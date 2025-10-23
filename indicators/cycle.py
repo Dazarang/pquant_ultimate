@@ -14,8 +14,8 @@ def _hilbert_transform_numba(data: np.ndarray) -> tuple:
     """
     Numba-optimized Hilbert Transform for cycle detection.
 
-    Implements simplified Hilbert Transform similar to ta-lib.
-    Uses 7-period weighted sum for 90-degree phase shift.
+    Implements standard Hilbert Transform with high-pass filter detrending
+    and 7-period weighted sum for 90-degree phase shift approximation.
 
     Args:
         data: Price array

@@ -36,9 +36,10 @@ class SMA(BaseIndicator):
 @njit
 def _calculate_ema_numba(data: np.ndarray, period: int) -> np.ndarray:
     """
-    Numba-optimized EMA calculation matching ta-lib exactly.
+    Numba-optimized EMA calculation using industry-standard algorithm.
 
-    Uses SMA for initialization, then exponential smoothing.
+    Initializes with SMA at period-1, then applies exponential smoothing
+    with alpha = 2/(period+1) for subsequent values.
 
     Args:
         data: Price array
@@ -69,7 +70,7 @@ def _calculate_ema_numba(data: np.ndarray, period: int) -> np.ndarray:
 
 
 class EMA(BaseIndicator):
-    """Exponential Moving Average - matches ta-lib exactly."""
+    """Exponential Moving Average using standard industry algorithm."""
 
     def __init__(self):
         super().__init__("EMA")

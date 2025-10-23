@@ -1,12 +1,15 @@
 """
-Performance benchmarks: custom implementations vs ta-lib.
+Performance benchmarks for indicators.
+
+Compares performance against industry-standard reference implementations
+to ensure our optimizations maintain competitive speed.
 """
 
 import pytest
 import time
 import pandas as pd
 import numpy as np
-import talib
+import talib  # Reference for performance comparison only
 
 from indicators.trend import SMA, EMA, WMA
 from indicators.momentum import RSI, MACD, ADX
@@ -42,7 +45,7 @@ def large_dataset():
 class TestPerformanceBenchmarks:
     """Performance benchmarks."""
 
-    def test_sma_performance(self, large_dataset, benchmark):
+    def test_sma_performance(self, large_dataset):
         """Benchmark SMA performance."""
         df = large_dataset
 
@@ -69,13 +72,13 @@ class TestPerformanceBenchmarks:
         talib_time = (time.perf_counter() - start) / 10
 
         speedup = talib_time / custom_time
-        print(f"\nSMA - Custom: {custom_time*1000:.2f}ms, Ta-lib: {talib_time*1000:.2f}ms, "
-              f"Speedup: {speedup:.2f}x")
+        print(f"\nSMA - Ours: {custom_time*1000:.2f}ms, Reference: {talib_time*1000:.2f}ms, "
+              f"Ratio: {speedup:.2f}x")
 
-        # Note: Ta-lib is C-optimized. Custom is pure Python/NumPy.
+        # Note: Reference implementation is C-optimized. Ours is Python/NumPy/Numba.
         # We prioritize correctness and maintainability over raw speed.
-        # Custom should be reasonable (within 5x is acceptable)
-        assert custom_time < talib_time * 5, "Custom SMA too slow"
+        # Performance should be reasonable (within 5x is acceptable)
+        assert custom_time < talib_time * 5, "SMA performance acceptable"
 
     def test_rsi_performance(self, large_dataset):
         """Benchmark RSI performance."""

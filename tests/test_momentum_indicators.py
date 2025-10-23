@@ -1,10 +1,12 @@
 """
-Test momentum indicators against ta-lib.
+Test momentum indicators for accuracy and correctness.
+
+Uses reference implementations for validation to ensure algorithmic correctness.
 """
 
 import pytest
 import numpy as np
-import talib
+import talib  # Reference implementation for validation only
 from indicators.momentum import RSI, MACD, ADX, ROC, MOM
 from indicators.volatility import ATR
 from tests.conftest import assert_series_close

@@ -1,10 +1,12 @@
 """
-Test trend indicators against ta-lib.
+Test trend indicators for accuracy and correctness.
+
+Uses reference implementations for validation to ensure algorithmic correctness.
 """
 
 import pytest
 import numpy as np
-import talib
+import talib  # Reference implementation for validation only
 from indicators.trend import SMA, EMA, WMA, VWAP
 from tests.conftest import assert_series_close
 
@@ -13,72 +15,72 @@ class TestSMA:
     """Test Simple Moving Average."""
 
     @pytest.mark.parametrize("period", [5, 20, 50, 200])
-    def test_sma_vs_talib(self, sample_ohlcv_data, tolerance_params, period):
-        """Compare SMA with ta-lib."""
+    def test_sma_accuracy(self, sample_ohlcv_data, tolerance_params, period):
+        """Validate SMA calculation accuracy."""
         df = sample_ohlcv_data
 
-        # Custom implementation
-        custom_sma = SMA().calculate(df, period)
+        # Our implementation
+        actual_sma = SMA().calculate(df, period)
 
-        # Ta-lib
-        talib_sma = talib.SMA(df["close"], timeperiod=period)
+        # Reference implementation for validation
+        expected_sma = talib.SMA(df["close"], timeperiod=period)
 
-        # Compare
-        assert_series_close(custom_sma, talib_sma, tolerance_params["sma"], f"SMA_{period}")
+        # Validate accuracy
+        assert_series_close(actual_sma, expected_sma, tolerance_params["sma"], f"SMA_{period}")
 
-    def test_sma_real_data(self, real_market_data, tolerance_params):
-        """Test SMA on real market data."""
+    def test_sma_realistic_data(self, real_market_data, tolerance_params):
+        """Test SMA on realistic market data."""
         df = real_market_data
 
-        custom_sma = SMA().calculate(df, period=20)
-        talib_sma = talib.SMA(df["close"], timeperiod=20)
+        actual_sma = SMA().calculate(df, period=20)
+        expected_sma = talib.SMA(df["close"], timeperiod=20)
 
-        assert_series_close(custom_sma, talib_sma, tolerance_params["sma"], "SMA_20_real")
+        assert_series_close(actual_sma, expected_sma, tolerance_params["sma"], "SMA_20_real")
 
 
 class TestEMA:
     """Test Exponential Moving Average."""
 
     @pytest.mark.parametrize("period", [5, 8, 21, 55, 89])
-    def test_ema_vs_talib(self, sample_ohlcv_data, tolerance_params, period):
-        """Compare EMA with ta-lib."""
+    def test_ema_accuracy(self, sample_ohlcv_data, tolerance_params, period):
+        """Validate EMA calculation accuracy."""
         df = sample_ohlcv_data
 
-        # Custom implementation
-        custom_ema = EMA().calculate(df, period)
+        # Our implementation
+        actual_ema = EMA().calculate(df, period)
 
-        # Ta-lib
-        talib_ema = talib.EMA(df["close"], timeperiod=period)
+        # Reference for validation
+        expected_ema = talib.EMA(df["close"], timeperiod=period)
 
-        # Compare
-        assert_series_close(custom_ema, talib_ema, tolerance_params["ema"], f"EMA_{period}")
+        # Validate accuracy
+        assert_series_close(actual_ema, expected_ema, tolerance_params["ema"], f"EMA_{period}")
 
-    def test_ema_real_data(self, real_market_data, tolerance_params):
-        """Test EMA on real market data."""
+    def test_ema_realistic_data(self, real_market_data, tolerance_params):
+        """Test EMA on realistic market data."""
         df = real_market_data
 
-        custom_ema = EMA().calculate(df, period=21)
-        talib_ema = talib.EMA(df["close"], timeperiod=21)
+        actual_ema = EMA().calculate(df, period=21)
+        expected_ema = talib.EMA(df["close"], timeperiod=21)
 
-        assert_series_close(custom_ema, talib_ema, tolerance_params["ema"], "EMA_21_real")
+        assert_series_close(actual_ema, expected_ema, tolerance_params["ema"], "EMA_21_real")
 
 
 class TestWMA:
     """Test Weighted Moving Average."""
 
     @pytest.mark.parametrize("period", [5, 10, 21])
-    def test_wma_vs_talib(self, sample_ohlcv_data, tolerance_params, period):
-        """Compare WMA with ta-lib."""
+    def test_wma_accuracy(self, sample_ohlcv_data, tolerance_params, period):
+        """Validate WMA calculation accuracy."""
         df = sample_ohlcv_data
 
-        # Custom implementation
-        custom_wma = WMA().calculate(df, period)
+        # Our implementation
+        actual_wma = WMA().calculate(df, period)
 
-        # Ta-lib
-        talib_wma = talib.WMA(df["close"], timeperiod=period)
+        # Reference for validation
+        expected_wma = talib.WMA(df["close"], timeperiod=period)
 
-        # Compare
-        assert_series_close(custom_wma, talib_wma, tolerance_params["wma"], f"WMA_{period}")
+        # Validate accuracy
+        assert_series_close(actual_wma, expected_wma, tolerance_params["wma"], f"WMA_{period}")
 
 
 class TestVWAP:

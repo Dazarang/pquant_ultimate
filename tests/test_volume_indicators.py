@@ -1,10 +1,12 @@
 """
-Test volume indicators against ta-lib.
+Test volume indicators for accuracy and correctness.
+
+Uses reference implementations for validation to ensure algorithmic correctness.
 """
 
 import pytest
 import numpy as np
-import talib
+import talib  # Reference implementation for validation only
 from indicators.volume import OBV, ADOSC
 from tests.conftest import assert_series_close
 

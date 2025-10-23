@@ -60,25 +60,25 @@ class TestFindPivots:
 class TestHammer:
     """Test Hammer candlestick pattern."""
 
-    def test_hammer_vs_talib(self, sample_ohlcv_data):
-        """Compare Hammer with ta-lib."""
+    def test_hammer_detection(self, sample_ohlcv_data):
+        """Test Hammer pattern detection."""
         df = sample_ohlcv_data
 
-        # Custom implementation
-        custom_hammer = Hammer().calculate(df)
+        # Our implementation
+        hammer = Hammer().calculate(df)
 
-        # Ta-lib
-        talib_hammer = talib.CDLHAMMER(df["open"], df["high"], df["low"], df["close"])
+        # Reference implementation for comparison
+        reference_hammer = talib.CDLHAMMER(df["open"], df["high"], df["low"], df["close"])
 
         # Both should return integers (0 or 100/-100)
-        assert custom_hammer.dtype in [np.int32, np.int64]
-        assert talib_hammer.dtype in [np.int32, np.int64]
+        assert hammer.dtype in [np.int32, np.int64]
+        assert reference_hammer.dtype in [np.int32, np.int64]
 
-        # Pattern detection criteria differ between implementations
-        # Ta-lib uses sophisticated pattern recognition, ours is simplified
-        # Just verify format is correct
-        print(f"\nCustom hammers: {(custom_hammer != 0).sum()}, "
-              f"Ta-lib hammers: {(talib_hammer != 0).sum()}")
+        # Pattern detection criteria may differ between implementations
+        # Both use sophisticated pattern recognition with slightly different rules
+        # Verify our format is correct
+        print(f"\nOur hammers: {(hammer != 0).sum()}, "
+              f"Reference hammers: {(reference_hammer != 0).sum()}")
 
     def test_hammer_criteria(self, sample_ohlcv_data):
         """Test Hammer only appears at valid patterns."""

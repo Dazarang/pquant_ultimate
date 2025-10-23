@@ -1,10 +1,12 @@
 """
-Test volatility indicators against ta-lib.
+Test volatility indicators for accuracy and correctness.
+
+Uses reference implementations for validation to ensure algorithmic correctness.
 """
 
 import pytest
 import numpy as np
-import talib
+import talib  # Reference implementation for validation only
 from indicators.volatility import BBands, ATR, ADR, SAR
 from tests.conftest import assert_series_close
 

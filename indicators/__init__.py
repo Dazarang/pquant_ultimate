@@ -1,7 +1,8 @@
 """
-Custom technical indicators - 10x faster than ta-lib with vectorization & Numba JIT.
+High-performance technical indicators with vectorization & Numba JIT optimization.
 
-No external indicator libraries required - pure NumPy/Pandas implementations.
+Pure NumPy/Pandas implementations - no external dependencies.
+Optimized for speed and accuracy with comprehensive validation.
 """
 
 from indicators.base import BaseIndicator
