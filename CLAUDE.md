@@ -4,7 +4,7 @@
 
 # Python usage
 - We run python using `uv`
-- uv add *package*
+- uv add *package* - never add packages manually in the toml.
 - uv add --dev *package*
 
 # Shell Tool Usage Guidelines
