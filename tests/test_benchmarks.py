@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 import talib  # Reference for performance comparison only
 
-from indicators.trend import SMA, EMA, WMA
+from indicators.trend import SMA, EMA
 from indicators.momentum import RSI, MACD, ADX
 from indicators.volatility import BBands, ATR, SAR
 from indicators.volume import OBV, ADOSC

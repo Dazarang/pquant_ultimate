@@ -92,7 +92,6 @@ def tolerance_params():
     return {
         "sma": 1e-8,
         "ema": 1e-10,  # Should match exactly with corrected algorithm
-        "wma": 1e-6,
         "rsi": 1e-3,
         "macd": 1e-3,
         "bbands": 0.5,  # Different middle band calculation methods acceptable

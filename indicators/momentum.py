@@ -299,6 +299,105 @@ class MOM(BaseIndicator):
         return df["close"] - df["close"].shift(period)
 
 
+@njit
+def _calculate_stoch_numba(
+    high: np.ndarray,
+    low: np.ndarray,
+    close: np.ndarray,
+    fastk_period: int,
+) -> np.ndarray:
+    """
+    Numba-optimized Stochastic %K calculation.
+
+    Formula: %K = 100 * (Close - Lowest Low) / (Highest High - Lowest Low)
+
+    Args:
+        high: High prices
+        low: Low prices
+        close: Close prices
+        fastk_period: Lookback period for %K
+
+    Returns:
+        %K array
+    """
+    n = len(close)
+    result = np.empty(n)
+    result[:] = np.nan
+
+    if n < fastk_period:
+        return result
+
+    for i in range(fastk_period - 1, n):
+        # Get window
+        window_low = low[i - fastk_period + 1 : i + 1]
+        window_high = high[i - fastk_period + 1 : i + 1]
+
+        lowest_low = np.min(window_low)
+        highest_high = np.max(window_high)
+
+        # Calculate %K
+        denominator = highest_high - lowest_low
+        if denominator == 0:
+            result[i] = 50.0  # Neutral value when no range
+        else:
+            result[i] = 100.0 * (close[i] - lowest_low) / denominator
+
+    return result
+
+
+class Stochastic(BaseIndicator):
+    """
+    Stochastic Oscillator - momentum indicator comparing close to price range.
+
+    %K line shows where close is relative to high-low range.
+    %D line is a moving average of %K (signal line).
+    """
+
+    def __init__(self):
+        super().__init__("Stochastic")
+
+    def calculate(
+        self,
+        df: pd.DataFrame,
+        fastk_period: int = 14,
+        slowk_period: int = 3,
+        slowd_period: int = 3,
+    ) -> tuple[pd.Series, pd.Series]:
+        """
+        Calculate Stochastic Oscillator.
+
+        Args:
+            df: DataFrame with 'high', 'low', 'close' columns
+            fastk_period: Period for %K calculation (default 14)
+            slowk_period: Smoothing period for %K to get Slow %K (default 3)
+            slowd_period: Smoothing period for %D signal line (default 3)
+
+        Returns:
+            Tuple of (%K, %D) series
+        """
+        required_cols = ["high", "low", "close"]
+        self.validate_dataframe(df, required_cols)
+        self.validate_period(fastk_period)
+        self.validate_period(slowk_period)
+        self.validate_period(slowd_period)
+
+        # Calculate Fast %K
+        high = ensure_numpy_array(df["high"])
+        low = ensure_numpy_array(df["low"])
+        close = ensure_numpy_array(df["close"])
+
+        fastk = _calculate_stoch_numba(high, low, close, fastk_period)
+
+        # Smooth to get Slow %K (moving average of Fast %K)
+        fastk_series = pd.Series(fastk, index=df.index)
+        slowk = fastk_series.rolling(window=slowk_period, min_periods=1).mean()
+
+        # %D is moving average of Slow %K
+        slowd = slowk.rolling(window=slowd_period, min_periods=1).mean()
+
+        return slowk, slowd
+
+
 # Convenience functions
 def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """Calculate RSI - convenience function."""
@@ -328,3 +427,13 @@ def calculate_roc(df: pd.DataFrame, period: int = 10) -> pd.Series:
 def calculate_mom(df: pd.DataFrame, period: int = 10) -> pd.Series:
     """Calculate MOM - convenience function."""
     return MOM().calculate(df, period)
+
+
+def calculate_stochastic(
+    df: pd.DataFrame,
+    fastk_period: int = 14,
+    slowk_period: int = 3,
+    slowd_period: int = 3,
+) -> tuple[pd.Series, pd.Series]:
+    """Calculate Stochastic Oscillator - convenience function."""
+    return Stochastic().calculate(df, fastk_period, slowk_period, slowd_period)

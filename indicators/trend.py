@@ -1,5 +1,5 @@
 """
-Trend indicators: SMA, EMA, WMA, VWAP.
+Trend indicators: SMA, EMA, VWAP.
 Pure vectorized implementations for maximum performance.
 """
 
@@ -95,60 +95,6 @@ class EMA(BaseIndicator):
         return pd.Series(result, index=df.index, name=f"EMA_{period}")
 
 
-@njit
-def _calculate_wma_numba(data: np.ndarray, period: int) -> np.ndarray:
-    """
-    Numba-optimized WMA calculation.
-
-    Args:
-        data: Price array
-        period: Lookback period
-
-    Returns:
-        WMA array
-    """
-    n = len(data)
-    result = np.empty(n)
-    result[:] = np.nan
-
-    # Calculate weights once
-    weights = np.arange(1, period + 1, dtype=np.float64)
-    weight_sum = weights.sum()
-
-    for i in range(period - 1, n):
-        window = data[i - period + 1 : i + 1]
-        result[i] = np.sum(window * weights) / weight_sum
-
-    return result
-
-
-class WMA(BaseIndicator):
-    """Weighted Moving Average - Numba JIT optimized."""
-
-    def __init__(self):
-        super().__init__("WMA")
-
-    def calculate(self, df: pd.DataFrame, period: int = 50) -> pd.Series:
-        """
-        Calculate Weighted Moving Average.
-
-        Args:
-            df: DataFrame with 'close' column
-            period: Lookback period
-
-        Returns:
-            WMA series
-        """
-        self.validate_dataframe(df, ["close"])
-        self.validate_period(period)
-        self.validate_data_length(df, period)
-
-        data = ensure_numpy_array(df["close"])
-        result = _calculate_wma_numba(data, period)
-
-        return pd.Series(result, index=df.index, name=f"WMA_{period}")
-
-
 class VWAP(BaseIndicator):
     """Volume Weighted Average Price - vectorized implementation."""
 
@@ -187,19 +133,9 @@ def calculate_sma(df: pd.DataFrame, period: int = 50) -> pd.Series:
     return SMA().calculate(df, period)
 
 
-def calculate_cma(df: pd.DataFrame, period: int = 50) -> pd.Series:
-    """Calculate CMA (alias for SMA) - convenience function."""
-    return SMA().calculate(df, period)
-
-
 def calculate_ema(df: pd.DataFrame, period: int = 50) -> pd.Series:
     """Calculate EMA - convenience function."""
     return EMA().calculate(df, period)
-
-
-def calculate_wma(df: pd.DataFrame, period: int = 50) -> pd.Series:
-    """Calculate WMA - convenience function."""
-    return WMA().calculate(df, period)
 
 
 def calculate_vwap(df: pd.DataFrame) -> pd.Series:

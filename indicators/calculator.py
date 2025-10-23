@@ -7,13 +7,13 @@ import pandas as pd
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 
-from indicators.trend import SMA, EMA, WMA, VWAP
-from indicators.momentum import RSI, MACD, ADX, ROC, MOM
+from indicators.trend import SMA, EMA, VWAP
+from indicators.momentum import RSI, MACD, ADX, ROC, MOM, Stochastic
 from indicators.volatility import BBands, ATR, ADR, APZ, SAR
 from indicators.volume import OBV, ADOSC
 from indicators.pattern import find_pivots, Hammer
 from indicators.cycle import HT_SINE, HT_TRENDMODE
-from indicators.composite import EnhancedRealTimeStrengthIndex
+from indicators.advanced import create_all_advanced_features
 
 
 @dataclass
@@ -23,7 +23,6 @@ class IndicatorConfig:
     # Trend periods
     sma_periods: List[int] = field(default_factory=lambda: [5, 8, 21, 50, 55, 89, 200])
     ema_periods: List[int] = field(default_factory=lambda: [5, 8, 21, 50, 55, 89])
-    wma_periods: List[int] = field(default_factory=lambda: [21])
 
     # Momentum parameters
     rsi_periods: List[int] = field(default_factory=lambda: [14])
@@ -31,6 +30,7 @@ class IndicatorConfig:
     adx_periods: List[int] = field(default_factory=lambda: [14])
     roc_periods: List[int] = field(default_factory=lambda: [10])
     mom_periods: List[int] = field(default_factory=lambda: [10])
+    stoch_configs: List[tuple] = field(default_factory=lambda: [(14, 3, 3)])  # (fastk, slowk, slowd)
 
     # Volatility parameters
     bbands_configs: List[tuple] = field(default_factory=lambda: [(20, 2.0, 2.0)])
@@ -51,7 +51,10 @@ class IndicatorConfig:
     calculate_hammer: bool = True
     calculate_ht_sine: bool = True
     calculate_ht_trendmode: bool = True
-    calculate_enhanced_rtsi: bool = True
+    calculate_advanced_features: bool = False
+
+    # Advanced feature parameters
+    support_tolerance: float = 0.02  # Price tolerance for support testing
 
 
 class IndicatorCalculator:
@@ -109,8 +112,9 @@ class IndicatorCalculator:
         # Calculate cycle indicators
         result_df = self._add_cycle_indicators(result_df)
 
-        # Calculate composite indicators
-        result_df = self._add_composite_indicators(result_df)
+        # Calculate advanced features (if enabled)
+        if self.config.calculate_advanced_features:
+            result_df = self._add_advanced_features(result_df)
 
         return result_df
 
@@ -123,10 +127,6 @@ class IndicatorCalculator:
         # EMA
         for period in self.config.ema_periods:
             df[f"EMA_{period}"] = EMA().calculate(df, period)
-
-        # WMA
-        for period in self.config.wma_periods:
-            df[f"WMA_{period}"] = WMA().calculate(df, period)
 
         # VWAP
         if self.config.calculate_vwap:
@@ -158,6 +158,12 @@ class IndicatorCalculator:
         # MOM
         for period in self.config.mom_periods:
             df[f"MOM_{period}"] = MOM().calculate(df, period)
+
+        # Stochastic
+        for fastk, slowk, slowd in self.config.stoch_configs:
+            stoch_k, stoch_d = Stochastic().calculate(df, fastk, slowk, slowd)
+            df[f"STOCH_K_{fastk}"] = stoch_k
+            df[f"STOCH_D_{fastk}"] = stoch_d
 
         return df
 
@@ -235,11 +241,17 @@ class IndicatorCalculator:
 
         return df
 
-    def _add_composite_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Add composite indicators to DataFrame."""
-        if self.config.calculate_enhanced_rtsi:
-            df["Enhanced_RTSI"] = EnhancedRealTimeStrengthIndex().calculate(df)
+    def _add_advanced_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Add advanced ML features for bottom detection.
 
+        Applies all advanced feature engineering functions.
+        These features combine multiple indicators to detect patterns.
+        """
+        df = create_all_advanced_features(
+            df,
+            support_tolerance=self.config.support_tolerance,
+        )
         return df
 
     def clear_cache(self) -> None:

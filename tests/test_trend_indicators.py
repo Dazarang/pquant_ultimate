@@ -7,7 +7,7 @@ Uses reference implementations for validation to ensure algorithmic correctness.
 import pytest
 import numpy as np
 import talib  # Reference implementation for validation only
-from indicators.trend import SMA, EMA, WMA, VWAP
+from indicators.trend import SMA, EMA, VWAP
 from tests.conftest import assert_series_close
 
 
@@ -63,24 +63,6 @@ class TestEMA:
         expected_ema = talib.EMA(df["close"], timeperiod=21)
 
         assert_series_close(actual_ema, expected_ema, tolerance_params["ema"], "EMA_21_real")
-
-
-class TestWMA:
-    """Test Weighted Moving Average."""
-
-    @pytest.mark.parametrize("period", [5, 10, 21])
-    def test_wma_accuracy(self, sample_ohlcv_data, tolerance_params, period):
-        """Validate WMA calculation accuracy."""
-        df = sample_ohlcv_data
-
-        # Our implementation
-        actual_wma = WMA().calculate(df, period)
-
-        # Reference for validation
-        expected_wma = talib.WMA(df["close"], timeperiod=period)
-
-        # Validate accuracy
-        assert_series_close(actual_wma, expected_wma, tolerance_params["wma"], f"WMA_{period}")
 
 
 class TestVWAP:

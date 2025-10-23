@@ -6,9 +6,10 @@ Pure Python/NumPy/Numba implementation of technical indicators for quantitative 
 
 - ✅ **Zero External Dependencies** - No indicator libraries required
 - ✅ **High Performance** - Numba JIT optimization, 500+ bars/sec
-- ✅ **Validated** - 63 tests, all passing, 0 warnings
+- ✅ **Validated** - 78 tests, all passing, 0 warnings
 - ✅ **Production Ready** - Clean code, professional quality
 - ✅ **Modular** - OOP design, easy to extend
+- ✅ **Advanced ML Features** - 20+ features for bottom detection
 
 ## Installation
 
@@ -34,7 +35,6 @@ print(df_with_indicators[['close', 'RSI_14', 'SMA_50', 'MACD_12_26']])
 ### Trend Indicators
 - **SMA** - Simple Moving Average (vectorized)
 - **EMA** - Exponential Moving Average (Numba optimized)
-- **WMA** - Weighted Moving Average (Numba optimized)
 - **VWAP** - Volume Weighted Average Price
 
 ### Momentum Indicators
@@ -43,6 +43,7 @@ print(df_with_indicators[['close', 'RSI_14', 'SMA_50', 'MACD_12_26']])
 - **ADX** - Average Directional Index (Numba optimized)
 - **ROC** - Rate of Change
 - **MOM** - Momentum
+- **Stochastic** - Stochastic Oscillator (%K and %D lines, Numba optimized)
 
 ### Volatility Indicators
 - **BBands** - Bollinger Bands
@@ -63,8 +64,16 @@ print(df_with_indicators[['close', 'RSI_14', 'SMA_50', 'MACD_12_26']])
 - **HT_SINE** - Hilbert Transform Sine Wave
 - **HT_TRENDMODE** - Hilbert Transform Trend Mode
 
-### Composite Indicators
-- **EnhancedRTSI** - Enhanced Real-Time Strength Index (custom weighted composite)
+### Advanced ML Features (20+ features)
+- **Multi-Indicator Divergence** - Bullish divergence across RSI, MACD, Stochastic
+- **Volume Exhaustion** - Price down + volume down = selling exhaustion
+- **Panic Selling** - Extreme volume spike + extreme price drop
+- **Support Testing** - Count tests of similar price levels
+- **Exhaustion Sequence** - Consecutive down days with deceleration
+- **Hidden Divergence** - Higher price low + lower RSI low
+- **Mean Reversion** - Z-score from 252-day mean
+- **BB Squeeze** - Bollinger Band squeeze + breakdown
+- **Time Features** - Day of week, month-end, days since pivot
 
 ## Usage Examples
 
@@ -95,11 +104,35 @@ config = IndicatorConfig(
     ema_periods=[12, 26],
     rsi_periods=[14],
     calculate_vwap=True,
-    calculate_enhanced_rtsi=True,
+    calculate_advanced_features=True,  # Enable ML features
 )
 
 calculator = IndicatorCalculator(config)
 result = calculator.calculate_all(df)
+```
+
+### Advanced ML Features (Standalone)
+
+```python
+from indicators.advanced import create_all_advanced_features, ADVANCED_FEATURE_COLUMNS
+from indicators.pattern import find_pivots
+
+# Calculate base indicators first
+df = calculator.calculate_all(df)
+
+# Add pivot labels
+pivot_high, pivot_low = find_pivots(df, lb=8, rb=8, return_boolean=True)
+df['PivotHigh'] = pivot_high.astype(int)
+df['PivotLow'] = pivot_low.astype(int)
+
+# Generate all advanced features
+df = create_all_advanced_features(df)
+
+# Access feature columns
+print(ADVANCED_FEATURE_COLUMNS)  # List of all 20+ feature names
+
+# Use for ML model
+X = df[ADVANCED_FEATURE_COLUMNS].fillna(0)
 ```
 
 ### Batch Processing
@@ -138,13 +171,13 @@ for ticker in ["AAPL", "MSFT", "GOOGL"]:
 ```
 indicators/
 ├── base.py              - BaseIndicator abstract class
-├── trend.py             - Trend indicators (SMA, EMA, WMA, VWAP)
-├── momentum.py          - Momentum indicators (RSI, MACD, ADX, etc.)
+├── trend.py             - Trend indicators (SMA, EMA, VWAP)
+├── momentum.py          - Momentum indicators (RSI, MACD, ADX, Stochastic, etc.)
 ├── volatility.py        - Volatility indicators (BBands, ATR, SAR, etc.)
 ├── volume.py            - Volume indicators (OBV, ADOSC)
 ├── pattern.py           - Pattern recognition (pivots, candlesticks)
 ├── cycle.py             - Cycle indicators (Hilbert Transform)
-├── composite.py         - Composite indicators (EnhancedRTSI)
+├── advanced.py          - Advanced ML features (20+ features)
 └── calculator.py        - Orchestrator for batch calculation
 ```
 
@@ -158,7 +191,7 @@ uv run pytest tests/ -v
 
 Expected output:
 ```
-63 passed in 5.51s
+78 passed in 5.76s
 ```
 
 All tests pass with:
@@ -168,11 +201,41 @@ All tests pass with:
 
 ## Code Quality
 
-- **File size**: All files < 600 lines (avg ~200 lines)
+- **File size**: All files < 600 lines (avg ~250 lines)
 - **Design**: Single responsibility, OOP, modular
 - **Type hints**: Full typing for IDE support
 - **Documentation**: Comprehensive docstrings
-- **Testing**: 63 tests, 92%+ coverage
+- **Testing**: 78 tests, 92%+ coverage
+
+## Advanced Features Details
+
+The advanced features module provides ML-ready features for stock bottom detection:
+
+**Multi-Indicator Divergence** (most powerful):
+- Detects bullish divergence across RSI, MACD, and Stochastic
+- Score 0-3 based on how many indicators show divergence
+- Lower price low + higher indicator low = bullish signal
+
+**Volume Patterns**:
+- Volume exhaustion: Price down + volume down = sellers exhausted
+- Panic selling: Extreme volume + extreme drop = capitulation
+- Severity scores for ML model weighting
+
+**Support Levels**:
+- Counts tests of similar price levels (within 2% tolerance)
+- More tests = stronger support = higher bounce probability
+
+**Statistical Features**:
+- Mean reversion: Z-score from 252-day mean
+- BB squeeze: Low volatility followed by breakdown
+- Identifies 2+ standard deviation events
+
+**Temporal Patterns**:
+- Day of week effects (Monday/Friday)
+- Month-end and quarter-end patterns
+- Days since last pivot (cyclicality)
+
+All features auto-detect single-stock vs multi-stock DataFrames.
 
 ## Contributing
 

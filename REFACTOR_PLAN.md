@@ -14,14 +14,16 @@
 ```
 pquant_ultimate/indicators/
 ├── base.py              (~150 lines) - BaseIndicator abstract class, validation
-├── trend.py             (~200 lines) - SMA, EMA, WMA, VWAP
+├── trend.py             (~150 lines) - SMA, EMA, VWAP
 ├── momentum.py          (~250 lines) - RSI, MACD, ADX, ROC, MOM
 ├── volatility.py        (~200 lines) - BBands, ATR, ADR, APZ, SAR
 ├── volume.py            (~150 lines) - OBV, ADOSC
 ├── pattern.py           (~200 lines) - find_pivots, Hammer patterns
 ├── cycle.py             (~150 lines) - HT_SINE, HT_LEADSINE, HT_TRENDMODE
-├── composite.py         (~300 lines) - enhanced_real_time_strength_index
-└── calculator.py        (~250 lines) - IndicatorCalculator orchestrator
+└── calculator.py        (~220 lines) - IndicatorCalculator orchestrator
+
+Note: WMA removed (redundant with SMA/EMA), composite.py removed (data leakage issues).
+XGBoost will learn feature weights naturally without pre-computed composite indicators.
 ```
 
 ### Key Changes
@@ -278,8 +280,11 @@ dependencies = [
 
 **What to preserve:**
 - find_pivots logic (core labeling mechanism)
-- enhanced_real_time_strength_index (custom composite indicator)
 - All indicator calculations (reimplement without ta-lib)
+
+**What to remove:**
+- enhanced_real_time_strength_index (had data leakage via np.max on entire dataset)
+- Composite indicators (XGBoost learns feature weights naturally)
 
 ### Old Model Notebook
 **What works:**

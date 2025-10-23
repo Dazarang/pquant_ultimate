@@ -88,7 +88,7 @@ def _find_pivot_low_numba(data: np.ndarray, lb: int, rb: int) -> np.ndarray:
 
 
 def find_pivots(
-    df: pd.DataFrame, lb: int = 8, rb: int = 8, return_boolean: bool = True
+    df: pd.DataFrame, lb: int = 8, rb: int = 13, return_boolean: bool = True
 ) -> tuple[pd.Series, pd.Series]:
     """
     Identifies pivot highs and lows in DataFrame.
