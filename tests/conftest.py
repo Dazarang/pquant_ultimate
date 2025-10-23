@@ -34,34 +34,50 @@ def sample_ohlcv_data():
 @pytest.fixture
 def real_market_data():
     """
-    Generate realistic market data for validation.
-    Uses synthetic data with realistic properties instead of external API.
+    Fetch real Apple (AAPL) stock data for validation.
+    Uses actual market data for realistic testing scenarios.
     """
-    np.random.seed(42)
-    n = 252  # One year of trading days
+    import yfinance as yf
 
-    dates = pd.date_range(start="2023-01-01", periods=n, freq="B")
+    try:
+        # Fetch Apple stock data
+        ticker = yf.Ticker("AAPL")
+        df = ticker.history(start="2023-01-01", end="2024-01-01", auto_adjust=True)
 
-    # Generate realistic price movement with trend and volatility
-    returns = np.random.normal(0.0005, 0.02, n)  # Daily returns
-    close = 150 * np.exp(np.cumsum(returns))  # Geometric brownian motion
+        # Standardize column names to lowercase
+        df.columns = df.columns.str.lower()
 
-    # Generate OHLCV with realistic relationships
-    daily_range = np.abs(np.random.normal(0, 0.015, n))
-    high = close * (1 + daily_range)
-    low = close * (1 - daily_range)
-    open_ = low + (high - low) * np.random.uniform(0.3, 0.7, n)
-    volume = np.random.lognormal(15, 0.5, n)  # Log-normal volume distribution
+        # Ensure we have sufficient data
+        if len(df) < 100:
+            raise ValueError("Insufficient data fetched")
 
-    df = pd.DataFrame({
-        "open": open_,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    }, index=dates)
+        return df
 
-    return df
+    except Exception as e:
+        # Fallback to synthetic data if fetch fails
+        pytest.skip(f"Could not fetch Apple data: {e}. Skipping real data test.")
+
+        # This code won't run due to skip, but kept for clarity
+        np.random.seed(42)
+        n = 252
+        dates = pd.date_range(start="2023-01-01", periods=n, freq="B")
+        returns = np.random.normal(0.0005, 0.02, n)
+        close = 150 * np.exp(np.cumsum(returns))
+        daily_range = np.abs(np.random.normal(0, 0.015, n))
+        high = close * (1 + daily_range)
+        low = close * (1 - daily_range)
+        open_ = low + (high - low) * np.random.uniform(0.3, 0.7, n)
+        volume = np.random.lognormal(15, 0.5, n)
+
+        df = pd.DataFrame({
+            "open": open_,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        }, index=dates)
+
+        return df
 
 
 @pytest.fixture

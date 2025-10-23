@@ -1,6 +1,7 @@
 # Guidelines to follow
 - Be extremely concise. Sacrifice grammar for the sake of concision.
 - All docs-names are written in lower case with dashes connecting words, e.g. this-is-a-doc.md
+- You will never use emojis or other such characters.
 
 # Python usage
 - We run python using `uv`
