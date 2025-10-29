@@ -10,6 +10,9 @@ from tqdm import tqdm
 import time
 import pickle
 from pathlib import Path
+import re
+import subprocess
+from datetime import datetime
 
 # ============================================================================
 # STEP 1: LOAD AND FILTER TICKERS
@@ -592,6 +595,9 @@ def main():
     """
     Complete pipeline execution
     """
+    # Track run timing
+    run_start_time = datetime.now()
+
     print("\n" + "=" * 70)
     print("STOCK BOTTOM DETECTION - TRAINING DATASET BUILDER")
     print("=" * 70)
@@ -603,8 +609,25 @@ def main():
     TARGET_US_SAMPLE = 2000    # How many US stocks to try downloading
     TARGET_FINAL = 1500        # Final training set size
 
+    # Extract date from ticker filename (tickers_validated_20251029.json -> 20251029)
+    ticker_filename = Path(TICKER_JSON_PATH).name
+    date_match = re.search(r'(\d{8})', ticker_filename)
+    dataset_date = date_match.group(1) if date_match else datetime.now().strftime('%Y%m%d')
+
+    # Get git commit hash
+    try:
+        git_commit = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            cwd=Path(__file__).parent.parent,
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+    except:
+        git_commit = 'unknown'
+
     print(f"\nConfiguration:")
-    print(f"  Input: {TICKER_JSON_PATH.split('/')[-1]}")
+    print(f"  Dataset date: {dataset_date}")
+    print(f"  Git commit: {git_commit}")
+    print(f"  Input: {ticker_filename}")
     print(f"  Date range: {START_DATE} to {END_DATE} (10 years, ~2500 trading days)")
     print(f"  Data frequency: Daily (default yfinance interval)")
     print(f"  Target sample: {TARGET_US_SAMPLE} US stocks")
@@ -642,46 +665,94 @@ def main():
     print("SAVING TO DISK")
     print("=" * 70)
 
-    # Determine output directory
-    output_dir = Path(__file__).parent
+    # Create dated output directory
+    base_dir = Path(__file__).parent
+    output_dir = base_dir / 'training_data' / dataset_date
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Output directory: {output_dir}")
+
+    # Create combined dataframe first (needed for metadata)
+    all_dfs = []
+    for ticker, info in final_data.items():
+        if info['data'] is not None:
+            df = info['data'].copy()
+            df['ticker'] = ticker
+            df['stock_id'] = ticker
+            df['is_failed'] = info['is_failed']
+            df = df.reset_index()
+            df.columns = [c.lower() for c in df.columns]
+            all_dfs.append(df)
+
+    if not all_dfs:
+        print(f"\n⚠️  NO DATA - All downloads failed or were rejected")
+        print(f"   Try adjusting the quality filters or ticker selection")
+        return
+
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+
+    # Calculate run duration
+    run_end_time = datetime.now()
+    run_duration_seconds = int((run_end_time - run_start_time).total_seconds())
+
+    # Generate comprehensive metadata
+    metadata = {
+        'created_at': run_end_time.isoformat(),
+        'dataset_date': dataset_date,
+        'data_date_range': {
+            'start': START_DATE,
+            'end': END_DATE,
+            'actual_min': str(combined_df['date'].min()),
+            'actual_max': str(combined_df['date'].max())
+        },
+        'ticker_source': ticker_filename,
+        'parameters': {
+            'target_us_sample': TARGET_US_SAMPLE,
+            'target_final': TARGET_FINAL,
+            'start_date': START_DATE,
+            'end_date': END_DATE
+        },
+        'results': {
+            'total_stocks': len(final_data),
+            'active_stocks': len([v for v in final_data.values() if not v['is_failed']]),
+            'failed_stocks': sum(1 for v in final_data.values() if v['is_failed']),
+            'total_rows': len(combined_df)
+        },
+        'git_commit': git_commit,
+        'run_duration_seconds': run_duration_seconds,
+        'run_duration_human': f"{run_duration_seconds // 3600}h {(run_duration_seconds % 3600) // 60}m {run_duration_seconds % 60}s",
+        'selection_stats': selection_stats
+    }
+
+    # Save metadata
+    metadata_path = output_dir / 'metadata.json'
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=2, default=str)
+    print(f"✓ Saved: {metadata_path.name}")
 
     # Save as pickle (preserves dataframes)
     pkl_path = output_dir / 'training_data.pkl'
     with open(pkl_path, 'wb') as f:
         pickle.dump(final_data, f)
-    print(f"✓ Saved: {pkl_path}")
+    print(f"✓ Saved: {pkl_path.name}")
 
-    # Save selection stats
-    stats_path = output_dir / 'training_selection_stats.json'
+    # Save parquet
+    parquet_path = output_dir / 'training_stocks_data.parquet'
+    combined_df.to_parquet(parquet_path)
+    print(f"✓ Saved: {parquet_path.name}")
+
+    # Save selection stats (legacy compatibility)
+    stats_path = output_dir / 'selection_stats.json'
     with open(stats_path, 'w') as f:
         json.dump(selection_stats, f, indent=2, default=str)
-    print(f"✓ Saved: {stats_path}")
+    print(f"✓ Saved: {stats_path.name}")
 
-    # Also create combined dataframe
-    all_dfs = []
-    for ticker, info in final_data.items():
-        df = info['data'].copy()
-        df['ticker'] = ticker
-        df['stock_id'] = ticker
-        df['is_failed'] = info['is_failed']
-        df = df.reset_index()
-        df.columns = [c.lower() for c in df.columns]
-        all_dfs.append(df)
-
-    if all_dfs:
-        combined_df = pd.concat(all_dfs, ignore_index=True)
-        parquet_path = output_dir / 'training_stocks_data.parquet'
-        combined_df.to_parquet(parquet_path)
-        print(f"✓ Saved: {parquet_path}")
-
-        print(f"\n✅ COMPLETE!")
-        print(f"   Total stocks: {len(final_data)}")
-        print(f"   Total rows: {len(combined_df):,}")
-        print(f"   Date range: {combined_df['date'].min()} to {combined_df['date'].max()}")
-        print(f"   Failed stocks: {sum(1 for v in final_data.values() if v['is_failed'])}")
-    else:
-        print(f"\n⚠️  NO DATA - All downloads failed or were rejected")
-        print(f"   Try adjusting the quality filters or ticker selection")
+    print(f"\n✅ COMPLETE!")
+    print(f"   Output: {output_dir}")
+    print(f"   Total stocks: {len(final_data)}")
+    print(f"   Total rows: {len(combined_df):,}")
+    print(f"   Date range: {combined_df['date'].min()} to {combined_df['date'].max()}")
+    print(f"   Failed stocks: {sum(1 for v in final_data.values() if v['is_failed'])}")
+    print(f"   Run duration: {metadata['run_duration_human']}")
 
 
 if __name__ == "__main__":

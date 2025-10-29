@@ -81,16 +81,19 @@ uv run python build_training_set.py
 - stratifies by market cap (us vs swedish thresholds)
 - selects 1,500 final stocks
 
-**output:**
-- `training_data.pkl` (~500mb)
-- `training_stocks_data.parquet` (~300mb)
-- ~1,500 stocks, ~3.75m rows
+**output:** (saved to `training_data/{YYYYMMDD}/`)
+- `metadata.json` - comprehensive run metadata
+- `training_data.pkl` (~140mb)
+- `training_stocks_data.parquet` (~95mb)
+- `selection_stats.json` - stratification stats
+- ~1,500 stocks, ~3.5m rows
 
-**configuration (line 614-618):**
+**configuration (line 606-610):**
 - input: tickers_validated_20251029.json
 - dates: 2015-01-01 to 2024-12-31 (10 years)
 - frequency: daily (~2,500 trading days)
 - target: 1,500 stocks
+- output: training_data/{date}/ (date from ticker filename)
 
 ---
 
@@ -104,7 +107,7 @@ step 1: filter_tickers.py
 step 2: validate_tickers.py
   ↓ tickers_validated_20251029.json (~6-7k valid)
 step 3: build_training_set.py
-  ↓ training_data.pkl + training_stocks_data.parquet
+  ↓ training_data/20251029/ (metadata, pkl, parquet, stats)
 ```
 
 ## total time comparison
@@ -175,7 +178,8 @@ python3 -c "import json; d=json.load(open('tickers_data/tickers_filtered_2025102
 python3 -c "import json; d=json.load(open('tickers_data/tickers_validated_20251029.json')); print(f'validated: us={len(d.get(\"US\",[]))}, sp500={len(d.get(\"SP500\",[]))}, sweden={len(d.get(\"Sweden\",[]))}')"
 
 # after training set (step 3)
-ls -lh training_data.pkl training_stocks_data.parquet
+ls -lh training_data/20251029/
+cat training_data/20251029/metadata.json
 ```
 
 ---
