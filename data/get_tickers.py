@@ -32,6 +32,25 @@ class USTickerFetcher:
     def __init__(self):
         self.tickers: List[str] = []
 
+    def _convert_ticker(self, ticker: str) -> str:
+        """
+        convert ticker format for yahoo finance compatibility
+        only converts dots in share class designations, not exchange suffixes
+
+        examples:
+            BRK.A -> BRK-A
+            BRK.B -> BRK-B
+            SFAST.ST -> SFAST.ST (unchanged)
+        """
+        # don't convert if ticker has exchange suffix
+        exchange_suffixes = ['.ST', '.TO', '.L', '.AX', '.HK', '.T']
+        for suffix in exchange_suffixes:
+            if ticker.endswith(suffix):
+                return ticker
+
+        # convert remaining dots (share classes)
+        return ticker.replace('.', '-')
+
     def fetch(self) -> List[str]:
         """
         download us market tickers from nasdaq ftp
@@ -62,7 +81,7 @@ class USTickerFetcher:
                 if len(parts) >= 2:
                     symbol = parts[0].strip()
                     if symbol and symbol not in ['File Creation Time']:
-                        tickers.append(symbol)
+                        tickers.append(self._convert_ticker(symbol))
 
             logger.info(f"  nasdaq: {len(tickers)} tickers")
 
@@ -76,7 +95,7 @@ class USTickerFetcher:
                 if len(parts) >= 7:
                     symbol = parts[0].strip()
                     if symbol and symbol not in ['File Creation Time']:
-                        tickers.append(symbol)
+                        tickers.append(self._convert_ticker(symbol))
 
             ftp.quit()
             logger.info(f"total us tickers: {len(tickers)}")
@@ -95,6 +114,25 @@ class SP500TickerFetcher:
         self.tickers: List[str] = []
         self.session = requests.Session()
         self.base_url = "https://stockanalysis.com/api/screener/s/f"
+
+    def _convert_ticker(self, ticker: str) -> str:
+        """
+        convert ticker format for yahoo finance compatibility
+        only converts dots in share class designations, not exchange suffixes
+
+        examples:
+            BRK.A -> BRK-A
+            BRK.B -> BRK-B
+            SFAST.ST -> SFAST.ST (unchanged)
+        """
+        # don't convert if ticker has exchange suffix
+        exchange_suffixes = ['.ST', '.TO', '.L', '.AX', '.HK', '.T']
+        for suffix in exchange_suffixes:
+            if ticker.endswith(suffix):
+                return ticker
+
+        # convert remaining dots (share classes)
+        return ticker.replace('.', '-')
 
     def fetch(self) -> List[str]:
         """
@@ -134,7 +172,7 @@ class SP500TickerFetcher:
             for item in items:
                 ticker = item.get('s', '')
                 if ticker:
-                    tickers.append(ticker)
+                    tickers.append(self._convert_ticker(ticker))
 
             logger.info(f"total s&p 500 tickers: {len(tickers)}")
 

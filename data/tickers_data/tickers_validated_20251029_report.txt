@@ -1,0 +1,26 @@
+TICKER VALIDATION REPORT
+======================================================================
+
+Date: 2025-10-29 20:25:00
+Input: data/tickers_data/tickers_cleaned_20251023.json
+Output: data/tickers_data/tickers_validated_20251029.json
+
+Original total: 13144
+Cleaned total: 0
+Removed: 13144
+
+
+US:
+  Original: 11917
+  Cleaned: 0
+  Removed: 11917
+
+SP500:
+  Original: 503
+  Cleaned: 0
+  Removed: 503
+
+Sweden:
+  Original: 724
+  Cleaned: 0
+  Removed: 724

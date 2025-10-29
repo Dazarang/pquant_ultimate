@@ -217,7 +217,8 @@ def download_batch(tickers, start_date, end_date, current_date):
             end=end_date,
             group_by='ticker',
             threads=True,
-            progress=False
+            progress=False,
+            auto_adjust=True  # Silence FutureWarning
         )
         
         # Process each ticker
@@ -264,11 +265,12 @@ def download_batch(tickers, start_date, end_date, current_date):
 
 def download_all_tickers(ticker_list, start_date='2015-01-01', end_date='2024-12-31'):
     """
-    Download all tickers in batches with progress bar
+    Download all tickers in batches with progress bar and rate limiting.
     """
     print("\n" + "=" * 70)
     print("STEP 3: DOWNLOADING DATA (This will take 15-30 minutes)")
     print("=" * 70)
+    print(f"Note: Using {start_date} to {end_date} date range")
 
     batch_size = 100
     all_results = {
@@ -279,31 +281,32 @@ def download_all_tickers(ticker_list, start_date='2015-01-01', end_date='2024-12
 
     # Use end_date as reference (not today) for historical data
     current_date = end_date
-    
+
     # Process in batches
     for i in tqdm(range(0, len(ticker_list), batch_size), desc="Downloading batches"):
         batch = ticker_list[i:i+batch_size]
-        
+
         batch_results = download_batch(batch, start_date, end_date, current_date)
-        
+
         all_results['valid'].extend(batch_results['valid'])
         all_results['delisted'].extend(batch_results['delisted'])
         all_results['rejected'].extend(batch_results['rejected'])
-        
-        # Rate limiting
-        time.sleep(0.5)
-        
+
+        # Increased rate limiting to avoid 429 errors
+        # Yahoo Finance rate limits more aggressively now
+        time.sleep(1.0)  # Increased from 0.5 to 1.0 seconds
+
         # Progress update every 500 tickers
         if (i + batch_size) % 500 == 0:
             print(f"\n  Progress: Valid={len(all_results['valid'])}, "
                   f"Delisted={len(all_results['delisted'])}, "
                   f"Rejected={len(all_results['rejected'])}")
-    
+
     print("\n✓ Download complete!")
     print(f"  Valid stocks: {len(all_results['valid'])}")
     print(f"  Delisted/failed: {len(all_results['delisted'])}")
     print(f"  Rejected: {len(all_results['rejected'])}")
-    
+
     return all_results
 
 
@@ -313,46 +316,74 @@ def download_all_tickers(ticker_list, start_date='2015-01-01', end_date='2024-12
 
 def enrich_with_metadata(stock_list, max_stocks=None):
     """
-    Get market cap, sector info (slow, so limit if needed)
+    Get market cap, sector info using fast_info (more reliable than info).
     """
     print("\n" + "=" * 70)
     print("STEP 4: ENRICHING WITH METADATA (Getting sector/market cap)")
     print("=" * 70)
-    
+
     if max_stocks:
         stock_list = stock_list[:max_stocks]
         print(f"Limiting to {max_stocks} stocks for faster processing")
-    
+
     enriched = []
-    
+    failed_count = 0
+
     for stock_info in tqdm(stock_list, desc="Getting metadata"):
         ticker = stock_info['ticker']
-        
+
         try:
             ticker_obj = yf.Ticker(ticker)
-            info = ticker_obj.info
-            
+
+            # Try fast_info first (more reliable for market cap)
+            try:
+                fast_info = ticker_obj.fast_info
+                market_cap = fast_info.get('market_cap', 0) or fast_info.get('marketCap', 0)
+            except:
+                # Fallback to info if fast_info fails
+                try:
+                    info = ticker_obj.info
+                    market_cap = info.get('marketCap', 0) or info.get('market_cap', 0)
+                except:
+                    market_cap = 0
+
+            # Get sector/industry from info (not available in fast_info)
+            try:
+                info = ticker_obj.info
+                sector = info.get('sector', 'Unknown')
+                industry = info.get('industry', 'Unknown')
+                country = info.get('country', 'Unknown')
+            except:
+                sector = 'Unknown'
+                industry = 'Unknown'
+                country = 'Unknown'
+
             stock_info['metadata'] = {
-                'sector': info.get('sector', 'Unknown'),
-                'industry': info.get('industry', 'Unknown'),
-                'market_cap': info.get('marketCap', 0),
-                'country': info.get('country', 'Unknown'),
+                'sector': sector,
+                'industry': industry,
+                'market_cap': market_cap if market_cap else 0,
+                'country': country,
             }
-            
+
             enriched.append(stock_info)
-            
+
         except Exception as e:
             # Still include, just without metadata
+            failed_count += 1
             stock_info['metadata'] = {
                 'sector': 'Unknown',
+                'industry': 'Unknown',
                 'market_cap': 0,
+                'country': 'Unknown',
             }
             enriched.append(stock_info)
-        
-        time.sleep(0.1)  # Rate limiting
-    
+
+        time.sleep(0.2)  # Increased rate limiting to avoid 429 errors
+
     print(f"✓ Enriched {len(enriched)} stocks with metadata")
-    
+    if failed_count > 0:
+        print(f"  ⚠️  Failed to get full metadata for {failed_count} stocks")
+
     return enriched
 
 
@@ -362,7 +393,8 @@ def enrich_with_metadata(stock_list, max_stocks=None):
 
 def stratified_selection(enriched_stocks, failed_stocks, target_total=1500):
     """
-    Select balanced training set by market cap and sector
+    Select balanced training set by market cap and sector.
+    Falls back to volume-based selection if market cap unavailable.
     """
     print("\n" + "=" * 70)
     print("STEP 5: STRATIFIED SELECTION")
@@ -383,54 +415,105 @@ def stratified_selection(enriched_stocks, failed_stocks, target_total=1500):
         }
         for s in enriched_stocks
     ])
-    
-    # Market cap buckets
-    df['cap_bucket'] = pd.cut(
-        df['market_cap'],
-        bins=[0, 2e9, 10e9, 200e9, 1e15],
-        labels=['small', 'mid', 'large', 'mega']
-    )
-    
-    # Target allocation (save 10% for failures)
-    target_by_bucket = {
-        'mega': int(target_total * 0.15),   # 15%
-        'large': int(target_total * 0.25),  # 25%
-        'mid': int(target_total * 0.30),    # 30%
-        'small': int(target_total * 0.20),  # 20%
-    }
-    
+
+    # Check if we have market cap data
+    valid_market_caps = df[df['market_cap'] > 0]
+    use_market_cap = len(valid_market_caps) > (len(df) * 0.5)  # At least 50% have market cap
+
     selected = []
-    
-    for bucket, n_target in target_by_bucket.items():
-        bucket_df = df[df['cap_bucket'] == bucket]
-        
-        if len(bucket_df) == 0:
-            continue
-        
-        # Sample within bucket
-        n_sample = min(n_target, len(bucket_df))
-        
-        # Try to balance by sector within bucket
-        sampled = bucket_df.sample(n=n_sample, random_state=42)
-        selected.extend(sampled['ticker'].tolist())
-    
+
+    if use_market_cap:
+        print(f"Using market cap stratification ({len(valid_market_caps)}/{len(df)} stocks have market cap)")
+
+        # Market cap buckets
+        df['cap_bucket'] = pd.cut(
+            df['market_cap'],
+            bins=[0, 2e9, 10e9, 200e9, 1e15],
+            labels=['small', 'mid', 'large', 'mega']
+        )
+
+        # Target allocation (save 10% for failures)
+        target_by_bucket = {
+            'mega': int(target_total * 0.15),   # 15%
+            'large': int(target_total * 0.25),  # 25%
+            'mid': int(target_total * 0.30),    # 30%
+            'small': int(target_total * 0.20),  # 20%
+        }
+
+        for bucket, n_target in target_by_bucket.items():
+            bucket_df = df[df['cap_bucket'] == bucket]
+
+            if len(bucket_df) == 0:
+                continue
+
+            # Sample within bucket
+            n_sample = min(n_target, len(bucket_df))
+
+            # Try to balance by sector within bucket
+            sampled = bucket_df.sample(n=n_sample, random_state=42)
+            selected.extend(sampled['ticker'].tolist())
+
+        # If we didn't get enough from bucketed selection, add random samples
+        if len(selected) < int(target_total * 0.90):
+            remaining_needed = int(target_total * 0.90) - len(selected)
+            unselected = df[~df['ticker'].isin(selected)]
+            if len(unselected) > 0:
+                additional = unselected.sample(n=min(remaining_needed, len(unselected)), random_state=42)
+                selected.extend(additional['ticker'].tolist())
+                print(f"  Added {len(additional)} random samples to reach target")
+
+    else:
+        # Fallback: use volume-based stratification
+        print(f"⚠️  Insufficient market cap data, using volume-based selection")
+
+        # Volume buckets
+        df['volume_bucket'] = pd.qcut(
+            df['avg_volume'],
+            q=4,
+            labels=['low', 'medium', 'high', 'very_high'],
+            duplicates='drop'
+        )
+
+        target_per_bucket = int(target_total * 0.90 / 4)
+
+        for bucket in ['low', 'medium', 'high', 'very_high']:
+            bucket_df = df[df['volume_bucket'] == bucket]
+
+            if len(bucket_df) == 0:
+                continue
+
+            n_sample = min(target_per_bucket, len(bucket_df))
+            sampled = bucket_df.sample(n=n_sample, random_state=42)
+            selected.extend(sampled['ticker'].tolist())
+
     # Add failures (up to 10% of total)
     n_failures = min(len(failed_stocks), int(target_total * 0.10))
     failure_tickers = [s['ticker'] for s in failed_stocks[:n_failures]]
     selected.extend(failure_tickers)
-    
+
+    # Final report
     print(f"\n✓ Selected {len(selected)} stocks:")
     print(f"  Active stocks: {len(selected) - len(failure_tickers)}")
-    print(f"  Failed stocks: {len(failure_tickers)} ({len(failure_tickers)/len(selected):.1%})")
-    
+
+    if len(selected) > 0:  # Fix division by zero
+        print(f"  Failed stocks: {len(failure_tickers)} ({len(failure_tickers)/len(selected):.1%})")
+    else:
+        print(f"  Failed stocks: {len(failure_tickers)}")
+
     # Distribution report
-    selected_df = df[df['ticker'].isin(selected)]
-    print(f"\n📊 Market Cap Distribution:")
-    print(selected_df['cap_bucket'].value_counts().sort_index())
-    
-    print(f"\n📊 Sector Distribution (top 10):")
-    print(selected_df['sector'].value_counts().head(10))
-    
+    if len(selected) > 0:
+        selected_df = df[df['ticker'].isin(selected)]
+
+        if use_market_cap and 'cap_bucket' in selected_df.columns:
+            print(f"\n📊 Market Cap Distribution:")
+            print(selected_df['cap_bucket'].value_counts().sort_index())
+        elif 'volume_bucket' in selected_df.columns:
+            print(f"\n📊 Volume Distribution:")
+            print(selected_df['volume_bucket'].value_counts().sort_index())
+
+        print(f"\n📊 Sector Distribution (top 10):")
+        print(selected_df['sector'].value_counts().head(10))
+
     return selected
 
 
