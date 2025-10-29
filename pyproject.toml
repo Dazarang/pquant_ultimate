@@ -17,4 +17,33 @@ dev = [
     "pytest>=8.4.2",
     "pytest-benchmark>=5.1.0",
     "requests>=2.32.5",
+    "ruff>=0.14.2",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [
+    ".venv/",
+    "build/",
+    "dist/",
+    "__pycache__/",
+    "*.egg-info/",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+]
+ignore = []
+exclude = [
+    ".venv/",
+    "build/",
+    "dist/",
 ]
