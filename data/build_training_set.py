@@ -9,6 +9,7 @@ import yfinance as yf
 from tqdm import tqdm
 import time
 import pickle
+from pathlib import Path
 
 # ============================================================================
 # STEP 1: LOAD AND FILTER TICKERS
@@ -412,8 +413,8 @@ def stratified_selection(enriched_stocks, failed_stocks, target_total=1500):
     # Separate Swedish stocks (different market cap scale)
     # Swedish large-cap ~$5-10B vs US large-cap $10B+
     is_swedish = df['country'] == 'Sweden'
-    df_us = df[~is_swedish]
-    df_swedish = df[is_swedish]
+    df_us = df[~is_swedish].copy()
+    df_swedish = df[is_swedish].copy()
 
     print(f"\nStock distribution:")
     print(f"  US/International: {len(df_us)}")
@@ -517,21 +518,39 @@ def stratified_selection(enriched_stocks, failed_stocks, target_total=1500):
     else:
         print(f"  Failed stocks: {len(failure_tickers)}")
 
-    # Distribution report
+    # Distribution report and stats collection
+    stats = {
+        'total_selected': len(selected),
+        'active_stocks': len(selected) - len(failure_tickers),
+        'failed_stocks': len(failure_tickers),
+        'failed_pct': len(failure_tickers)/len(selected) if len(selected) > 0 else 0,
+        'us_international': len(df_us),
+        'swedish': len(df_swedish),
+        'market_cap_distribution': {},
+        'volume_distribution': {},
+        'sector_distribution': {}
+    }
+
     if len(selected) > 0:
         selected_df = df[df['ticker'].isin(selected)]
 
         if use_market_cap and 'cap_bucket' in selected_df.columns:
             print(f"\n📊 Market Cap Distribution:")
-            print(selected_df['cap_bucket'].value_counts().sort_index())
+            cap_dist = selected_df['cap_bucket'].value_counts().sort_index()
+            print(cap_dist)
+            stats['market_cap_distribution'] = cap_dist.to_dict()
         elif 'volume_bucket' in selected_df.columns:
             print(f"\n📊 Volume Distribution:")
-            print(selected_df['volume_bucket'].value_counts().sort_index())
+            vol_dist = selected_df['volume_bucket'].value_counts().sort_index()
+            print(vol_dist)
+            stats['volume_distribution'] = vol_dist.to_dict()
 
         print(f"\n📊 Sector Distribution (top 10):")
-        print(selected_df['sector'].value_counts().head(10))
+        sector_dist = selected_df['sector'].value_counts()
+        print(sector_dist.head(10))
+        stats['sector_distribution'] = sector_dist.to_dict()
 
-    return selected
+    return selected, stats
 
 
 # ============================================================================
@@ -602,10 +621,10 @@ def main():
     download_results = download_all_tickers(download_list, START_DATE, END_DATE)
     
     # Step 4: Enrich with metadata
-    enriched = enrich_with_metadata(download_results['valid'], max_stocks=2000)
+    enriched = enrich_with_metadata(download_results['valid'], max_stocks=2500)
     
     # Step 5: Stratified selection
-    selected_tickers = stratified_selection(
+    selected_tickers, selection_stats = stratified_selection(
         enriched,
         download_results['delisted'],
         TARGET_FINAL
@@ -622,12 +641,22 @@ def main():
     print("\n" + "=" * 70)
     print("SAVING TO DISK")
     print("=" * 70)
-    
+
+    # Determine output directory
+    output_dir = Path(__file__).parent
+
     # Save as pickle (preserves dataframes)
-    with open('training_data.pkl', 'wb') as f:
+    pkl_path = output_dir / 'training_data.pkl'
+    with open(pkl_path, 'wb') as f:
         pickle.dump(final_data, f)
-    print("✓ Saved: training_data.pkl")
-    
+    print(f"✓ Saved: {pkl_path}")
+
+    # Save selection stats
+    stats_path = output_dir / 'training_selection_stats.json'
+    with open(stats_path, 'w') as f:
+        json.dump(selection_stats, f, indent=2, default=str)
+    print(f"✓ Saved: {stats_path}")
+
     # Also create combined dataframe
     all_dfs = []
     for ticker, info in final_data.items():
@@ -641,8 +670,9 @@ def main():
 
     if all_dfs:
         combined_df = pd.concat(all_dfs, ignore_index=True)
-        combined_df.to_parquet('training_stocks_data.parquet')
-        print("✓ Saved: training_stocks_data.parquet")
+        parquet_path = output_dir / 'training_stocks_data.parquet'
+        combined_df.to_parquet(parquet_path)
+        print(f"✓ Saved: {parquet_path}")
 
         print(f"\n✅ COMPLETE!")
         print(f"   Total stocks: {len(final_data)}")

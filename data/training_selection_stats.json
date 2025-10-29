@@ -1,0 +1,22 @@
+{
+  "total_selected": 1379,
+  "active_stocks": 1350,
+  "failed_stocks": 29,
+  "failed_pct": 0.02102973168963017,
+  "market_cap_distribution": {},
+  "sector_distribution": {
+    "Financial Services": 231,
+    "Unknown": 219,
+    "Industrials": 171,
+    "Technology": 136,
+    "Consumer Cyclical": 121,
+    "Healthcare": 119,
+    "Real Estate": 80,
+    "Energy": 67,
+    "Basic Materials": 67,
+    "Consumer Defensive": 51,
+    "Communication Services": 49,
+    "Utilities": 38,
+    "": 1
+  }
+}
