@@ -6,7 +6,30 @@
 2. build_training_set.py bugs - zerodivisionerror, missing market cap, multiindex columns
 3. filtering issues - missed preferred shares ($), duplicates, class shares
 
-## solution - professional 3-step pipeline
+## solution - professional 4-step pipeline
+
+### step 0: download ticker lists (one-time, ~30 seconds)
+```bash
+cd /Users/deaz/Developer/project_quant/pQuant_ultimate/data
+uv run python get_tickers.py
+```
+
+**what it does:**
+- downloads us tickers from nasdaq ftp (official source)
+- downloads s&p 500 from stockanalysis.com api
+- downloads swedish stocks from stockanalysis.com api
+- cleans duplicate share classes (prefers b shares)
+
+**output:** `tickers_20251029.json`
+- ~12k us tickers
+- ~500 s&p 500 tickers
+- ~700 swedish tickers
+- 30 seconds
+- run once, reuse for months
+
+**note:** only run when you need fresh ticker lists (new ipos, delistings)
+
+---
 
 ### step 1: filter tickers (instant, no api)
 ```bash
@@ -71,19 +94,34 @@ uv run python build_training_set.py
 
 ---
 
+## complete pipeline flow
+
+```
+step 0: get_tickers.py
+  ↓ tickers_20251029.json (13k raw)
+step 1: filter_tickers.py
+  ↓ tickers_filtered_20251029.json (8.7k clean)
+step 2: validate_tickers.py
+  ↓ tickers_validated_20251029.json (~6-7k valid)
+step 3: build_training_set.py
+  ↓ training_data.pkl + training_stocks_data.parquet
+```
+
 ## total time comparison
 
 **old pipeline (wasteful):**
 ```
-validate 13k → filter → 3-4 hours
+get tickers → validate 13k → filter → 3.5-4.5 hours
 ```
 
 **new pipeline (efficient):**
 ```
-filter → validate 8.7k → build → 2.5-3.5 hours
+get tickers → filter → validate 8.7k → build → 3-4 hours
 ```
 
 **improvement:** 25% faster, 33% fewer api calls
+
+**step 0 amortized:** run once per month, reuse ticker list
 
 ---
 
@@ -127,6 +165,9 @@ filter → validate 8.7k → build → 2.5-3.5 hours
 after each step:
 
 ```bash
+# after downloading (step 0)
+python3 -c "import json; d=json.load(open('tickers_data/tickers_20251029.json')); print(f'raw: us={len(d.get(\"US\",[]))}, sp500={len(d.get(\"SP500\",[]))}, sweden={len(d.get(\"Sweden\",[]))}')"
+
 # after filtering (step 1)
 python3 -c "import json; d=json.load(open('tickers_data/tickers_filtered_20251029.json')); print(f'filtered: us={len(d.get(\"US\",[]))}, sp500={len(d.get(\"SP500\",[]))}, sweden={len(d.get(\"Sweden\",[]))}')"
 
@@ -156,9 +197,10 @@ TARGET_US_SAMPLE = 500  # instead of 2000
 ## architecture principles (per CLAUDE.md)
 
 **single responsibility:**
-- filter_tickers.py - filtering only
-- validate_tickers.py - validation only
-- build_training_set.py - training set only
+- get_tickers.py - download raw ticker lists only
+- filter_tickers.py - filtering only (no api)
+- validate_tickers.py - validation only (api)
+- build_training_set.py - training set construction only (api)
 
 **modular design:**
 - clear inputs/outputs
@@ -173,6 +215,14 @@ TARGET_US_SAMPLE = 500  # instead of 2000
 ---
 
 ## expected results
+
+**downloading (step 0):**
+- us: ~12k tickers (nasdaq ftp)
+- sp500: ~500 tickers (stockanalysis.com)
+- swedish: ~700 tickers (stockanalysis.com)
+- total: ~13k tickers
+- time: 30 seconds
+- note: run once per month, reuse list
 
 **filtering (step 1):**
 - removed: 4,315 tickers (33%)
@@ -202,8 +252,14 @@ TARGET_US_SAMPLE = 500  # instead of 2000
 ## summary
 
 **before:** validate everything → filter later (wasteful, 3-4 hours)
-**after:** filter first → validate clean (efficient, 2.5-3.5 hours)
+**after:** get tickers → filter first → validate clean → build (efficient, 3-4 hours)
 
 **key insight:** filtering is instant and free, validation costs time and api calls. do filtering first.
 
-**result:** professional 3-step pipeline following claude.md principles
+**complete pipeline:**
+0. get_tickers.py - download raw lists (30s, run once/month)
+1. filter_tickers.py - filter junk (instant, no api)
+2. validate_tickers.py - validate clean list (1-2 hours, api)
+3. build_training_set.py - build dataset (45-90 min, api)
+
+**result:** professional 4-step pipeline following claude.md principles (single responsibility, modular, efficient)
