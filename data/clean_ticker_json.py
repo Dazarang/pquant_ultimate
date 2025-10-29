@@ -25,11 +25,16 @@ def save_ticker_json(data: dict, output_path: str) -> None:
 def main():
     """Main execution."""
     # Configuration
-    INPUT_JSON = 'data/tickers_data/tickers_cleaned_20251023.json'
-    OUTPUT_JSON = f'data/tickers_data/tickers_validated_{datetime.now().strftime("%Y%m%d")}.json'
+    TEST_MODE = False  # Set to False for full validation
+    TEST_LIMIT = 200  # Tickers per category in test mode
+
+    INPUT_JSON = '/Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_20251029.json'
+    OUTPUT_JSON = f'/Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_validated_{datetime.now().strftime("%Y%m%d")}.json'
 
     print("=" * 70)
     print("TICKER VALIDATION AND CLEANING")
+    if TEST_MODE:
+        print(f"*** TEST MODE: Validating {TEST_LIMIT} tickers per category ***")
     print("=" * 70)
     print(f"Input: {INPUT_JSON}")
     print(f"Output: {OUTPUT_JSON}")
@@ -40,7 +45,7 @@ def main():
 
     # Create validator
     validator = TickerValidator(
-        validation_days=7,
+        validation_days=3,
         rate_limit_delay=0.15  # 150ms between requests
     )
 
@@ -49,39 +54,42 @@ def main():
 
     # Process US tickers
     if 'US' in data:
+        us_tickers = data['US'][:TEST_LIMIT] if TEST_MODE else data['US']
         print(f"\n{'=' * 70}")
-        print(f"VALIDATING US TICKERS ({len(data['US'])} total)")
+        print(f"VALIDATING US TICKERS ({len(us_tickers)} total)")
         print(f"{'=' * 70}")
 
-        valid_us = validator.filter_ticker_list(data['US'], verbose=True)
+        valid_us = validator.filter_ticker_list(us_tickers, verbose=True)
         cleaned_data['US'] = valid_us
 
-        print(f"\nUS tickers: {len(data['US'])} -> {len(valid_us)} "
-              f"(removed {len(data['US']) - len(valid_us)})")
+        print(f"\nUS tickers: {len(us_tickers)} -> {len(valid_us)} "
+              f"(removed {len(us_tickers) - len(valid_us)})")
 
     # Process S&P 500 (usually clean, but validate anyway)
     if 'SP500' in data:
+        sp500_tickers = data['SP500'][:TEST_LIMIT] if TEST_MODE else data['SP500']
         print(f"\n{'=' * 70}")
-        print(f"VALIDATING S&P 500 TICKERS ({len(data['SP500'])} total)")
+        print(f"VALIDATING S&P 500 TICKERS ({len(sp500_tickers)} total)")
         print(f"{'=' * 70}")
 
-        valid_sp500 = validator.filter_ticker_list(data['SP500'], verbose=True)
+        valid_sp500 = validator.filter_ticker_list(sp500_tickers, verbose=True)
         cleaned_data['SP500'] = valid_sp500
 
-        print(f"\nS&P 500: {len(data['SP500'])} -> {len(valid_sp500)} "
-              f"(removed {len(data['SP500']) - len(valid_sp500)})")
+        print(f"\nS&P 500: {len(sp500_tickers)} -> {len(valid_sp500)} "
+              f"(removed {len(sp500_tickers) - len(valid_sp500)})")
 
     # Process Swedish stocks
     if 'Sweden' in data:
+        sweden_tickers = data['Sweden'][:TEST_LIMIT] if TEST_MODE else data['Sweden']
         print(f"\n{'=' * 70}")
-        print(f"VALIDATING SWEDISH TICKERS ({len(data['Sweden'])} total)")
+        print(f"VALIDATING SWEDISH TICKERS ({len(sweden_tickers)} total)")
         print(f"{'=' * 70}")
 
-        valid_sweden = validator.filter_ticker_list(data['Sweden'], verbose=True)
+        valid_sweden = validator.filter_ticker_list(sweden_tickers, verbose=True)
         cleaned_data['Sweden'] = valid_sweden
 
-        print(f"\nSwedish stocks: {len(data['Sweden'])} -> {len(valid_sweden)} "
-              f"(removed {len(data['Sweden']) - len(valid_sweden)})")
+        print(f"\nSwedish stocks: {len(sweden_tickers)} -> {len(valid_sweden)} "
+              f"(removed {len(sweden_tickers) - len(valid_sweden)})")
 
     # Save cleaned data
     print(f"\n{'=' * 70}")

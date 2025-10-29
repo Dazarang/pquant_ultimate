@@ -1,26 +1,26 @@
 TICKER VALIDATION REPORT
 ======================================================================
 
-Date: 2025-10-29 20:25:00
-Input: data/tickers_data/tickers_cleaned_20251023.json
-Output: data/tickers_data/tickers_validated_20251029.json
+Date: 2025-10-29 20:45:59
+Input: /Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_20251029.json
+Output: /Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_validated_20251029.json
 
-Original total: 13144
-Cleaned total: 0
-Removed: 13144
+Original total: 13039
+Cleaned total: 599
+Removed: 12440
 
 
 US:
-  Original: 11917
-  Cleaned: 0
-  Removed: 11917
+  Original: 11813
+  Cleaned: 200
+  Removed: 11613
 
 SP500:
   Original: 503
-  Cleaned: 0
-  Removed: 503
+  Cleaned: 200
+  Removed: 303
 
 Sweden:
-  Original: 724
-  Cleaned: 0
-  Removed: 724
+  Original: 723
+  Cleaned: 199
+  Removed: 524

@@ -50,7 +50,7 @@ class TickerValidator:
                 start=self.start_date,
                 end=self.end_date,
                 progress=False,
-                show_errors=False
+                auto_adjust=True  # Silence FutureWarning
             )
 
             # Check if data exists
@@ -62,12 +62,32 @@ class TickerValidator:
                 return False, "insufficient_data"
 
             # Check for valid close price
-            close_col = 'Close' if 'Close' in data.columns else 'close'
-            if close_col not in data.columns:
-                return False, "missing_close_column"
+            # yfinance returns MultiIndex columns for single tickers
+            # data['Close'] might be Series or DataFrame depending on structure
+            try:
+                close_prices = data['Close']
+                # Handle both Series and DataFrame (MultiIndex case)
+                import pandas as pd
+                if isinstance(close_prices, pd.DataFrame):
+                    has_all_nan = close_prices.isna().all().all()  # Double all() for DataFrame
+                else:
+                    has_all_nan = close_prices.isna().all()  # Single all() for Series
 
-            if data[close_col].isna().all():
-                return False, "all_prices_nan"
+                if has_all_nan:
+                    return False, "all_prices_nan"
+            except (KeyError, ValueError):
+                # Try lowercase
+                try:
+                    close_prices = data['close']
+                    if isinstance(close_prices, pd.DataFrame):
+                        has_all_nan = close_prices.isna().all().all()
+                    else:
+                        has_all_nan = close_prices.isna().all()
+
+                    if has_all_nan:
+                        return False, "all_prices_nan"
+                except (KeyError, ValueError):
+                    return False, "missing_close_column"
 
             # Valid ticker
             return True, "valid"

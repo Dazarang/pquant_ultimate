@@ -5,80 +5,52 @@ Uses yfinance with smart filtering and stratification
 
 import json
 import pandas as pd
-import numpy as np
 import yfinance as yf
-from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 import time
 import pickle
-from datetime import datetime, timedelta
-from collections import Counter
 
 # ============================================================================
 # STEP 1: LOAD AND FILTER TICKERS
 # ============================================================================
 
-def load_and_filter_tickers(json_path):
+def load_tickers(json_path):
     """
-    Load tickers and filter out noise (warrants, units, preferred, ETFs)
+    Load pre-filtered and validated tickers.
+    No filtering - assumes already filtered by filter_tickers.py
     """
     print("\n" + "=" * 70)
-    print("STEP 1: LOADING AND FILTERING TICKERS")
+    print("STEP 1: LOADING VALIDATED TICKERS")
     print("=" * 70)
-    
+
     with open(json_path, 'r') as f:
         data = json.load(f)
-    
-    # Filter US tickers
-    us_tickers = data['US']
-    print(f"\nUS tickers (raw): {len(us_tickers)}")
-    
-    # Remove derivatives and junk
-    us_filtered = [
-        t for t in us_tickers
-        if not (
-            t.endswith('W') or  # Warrants
-            t.endswith('U') or  # Units
-            t.endswith('R') or  # Rights
-            '.W' in t or        # Warrants (alt format)
-            '.U' in t or        # Units (alt format)
-            '+' in t or         # Special shares
-            '=' in t or         # When-issued
-            '^' in t or         # Preferred (some formats)
-            len(t) > 6 or       # Likely derivatives
-            t.endswith('WW')    # Double warrants
-        )
-    ]
-    
-    # Additional filters for preferred shares (complex patterns)
-    us_filtered = [
-        t for t in us_filtered
-        if not any(t.endswith(suffix) for suffix in ['P', 'PR', 'PRA', 'PRB', 'PRC'])
-    ]
-    
-    # Filter common ETF patterns
-    etf_patterns = [
-        'SPY', 'QQQ', 'IWM', 'EEM', 'VT', 'VO', 'AGG', 'BND',
-        'XL', 'IWR', 'IWV', 'VEA', 'VWO', 'GLD', 'SLV', 'USO'
-    ]
-    us_filtered = [
-        t for t in us_filtered
-        if not any(t.startswith(pattern) for pattern in etf_patterns)
-    ]
-    
-    print(f"US tickers (filtered): {len(us_filtered)}")
-    print(f"  Removed: {len(us_tickers) - len(us_filtered)} tickers")
-    
-    # S&P 500 (already clean)
-    sp500 = data['SP500']
-    print(f"\nS&P 500: {len(sp500)} tickers (will prioritize these)")
-    
-    # Swedish stocks (optional, very clean)
+
+    # Load US tickers (already filtered and validated)
+    us_tickers = data.get('US', [])
+    if us_tickers:
+        print(f"\nUS tickers: {len(us_tickers)} (pre-filtered & validated)")
+    else:
+        print("\nWarning: No US tickers found in JSON")
+
+    # S&P 500 (already validated)
+    sp500 = data.get('SP500', [])
+    if sp500:
+        print(f"S&P 500: {len(sp500)} tickers (will prioritize these)")
+    else:
+        print("Warning: No S&P 500 tickers found in JSON")
+
+    # Swedish stocks (already validated)
     sweden = data.get('Sweden', [])
-    print(f"Swedish stocks: {len(sweden)} tickers")
-    
+    if sweden:
+        print(f"Swedish stocks: {len(sweden)} tickers")
+        print("  Note: Swedish market caps smaller than US (large-cap ~$5-10B vs US $10B+)")
+
+    total = len(us_tickers) + len(sp500) + len(sweden)
+    print(f"\nTotal tickers loaded: {total}")
+
     return {
-        'us_filtered': us_filtered,
+        'us_filtered': us_tickers,
         'sp500': sp500,
         'sweden': sweden
     }
@@ -139,19 +111,35 @@ def check_data_quality(ticker, df, current_date):
     """
     if df is None or df.empty or len(df) < 100:
         return {'status': 'rejected', 'reason': 'insufficient_data'}
-    
+
     # Basic stats
     last_date = df.index[-1]
     first_date = df.index[0]
     days_of_data = len(df)
-    
-    # Handle Volume column (might be uppercase or lowercase)
-    volume_col = 'Volume' if 'Volume' in df.columns else 'volume'
-    close_col = 'Close' if 'Close' in df.columns else 'close'
-    
-    avg_volume = df[volume_col].mean()
-    avg_price = df[close_col].mean()
-    last_price = df[close_col].iloc[-1]
+
+    # Handle column access (yfinance returns MultiIndex or simple columns)
+    # For batch downloads: columns are ('Close', 'AAPL'), ('Volume', 'AAPL')
+    # For single ticker: columns are 'Close', 'Volume'
+    try:
+        volume_data = df['Volume']
+        close_data = df['Close']
+    except KeyError:
+        # Try lowercase
+        try:
+            volume_data = df['volume']
+            close_data = df['close']
+        except KeyError:
+            return {'status': 'rejected', 'reason': 'missing_price_columns'}
+
+    # Handle both Series and DataFrame (MultiIndex case)
+    if isinstance(volume_data, pd.DataFrame):
+        avg_volume = volume_data.iloc[:, 0].mean()
+        last_price = close_data.iloc[-1, 0]
+        avg_price = close_data.iloc[:, 0].mean()
+    else:
+        avg_volume = volume_data.mean()
+        last_price = close_data.iloc[-1]
+        avg_price = close_data.mean()
     
     days_since_last = (pd.to_datetime(current_date) - last_date).days
     
@@ -336,9 +324,12 @@ def enrich_with_metadata(stock_list, max_stocks=None):
             ticker_obj = yf.Ticker(ticker)
 
             # Try fast_info first (more reliable for market cap)
+            # fast_info is an object with attributes, not a dict
             try:
                 fast_info = ticker_obj.fast_info
-                market_cap = fast_info.get('market_cap', 0) or fast_info.get('marketCap', 0)
+                market_cap = getattr(fast_info, 'market_cap', None) or getattr(fast_info, 'marketCap', None)
+                if market_cap is None:
+                    market_cap = 0
             except:
                 # Fallback to info if fast_info fails
                 try:
@@ -347,7 +338,7 @@ def enrich_with_metadata(stock_list, max_stocks=None):
                 except:
                     market_cap = 0
 
-            # Get sector/industry from info (not available in fast_info)
+            # Get sector/industry/country from info (not available in fast_info)
             try:
                 info = ticker_obj.info
                 sector = info.get('sector', 'Unknown')
@@ -394,6 +385,7 @@ def enrich_with_metadata(stock_list, max_stocks=None):
 def stratified_selection(enriched_stocks, failed_stocks, target_total=1500):
     """
     Select balanced training set by market cap and sector.
+    Handles Swedish vs US market cap differences.
     Falls back to volume-based selection if market cap unavailable.
     """
     print("\n" + "=" * 70)
@@ -410,11 +402,22 @@ def stratified_selection(enriched_stocks, failed_stocks, target_total=1500):
             'ticker': s['ticker'],
             'market_cap': s['metadata'].get('market_cap', 0),
             'sector': s['metadata'].get('sector', 'Unknown'),
+            'country': s['metadata'].get('country', 'Unknown'),
             'avg_volume': s['stats']['avg_volume'],
             'days_of_data': s['stats']['days_of_data'],
         }
         for s in enriched_stocks
     ])
+
+    # Separate Swedish stocks (different market cap scale)
+    # Swedish large-cap ~$5-10B vs US large-cap $10B+
+    is_swedish = df['country'] == 'Sweden'
+    df_us = df[~is_swedish]
+    df_swedish = df[is_swedish]
+
+    print(f"\nStock distribution:")
+    print(f"  US/International: {len(df_us)}")
+    print(f"  Swedish: {len(df_swedish)}")
 
     # Check if we have market cap data
     valid_market_caps = df[df['market_cap'] > 0]
@@ -425,12 +428,26 @@ def stratified_selection(enriched_stocks, failed_stocks, target_total=1500):
     if use_market_cap:
         print(f"Using market cap stratification ({len(valid_market_caps)}/{len(df)} stocks have market cap)")
 
-        # Market cap buckets
-        df['cap_bucket'] = pd.cut(
-            df['market_cap'],
-            bins=[0, 2e9, 10e9, 200e9, 1e15],
-            labels=['small', 'mid', 'large', 'mega']
-        )
+        # Apply different market cap buckets for US vs Swedish
+        # US: small <$2B, mid $2-10B, large $10-200B, mega $200B+
+        # Swedish: adjusted down (large-cap there ~$5-10B)
+        if len(df_us) > 0:
+            df_us['cap_bucket'] = pd.cut(
+                df_us['market_cap'],
+                bins=[0, 2e9, 10e9, 200e9, 1e15],
+                labels=['small', 'mid', 'large', 'mega']
+            )
+
+        if len(df_swedish) > 0:
+            # Lower thresholds for Swedish market
+            df_swedish['cap_bucket'] = pd.cut(
+                df_swedish['market_cap'],
+                bins=[0, 500e6, 2e9, 10e9, 1e15],  # Adjusted: 500M, 2B, 10B
+                labels=['small', 'mid', 'large', 'mega']
+            )
+
+        # Recombine
+        df = pd.concat([df_us, df_swedish], ignore_index=True)
 
         # Target allocation (save 10% for failures)
         target_by_bucket = {
@@ -559,16 +576,24 @@ def main():
     print("\n" + "=" * 70)
     print("STOCK BOTTOM DETECTION - TRAINING DATASET BUILDER")
     print("=" * 70)
-    
+
     # Configuration
-    TICKER_JSON_PATH = 'data/tickers_data/tickers_cleaned_20251023.json'
-    START_DATE = '2024-01-01'
-    END_DATE = '2024-12-31'
-    TARGET_US_SAMPLE = 2000  # How many US stocks to try downloading
-    TARGET_FINAL = 1500      # Final training set size
-    
-    # Step 1: Load and filter
-    tickers_dict = load_and_filter_tickers(TICKER_JSON_PATH)
+    TICKER_JSON_PATH = '/Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_validated_20251029.json'
+    START_DATE = '2015-01-01'  # 10 years of data for pattern recognition
+    END_DATE = '2024-12-31'    # ~2,500 trading days (250/year * 10)
+    TARGET_US_SAMPLE = 2000    # How many US stocks to try downloading
+    TARGET_FINAL = 1500        # Final training set size
+
+    print(f"\nConfiguration:")
+    print(f"  Input: {TICKER_JSON_PATH.split('/')[-1]}")
+    print(f"  Date range: {START_DATE} to {END_DATE} (10 years, ~2500 trading days)")
+    print(f"  Data frequency: Daily (default yfinance interval)")
+    print(f"  Target sample: {TARGET_US_SAMPLE} US stocks")
+    print(f"  Target final: {TARGET_FINAL} stocks")
+    print(f"\nNote: Input should be filtered & validated (run filter_tickers.py -> validate_tickers.py first)")
+
+    # Step 1: Load validated tickers
+    tickers_dict = load_tickers(TICKER_JSON_PATH)
     
     # Step 2: Create download list
     download_list = create_download_list(tickers_dict, TARGET_US_SAMPLE)
