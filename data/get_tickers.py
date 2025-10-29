@@ -310,41 +310,86 @@ class TickerCleaner:
 
         return base
 
+    def _get_share_class(self, ticker: str) -> str | None:
+        """
+        extract share class from ticker
+
+        examples:
+            BRK-A -> A
+            BRK-B -> B
+            ERIC-A.ST -> A
+            ERIC-B.ST -> B
+            AAPL -> None
+        """
+        # remove exchange suffix first
+        ticker_without_exchange = ticker
+        for suffix in ['.ST', '.TO', '.L', '.AX', '.HK', '.T']:
+            if ticker.endswith(suffix):
+                ticker_without_exchange = ticker.replace(suffix, '')
+                break
+
+        # extract share class (everything after first hyphen)
+        if '-' in ticker_without_exchange:
+            parts = ticker_without_exchange.split('-')
+            if len(parts) >= 2:
+                return parts[1]
+
+        return None
+
     def clean(self, tickers: list[str], market_name: str = "") -> list[str]:
         """
         deduplicate tickers by keeping one share class per company
+        prefers B shares (more liquid) when available
 
         args:
             tickers: list of ticker symbols
             market_name: name for logging purposes
 
         returns:
-            deduplicated list (first occurrence of each company)
+            deduplicated list (B shares preferred, otherwise first occurrence)
         """
-        seen_bases: dict[str, str] = {}  # base -> full ticker
-        cleaned = []
-        removed = []
-
+        # group tickers by base name
+        base_groups: dict[str, list[str]] = {}
         for ticker in tickers:
             base = self._extract_base_name(ticker)
+            if base not in base_groups:
+                base_groups[base] = []
+            base_groups[base].append(ticker)
 
-            if base not in seen_bases:
-                seen_bases[base] = ticker
-                cleaned.append(ticker)
+        # select best ticker for each base (prefer B shares)
+        selected: dict[str, str] = {}
+        for base, group in base_groups.items():
+            if len(group) == 1:
+                selected[base] = group[0]
             else:
-                removed.append(ticker)
-                logger.debug(f"{market_name}: removing {ticker} (keeping {seen_bases[base]})")
+                # prefer B share if available
+                b_shares = [t for t in group if self._get_share_class(t) == 'B']
+                if b_shares:
+                    selected[base] = b_shares[0]
+                else:
+                    selected[base] = group[0]
+
+        # build cleaned list and removed list
+        cleaned = []
+        removed = []
+        for base, group in base_groups.items():
+            chosen = selected[base]
+            cleaned.append(chosen)
+            for ticker in group:
+                if ticker != chosen:
+                    removed.append(ticker)
+                    logger.debug(f"{market_name}: removing {ticker} (keeping {chosen})")
 
         if removed:
-            logger.info(f"{market_name}: removed {len(removed)} duplicates")
+            logger.info(f"{market_name}: removed {len(removed)} duplicates (preferred B shares)")
             if len(removed) <= 5:
                 for ticker in removed:
                     base = self._extract_base_name(ticker)
-                    logger.info(f"  {ticker} -> kept {seen_bases[base]}")
+                    logger.info(f"  {ticker} -> kept {selected[base]}")
             else:
                 for ticker in removed[:3]:
                     base = self._extract_base_name(ticker)
-                    logger.info(f"  {ticker} -> kept {seen_bases[base]}")
+                    logger.info(f"  {ticker} -> kept {selected[base]}")
                 logger.info(f"  ... and {len(removed) - 3} more")
 
         self.removed_count += len(removed)
