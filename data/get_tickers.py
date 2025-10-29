@@ -1,8 +1,9 @@
 """
-ticker downloader for us and swedish markets
+ticker downloader for us, sp500, and swedish markets
 
 sources:
 - us: nasdaq ftp (official)
+- sp500: stockanalysis.com api
 - sweden: stockanalysis.com api
 """
 
@@ -82,6 +83,63 @@ class USTickerFetcher:
 
         except Exception as e:
             logger.error(f"error downloading from nasdaq ftp: {e}")
+
+        self.tickers = tickers
+        return tickers
+
+
+class SP500TickerFetcher:
+    """fetches s&p 500 tickers from stockanalysis.com api"""
+
+    def __init__(self):
+        self.tickers: List[str] = []
+        self.session = requests.Session()
+        self.base_url = "https://stockanalysis.com/api/screener/s/f"
+
+    def fetch(self) -> List[str]:
+        """
+        download s&p 500 tickers from stockanalysis.com api
+
+        returns:
+            list of ticker symbols
+        """
+        logger.info("=" * 70)
+        logger.info("fetching s&p 500 tickers from stockanalysis.com")
+        logger.info("=" * 70)
+
+        tickers = []
+
+        try:
+            params = {
+                'm': 'marketCap',
+                's': 'desc',
+                'c': 'no,s,tr1m,tr6m,trYTD,tr1y,tr5y,tr10y,marketCap',
+                'sc': 'marketCap',
+                'f': 'inIndex-includes-SP500',
+                'i': 'stocks'
+            }
+
+            logger.info("fetching s&p 500 stocks...")
+            response = self.session.get(self.base_url, params=params, timeout=30)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if data['status'] != 200:
+                logger.error(f"api returned status {data['status']}")
+                return tickers
+
+            items = data['data']['data']
+
+            for item in items:
+                ticker = item.get('s', '')
+                if ticker:
+                    tickers.append(ticker)
+
+            logger.info(f"total s&p 500 tickers: {len(tickers)}")
+
+        except Exception as e:
+            logger.error(f"error downloading s&p 500 tickers: {e}")
 
         self.tickers = tickers
         return tickers
@@ -183,10 +241,11 @@ class SwedishTickerFetcher:
 
 
 class TickerDownloader:
-    """main ticker downloader coordinating us and swedish fetchers"""
+    """main ticker downloader coordinating us, sp500, and swedish fetchers"""
 
     def __init__(self):
         self.us_fetcher = USTickerFetcher()
+        self.sp500_fetcher = SP500TickerFetcher()
         self.swedish_fetcher = SwedishTickerFetcher()
         self.tickers: Dict[str, List[str]] = {}
 
@@ -195,7 +254,7 @@ class TickerDownloader:
         download tickers from all sources
 
         returns:
-            dict with keys 'US' and 'Sweden' containing ticker lists
+            dict with keys 'US', 'SP500', and 'Sweden' containing ticker lists
         """
         start_time = datetime.now()
         logger.info("starting ticker download")
@@ -204,11 +263,15 @@ class TickerDownloader:
         # fetch us tickers
         us_tickers = self.us_fetcher.fetch()
 
+        # fetch sp500 tickers
+        sp500_tickers = self.sp500_fetcher.fetch()
+
         # fetch swedish tickers
         swedish_tickers = self.swedish_fetcher.fetch()
 
         self.tickers = {
             'US': us_tickers,
+            'SP500': sp500_tickers,
             'Sweden': swedish_tickers
         }
 
@@ -219,8 +282,9 @@ class TickerDownloader:
         logger.info("download complete")
         logger.info("=" * 70)
         logger.info(f"us tickers: {len(us_tickers):,}")
+        logger.info(f"sp500 tickers: {len(sp500_tickers):,}")
         logger.info(f"swedish tickers: {len(swedish_tickers):,}")
-        logger.info(f"total: {len(us_tickers) + len(swedish_tickers):,}")
+        logger.info(f"total: {len(us_tickers) + len(sp500_tickers) + len(swedish_tickers):,}")
         logger.info(f"time elapsed: {elapsed:.1f} seconds")
 
         return self.tickers
@@ -242,7 +306,7 @@ class TickerDownloader:
 def main():
     """main entry point"""
     logger.info("ticker downloader")
-    logger.info("markets: us, sweden")
+    logger.info("markets: us, sp500, sweden")
     logger.info("")
 
     downloader = TickerDownloader()
