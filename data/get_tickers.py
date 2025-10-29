@@ -8,12 +8,12 @@ sources:
 """
 
 import ftplib
-import requests
 import json
 import logging
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, List
+from pathlib import Path
+
+import requests
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,7 +30,7 @@ class USTickerFetcher:
     """fetches us tickers from nasdaq ftp"""
 
     def __init__(self):
-        self.tickers: List[str] = []
+        self.tickers: list[str] = []
 
     def _convert_ticker(self, ticker: str) -> str:
         """
@@ -51,7 +51,7 @@ class USTickerFetcher:
         # convert remaining dots (share classes)
         return ticker.replace('.', '-')
 
-    def fetch(self) -> List[str]:
+    def fetch(self) -> list[str]:
         """
         download us market tickers from nasdaq ftp
 
@@ -111,7 +111,7 @@ class SP500TickerFetcher:
     """fetches s&p 500 tickers from stockanalysis.com api"""
 
     def __init__(self):
-        self.tickers: List[str] = []
+        self.tickers: list[str] = []
         self.session = requests.Session()
         self.base_url = "https://stockanalysis.com/api/screener/s/f"
 
@@ -134,7 +134,7 @@ class SP500TickerFetcher:
         # convert remaining dots (share classes)
         return ticker.replace('.', '-')
 
-    def fetch(self) -> List[str]:
+    def fetch(self) -> list[str]:
         """
         download s&p 500 tickers from stockanalysis.com api
 
@@ -187,7 +187,7 @@ class SwedishTickerFetcher:
     """fetches swedish tickers from stockanalysis.com api"""
 
     def __init__(self):
-        self.tickers: List[str] = []
+        self.tickers: list[str] = []
         self.session = requests.Session()
         self.base_url = "https://stockanalysis.com/api/screener/a/f"
 
@@ -212,7 +212,7 @@ class SwedishTickerFetcher:
 
         return ticker
 
-    def fetch(self) -> List[str]:
+    def fetch(self) -> list[str]:
         """
         download swedish market tickers from stockanalysis.com api
 
@@ -278,18 +278,93 @@ class SwedishTickerFetcher:
         return tickers
 
 
+class TickerCleaner:
+    """removes duplicate share classes from tickers across all markets"""
+
+    def __init__(self):
+        self.removed_count = 0
+
+    def _extract_base_name(self, ticker: str) -> str:
+        """
+        extract base company name from ticker
+
+        examples:
+            BRK-A -> BRK
+            BRK-B -> BRK
+            ERIC-A.ST -> ERIC
+            ERIC-B.ST -> ERIC
+            AAPL -> AAPL
+        """
+        # handle exchange suffix first
+        ticker_without_exchange = ticker
+        for suffix in ['.ST', '.TO', '.L', '.AX', '.HK', '.T']:
+            if ticker.endswith(suffix):
+                ticker_without_exchange = ticker.replace(suffix, '')
+                break
+
+        # get base name (everything before first hyphen)
+        if '-' in ticker_without_exchange:
+            base = ticker_without_exchange.split('-')[0]
+        else:
+            base = ticker_without_exchange
+
+        return base
+
+    def clean(self, tickers: list[str], market_name: str = "") -> list[str]:
+        """
+        deduplicate tickers by keeping one share class per company
+
+        args:
+            tickers: list of ticker symbols
+            market_name: name for logging purposes
+
+        returns:
+            deduplicated list (first occurrence of each company)
+        """
+        seen_bases: dict[str, str] = {}  # base -> full ticker
+        cleaned = []
+        removed = []
+
+        for ticker in tickers:
+            base = self._extract_base_name(ticker)
+
+            if base not in seen_bases:
+                seen_bases[base] = ticker
+                cleaned.append(ticker)
+            else:
+                removed.append(ticker)
+                logger.debug(f"{market_name}: removing {ticker} (keeping {seen_bases[base]})")
+
+        if removed:
+            logger.info(f"{market_name}: removed {len(removed)} duplicates")
+            if len(removed) <= 5:
+                for ticker in removed:
+                    base = self._extract_base_name(ticker)
+                    logger.info(f"  {ticker} -> kept {seen_bases[base]}")
+            else:
+                for ticker in removed[:3]:
+                    base = self._extract_base_name(ticker)
+                    logger.info(f"  {ticker} -> kept {seen_bases[base]}")
+                logger.info(f"  ... and {len(removed) - 3} more")
+
+        self.removed_count += len(removed)
+        return cleaned
+
+
 class TickerDownloader:
     """main ticker downloader coordinating us, sp500, and swedish fetchers"""
 
-    def __init__(self):
+    def __init__(self, clean_duplicates: bool = True):
         self.us_fetcher = USTickerFetcher()
         self.sp500_fetcher = SP500TickerFetcher()
         self.swedish_fetcher = SwedishTickerFetcher()
-        self.tickers: Dict[str, List[str]] = {}
+        self.cleaner = TickerCleaner() if clean_duplicates else None
+        self.tickers: dict[str, list[str]] = {}
+        self.clean_duplicates = clean_duplicates
 
-    def download_all(self) -> Dict[str, List[str]]:
+    def download_all(self) -> dict[str, list[str]]:
         """
-        download tickers from all sources
+        download tickers from all sources and optionally clean duplicates
 
         returns:
             dict with keys 'US', 'SP500', and 'Sweden' containing ticker lists
@@ -307,22 +382,44 @@ class TickerDownloader:
         # fetch swedish tickers
         swedish_tickers = self.swedish_fetcher.fetch()
 
-        self.tickers = {
-            'US': us_tickers,
-            'SP500': sp500_tickers,
-            'Sweden': swedish_tickers
-        }
+        # clean duplicates if enabled
+        if self.clean_duplicates and self.cleaner:
+            logger.info("\n" + "=" * 70)
+            logger.info("cleaning duplicate share classes")
+            logger.info("=" * 70)
+
+            us_tickers_clean = self.cleaner.clean(us_tickers, "US")
+            sp500_tickers_clean = self.cleaner.clean(sp500_tickers, "SP500")
+            swedish_tickers_clean = self.cleaner.clean(swedish_tickers, "Sweden")
+
+            logger.info(f"\ntotal duplicates removed: {self.cleaner.removed_count}")
+
+            self.tickers = {
+                'US': us_tickers_clean,
+                'SP500': sp500_tickers_clean,
+                'Sweden': swedish_tickers_clean
+            }
+        else:
+            self.tickers = {
+                'US': us_tickers,
+                'SP500': sp500_tickers,
+                'Sweden': swedish_tickers
+            }
 
         end_time = datetime.now()
         elapsed = (end_time - start_time).total_seconds()
 
+        us_final = self.tickers['US']
+        sp500_final = self.tickers['SP500']
+        swedish_final = self.tickers['Sweden']
+
         logger.info("\n" + "=" * 70)
         logger.info("download complete")
         logger.info("=" * 70)
-        logger.info(f"us tickers: {len(us_tickers):,}")
-        logger.info(f"sp500 tickers: {len(sp500_tickers):,}")
-        logger.info(f"swedish tickers: {len(swedish_tickers):,}")
-        logger.info(f"total: {len(us_tickers) + len(sp500_tickers) + len(swedish_tickers):,}")
+        logger.info(f"us tickers: {len(us_final):,}")
+        logger.info(f"sp500 tickers: {len(sp500_final):,}")
+        logger.info(f"swedish tickers: {len(swedish_final):,}")
+        logger.info(f"total: {len(us_final) + len(sp500_final) + len(swedish_final):,}")
         logger.info(f"time elapsed: {elapsed:.1f} seconds")
 
         return self.tickers
