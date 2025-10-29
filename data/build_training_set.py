@@ -117,9 +117,9 @@ def create_download_list(tickers_dict, target_us_sample=2000):
     print(f"✓ Added {len(us_sample)} sampled US tickers (Priority 2)")
     
     # Priority 3: Swedish stocks (optional - comment out if not needed)
-    # sweden = tickers_dict['sweden']
-    # download_list.extend(sweden)  # Take top 200 Swedish
-    # print(f"✓ Added Swedish tickers (Priority 3)")
+    sweden = tickers_dict['sweden']
+    download_list.extend(sweden)
+    print(f"✓ Added {len(sweden)} Swedish tickers (Priority 3)")
     
     # Remove duplicates
     download_list = list(set(download_list))
@@ -479,10 +479,10 @@ def main():
     
     # Configuration
     TICKER_JSON_PATH = 'data/tickers_data/tickers_cleaned_20251023.json'
-    START_DATE = '2015-01-01'
+    START_DATE = '2024-01-01'
     END_DATE = '2024-12-31'
-    TARGET_US_SAMPLE = 100  # How many US stocks to try downloading (TEST: reduced from 2000)
-    TARGET_FINAL = 50      # Final training set size (TEST: reduced from 1500)
+    TARGET_US_SAMPLE = 2000  # How many US stocks to try downloading
+    TARGET_FINAL = 1500      # Final training set size
     
     # Step 1: Load and filter
     tickers_dict = load_and_filter_tickers(TICKER_JSON_PATH)
