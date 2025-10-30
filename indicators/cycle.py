@@ -3,9 +3,10 @@ Cycle indicators: HT_SINE, HT_TRENDMODE.
 Hilbert Transform-based indicators for cycle detection.
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from numba import njit
+
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 
@@ -30,12 +31,9 @@ def _hilbert_transform_numba(data: np.ndarray) -> tuple:
     detrend[:7] = 0.0
 
     for i in range(7, n):
-        detrend[i] = (
-            0.0962 * data[i] +
-            0.5769 * data[i-2] -
-            0.5769 * data[i-4] -
-            0.0962 * data[i-6]
-        ) * (0.075 * (i-6) + 0.54)
+        detrend[i] = (0.0962 * data[i] + 0.5769 * data[i - 2] - 0.5769 * data[i - 4] - 0.0962 * data[i - 6]) * (
+            0.075 * (i - 6) + 0.54
+        )
 
     # InPhase and Quadrature components
     inphase = np.empty(n)
@@ -45,8 +43,8 @@ def _hilbert_transform_numba(data: np.ndarray) -> tuple:
 
     for i in range(7, n):
         # Weighted sum for Hilbert Transform
-        inphase[i] = 1.25 * (detrend[i-4] - 0.33 * detrend[i-6])
-        quadrature[i] = detrend[i-2]
+        inphase[i] = 1.25 * (detrend[i - 4] - 0.33 * detrend[i - 6])
+        quadrature[i] = detrend[i - 2]
 
     # Smooth InPhase and Quadrature
     smooth_inphase = np.empty(n)
@@ -55,8 +53,8 @@ def _hilbert_transform_numba(data: np.ndarray) -> tuple:
     smooth_quadrature[:] = quadrature[:]
 
     for i in range(7, n):
-        smooth_inphase[i] = 0.33 * inphase[i] + 0.67 * smooth_inphase[i-1]
-        smooth_quadrature[i] = 0.33 * quadrature[i] + 0.67 * smooth_quadrature[i-1]
+        smooth_inphase[i] = 0.33 * inphase[i] + 0.67 * smooth_inphase[i - 1]
+        smooth_quadrature[i] = 0.33 * quadrature[i] + 0.67 * smooth_quadrature[i - 1]
 
     # Calculate phase
     phase = np.empty(n)
@@ -66,7 +64,7 @@ def _hilbert_transform_numba(data: np.ndarray) -> tuple:
         if smooth_inphase[i] != 0:
             phase[i] = np.arctan(smooth_quadrature[i] / smooth_inphase[i])
         else:
-            phase[i] = phase[i-1]
+            phase[i] = phase[i - 1]
 
     return smooth_inphase, smooth_quadrature, phase
 
@@ -94,11 +92,7 @@ def _calculate_sine_wave_numba(phase: np.ndarray) -> tuple:
 
 
 @njit
-def _detect_trend_mode_numba(
-    inphase: np.ndarray,
-    quadrature: np.ndarray,
-    threshold: float = 0.5
-) -> np.ndarray:
+def _detect_trend_mode_numba(inphase: np.ndarray, quadrature: np.ndarray, threshold: float = 0.5) -> np.ndarray:
     """
     Detect trend vs cycle mode using Hilbert Transform components.
 
@@ -115,13 +109,13 @@ def _detect_trend_mode_numba(
 
     for i in range(7, n):
         # Calculate instantaneous amplitude
-        amplitude = np.sqrt(inphase[i]**2 + quadrature[i]**2)
+        amplitude = np.sqrt(inphase[i] ** 2 + quadrature[i] ** 2)
 
         # Compare with smoothed amplitude
         if i >= 14:
             avg_amplitude = 0.0
-            for j in range(i-7, i):
-                avg_amplitude += np.sqrt(inphase[j]**2 + quadrature[j]**2)
+            for j in range(i - 7, i):
+                avg_amplitude += np.sqrt(inphase[j] ** 2 + quadrature[j] ** 2)
             avg_amplitude /= 7
 
             # Trend if amplitude is consistently high

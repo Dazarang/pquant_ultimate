@@ -2,11 +2,10 @@
 Test pattern recognition indicators.
 """
 
-import pytest
 import numpy as np
 import talib
-from indicators.pattern import find_pivots, Hammer
-from tests.conftest import assert_series_close
+
+from indicators.pattern import Hammer, find_pivots
 
 
 class TestFindPivots:
@@ -77,8 +76,7 @@ class TestHammer:
         # Pattern detection criteria may differ between implementations
         # Both use sophisticated pattern recognition with slightly different rules
         # Verify our format is correct
-        print(f"\nOur hammers: {(hammer != 0).sum()}, "
-              f"Reference hammers: {(reference_hammer != 0).sum()}")
+        print(f"\nOur hammers: {(hammer != 0).sum()}, Reference hammers: {(reference_hammer != 0).sum()}")
 
     def test_hammer_criteria(self, sample_ohlcv_data):
         """Test Hammer only appears at valid patterns."""

@@ -3,10 +3,10 @@ Ticker validation for filtering out delisted and invalid stocks.
 Single responsibility: validate ticker availability and data quality.
 """
 
-import yfinance as yf
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
 import time
+from datetime import datetime, timedelta
+
+import yfinance as yf
 
 
 class TickerValidator:
@@ -31,7 +31,7 @@ class TickerValidator:
         self.end_date = datetime.now()
         self.start_date = self.end_date - timedelta(days=validation_days)
 
-    def validate_single_ticker(self, ticker: str) -> Tuple[bool, str]:
+    def validate_single_ticker(self, ticker: str) -> tuple[bool, str]:
         """
         Validate a single ticker.
 
@@ -50,7 +50,7 @@ class TickerValidator:
                 start=self.start_date,
                 end=self.end_date,
                 progress=False,
-                auto_adjust=True  # Silence FutureWarning
+                auto_adjust=True,  # Silence FutureWarning
             )
 
             # Check if data exists
@@ -65,9 +65,10 @@ class TickerValidator:
             # yfinance returns MultiIndex columns for single tickers
             # data['Close'] might be Series or DataFrame depending on structure
             try:
-                close_prices = data['Close']
+                close_prices = data["Close"]
                 # Handle both Series and DataFrame (MultiIndex case)
                 import pandas as pd
+
                 if isinstance(close_prices, pd.DataFrame):
                     has_all_nan = close_prices.isna().all().all()  # Double all() for DataFrame
                 else:
@@ -78,7 +79,7 @@ class TickerValidator:
             except (KeyError, ValueError):
                 # Try lowercase
                 try:
-                    close_prices = data['close']
+                    close_prices = data["close"]
                     if isinstance(close_prices, pd.DataFrame):
                         has_all_nan = close_prices.isna().all().all()
                     else:
@@ -96,24 +97,20 @@ class TickerValidator:
             error_str = str(e).lower()
 
             # Categorize common errors
-            if 'delisted' in error_str or 'no price data' in error_str:
+            if "delisted" in error_str or "no price data" in error_str:
                 return False, "delisted"
-            elif 'timezone' in error_str or 'no timezone' in error_str:
+            elif "timezone" in error_str or "no timezone" in error_str:
                 return False, "no_timezone"
-            elif 'rate limit' in error_str or '429' in error_str:
+            elif "rate limit" in error_str or "429" in error_str:
                 return False, "rate_limited"
-            elif 'not found' in error_str or '404' in error_str:
+            elif "not found" in error_str or "404" in error_str:
                 return False, "not_found"
-            elif 'timeout' in error_str:
+            elif "timeout" in error_str:
                 return False, "timeout"
             else:
                 return False, f"error_{type(e).__name__}"
 
-    def validate_batch(
-        self,
-        tickers: List[str],
-        verbose: bool = True
-    ) -> Dict[str, Dict]:
+    def validate_batch(self, tickers: list[str], verbose: bool = True) -> dict[str, dict]:
         """
         Validate a batch of tickers.
 
@@ -130,55 +127,50 @@ class TickerValidator:
             }
         """
         results = {
-            'valid': [],
-            'invalid': {},
+            "valid": [],
+            "invalid": {},
         }
 
         for i, ticker in enumerate(tickers, 1):
             is_valid, reason = self.validate_single_ticker(ticker)
 
             if is_valid:
-                results['valid'].append(ticker)
+                results["valid"].append(ticker)
             else:
-                results['invalid'][ticker] = reason
+                results["invalid"][ticker] = reason
 
             # Progress update
             if verbose and i % 100 == 0:
-                valid_count = len(results['valid'])
-                invalid_count = len(results['invalid'])
-                print(f"  Progress: {i}/{len(tickers)} | "
-                      f"Valid: {valid_count} | Invalid: {invalid_count}")
+                valid_count = len(results["valid"])
+                invalid_count = len(results["invalid"])
+                print(f"  Progress: {i}/{len(tickers)} | Valid: {valid_count} | Invalid: {invalid_count}")
 
             # Rate limiting
             time.sleep(self.rate_limit_delay)
 
         # Add statistics
-        results['stats'] = self._compute_stats(results)
+        results["stats"] = self._compute_stats(results)
 
         return results
 
-    def _compute_stats(self, results: Dict) -> Dict:
+    def _compute_stats(self, results: dict) -> dict:
         """Compute validation statistics."""
-        total = len(results['valid']) + len(results['invalid'])
+        total = len(results["valid"]) + len(results["invalid"])
 
         # Count reasons
         reason_counts = {}
-        for reason in results['invalid'].values():
+        for reason in results["invalid"].values():
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
 
         return {
-            'total_checked': total,
-            'valid_count': len(results['valid']),
-            'invalid_count': len(results['invalid']),
-            'valid_rate': len(results['valid']) / total if total > 0 else 0,
-            'rejection_reasons': reason_counts
+            "total_checked": total,
+            "valid_count": len(results["valid"]),
+            "invalid_count": len(results["invalid"]),
+            "valid_rate": len(results["valid"]) / total if total > 0 else 0,
+            "rejection_reasons": reason_counts,
         }
 
-    def filter_ticker_list(
-        self,
-        tickers: List[str],
-        verbose: bool = True
-    ) -> List[str]:
+    def filter_ticker_list(self, tickers: list[str], verbose: bool = True) -> list[str]:
         """
         Filter a list of tickers, returning only valid ones.
 
@@ -194,11 +186,11 @@ class TickerValidator:
         if verbose:
             self._print_summary(results)
 
-        return results['valid']
+        return results["valid"]
 
-    def _print_summary(self, results: Dict) -> None:
+    def _print_summary(self, results: dict) -> None:
         """Print validation summary."""
-        stats = results['stats']
+        stats = results["stats"]
 
         print(f"\n{'=' * 70}")
         print("VALIDATION SUMMARY")
@@ -207,10 +199,6 @@ class TickerValidator:
         print(f"Valid: {stats['valid_count']} ({stats['valid_rate']:.1%})")
         print(f"Invalid: {stats['invalid_count']}")
 
-        print(f"\nRejection reasons:")
-        for reason, count in sorted(
-            stats['rejection_reasons'].items(),
-            key=lambda x: x[1],
-            reverse=True
-        ):
+        print("\nRejection reasons:")
+        for reason, count in sorted(stats["rejection_reasons"].items(), key=lambda x: x[1], reverse=True):
             print(f"  {reason}: {count}")

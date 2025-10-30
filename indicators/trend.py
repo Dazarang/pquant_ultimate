@@ -3,9 +3,10 @@ Trend indicators: SMA, EMA, VWAP.
 Pure vectorized implementations for maximum performance.
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from numba import njit
+
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 

@@ -3,9 +3,10 @@ Volatility indicators: BBands, ATR, ADR, APZ, SAR.
 Optimized with vectorization and Numba.
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from numba import njit
+
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 
@@ -56,9 +57,7 @@ class BBands(BaseIndicator):
 
 
 @njit
-def _calculate_atr_numba(
-    high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int
-) -> np.ndarray:
+def _calculate_atr_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int) -> np.ndarray:
     """
     Numba-optimized ATR calculation.
 
@@ -180,9 +179,7 @@ class APZ(BaseIndicator):
         ema2 = ema1.ewm(span=period, adjust=False).mean()
         return ema2
 
-    def calculate(
-        self, df: pd.DataFrame, period: int = 21, band_pct: float = 2.0
-    ) -> tuple[pd.Series, pd.Series]:
+    def calculate(self, df: pd.DataFrame, period: int = 21, band_pct: float = 2.0) -> tuple[pd.Series, pd.Series]:
         """
         Calculate Adaptive Price Zone.
 
@@ -293,9 +290,7 @@ class SAR(BaseIndicator):
     def __init__(self):
         super().__init__("SAR")
 
-    def calculate(
-        self, df: pd.DataFrame, acceleration: float = 0.02, maximum: float = 0.2
-    ) -> pd.Series:
+    def calculate(self, df: pd.DataFrame, acceleration: float = 0.02, maximum: float = 0.2) -> pd.Series:
         """
         Calculate Parabolic SAR.
 
@@ -340,16 +335,12 @@ def calculate_adr(df: pd.DataFrame, length: int = 20) -> pd.Series:
     return ADR().calculate(df, length)
 
 
-def calculate_apz(
-    df: pd.DataFrame, period: int = 21, band_pct: float = 2.0
-) -> tuple[pd.Series, pd.Series]:
+def calculate_apz(df: pd.DataFrame, period: int = 21, band_pct: float = 2.0) -> tuple[pd.Series, pd.Series]:
     """Calculate APZ - convenience function."""
     return APZ().calculate(df, period, band_pct)
 
 
-def calculate_sar(
-    df: pd.DataFrame, acceleration: float = 0.02, maximum: float = 0.2
-) -> pd.Series:
+def calculate_sar(df: pd.DataFrame, acceleration: float = 0.02, maximum: float = 0.2) -> pd.Series:
     """Calculate SAR - convenience function."""
     return SAR().calculate(df, acceleration, maximum)
 

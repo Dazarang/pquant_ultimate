@@ -17,11 +17,11 @@ import requests
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler('data/tickers_data/ticker_download.log', mode='w', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
+        logging.FileHandler("data/tickers_data/ticker_download.log", mode="w", encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -43,13 +43,13 @@ class USTickerFetcher:
             SFAST.ST -> SFAST.ST (unchanged)
         """
         # don't convert if ticker has exchange suffix
-        exchange_suffixes = ['.ST', '.TO', '.L', '.AX', '.HK', '.T']
+        exchange_suffixes = [".ST", ".TO", ".L", ".AX", ".HK", ".T"]
         for suffix in exchange_suffixes:
             if ticker.endswith(suffix):
                 return ticker
 
         # convert remaining dots (share classes)
-        return ticker.replace('.', '-')
+        return ticker.replace(".", "-")
 
     def fetch(self) -> list[str]:
         """
@@ -74,13 +74,13 @@ class USTickerFetcher:
             # nasdaq-listed stocks
             logger.info("downloading nasdaqlisted.txt...")
             nasdaq_data = []
-            ftp.retrlines('RETR nasdaqlisted.txt', nasdaq_data.append)
+            ftp.retrlines("RETR nasdaqlisted.txt", nasdaq_data.append)
 
             for line in nasdaq_data[1:-1]:
-                parts = line.split('|')
+                parts = line.split("|")
                 if len(parts) >= 2:
                     symbol = parts[0].strip()
-                    if symbol and symbol not in ['File Creation Time']:
+                    if symbol and symbol not in ["File Creation Time"]:
                         tickers.append(self._convert_ticker(symbol))
 
             logger.info(f"  nasdaq: {len(tickers)} tickers")
@@ -88,13 +88,13 @@ class USTickerFetcher:
             # other listings (nyse, amex, etc)
             logger.info("downloading otherlisted.txt...")
             other_data = []
-            ftp.retrlines('RETR otherlisted.txt', other_data.append)
+            ftp.retrlines("RETR otherlisted.txt", other_data.append)
 
             for line in other_data[1:-1]:
-                parts = line.split('|')
+                parts = line.split("|")
                 if len(parts) >= 7:
                     symbol = parts[0].strip()
-                    if symbol and symbol not in ['File Creation Time']:
+                    if symbol and symbol not in ["File Creation Time"]:
                         tickers.append(self._convert_ticker(symbol))
 
             ftp.quit()
@@ -126,13 +126,13 @@ class SP500TickerFetcher:
             SFAST.ST -> SFAST.ST (unchanged)
         """
         # don't convert if ticker has exchange suffix
-        exchange_suffixes = ['.ST', '.TO', '.L', '.AX', '.HK', '.T']
+        exchange_suffixes = [".ST", ".TO", ".L", ".AX", ".HK", ".T"]
         for suffix in exchange_suffixes:
             if ticker.endswith(suffix):
                 return ticker
 
         # convert remaining dots (share classes)
-        return ticker.replace('.', '-')
+        return ticker.replace(".", "-")
 
     def fetch(self) -> list[str]:
         """
@@ -149,12 +149,12 @@ class SP500TickerFetcher:
 
         try:
             params = {
-                'm': 'marketCap',
-                's': 'desc',
-                'c': 'no,s,tr1m,tr6m,trYTD,tr1y,tr5y,tr10y,marketCap',
-                'sc': 'marketCap',
-                'f': 'inIndex-includes-SP500',
-                'i': 'stocks'
+                "m": "marketCap",
+                "s": "desc",
+                "c": "no,s,tr1m,tr6m,trYTD,tr1y,tr5y,tr10y,marketCap",
+                "sc": "marketCap",
+                "f": "inIndex-includes-SP500",
+                "i": "stocks",
             }
 
             logger.info("fetching s&p 500 stocks...")
@@ -163,14 +163,14 @@ class SP500TickerFetcher:
 
             data = response.json()
 
-            if data['status'] != 200:
+            if data["status"] != 200:
                 logger.error(f"api returned status {data['status']}")
                 return tickers
 
-            items = data['data']['data']
+            items = data["data"]["data"]
 
             for item in items:
-                ticker = item.get('s', '')
+                ticker = item.get("s", "")
                 if ticker:
                     tickers.append(self._convert_ticker(ticker))
 
@@ -201,11 +201,11 @@ class SwedishTickerFetcher:
             sto/ACE -> ACE.ST
         """
         # remove sto/ prefix
-        ticker = ticker_str.replace('sto/', '')
+        ticker = ticker_str.replace("sto/", "")
 
         # replace . with - for share classes
-        if '.' in ticker:
-            ticker = ticker.replace('.', '-')
+        if "." in ticker:
+            ticker = ticker.replace(".", "-")
 
         # add .ST suffix
         ticker = f"{ticker}.ST"
@@ -229,14 +229,14 @@ class SwedishTickerFetcher:
         try:
             while True:
                 params = {
-                    'm': 'marketCap',
-                    's': 'desc',
-                    'c': 'no,s,n,marketCap,price,change,revenue',
-                    'sc': 'marketCap',
-                    'cn': '500',
-                    'f': 'exchangeCode-is-STO,subtype-is-stock',
-                    'p': str(page),
-                    'i': 'symbols'
+                    "m": "marketCap",
+                    "s": "desc",
+                    "c": "no,s,n,marketCap,price,change,revenue",
+                    "sc": "marketCap",
+                    "cn": "500",
+                    "f": "exchangeCode-is-STO,subtype-is-stock",
+                    "p": str(page),
+                    "i": "symbols",
                 }
 
                 logger.info(f"fetching page {page}...")
@@ -245,17 +245,17 @@ class SwedishTickerFetcher:
 
                 data = response.json()
 
-                if data['status'] != 200:
+                if data["status"] != 200:
                     logger.error(f"api returned status {data['status']}")
                     break
 
-                items = data['data']['data']
+                items = data["data"]["data"]
 
                 if not items:
                     break
 
                 for item in items:
-                    ticker_raw = item.get('s', '')
+                    ticker_raw = item.get("s", "")
                     if ticker_raw:
                         ticker_converted = self._convert_ticker(ticker_raw)
                         tickers.append(ticker_converted)
@@ -263,7 +263,7 @@ class SwedishTickerFetcher:
                 logger.info(f"  page {page}: {len(items)} tickers")
 
                 # check if we've fetched all
-                total = data['data'].get('resultsCount', 0)
+                total = data["data"].get("resultsCount", 0)
                 if len(tickers) >= total:
                     break
 
@@ -297,14 +297,14 @@ class TickerCleaner:
         """
         # handle exchange suffix first
         ticker_without_exchange = ticker
-        for suffix in ['.ST', '.TO', '.L', '.AX', '.HK', '.T']:
+        for suffix in [".ST", ".TO", ".L", ".AX", ".HK", ".T"]:
             if ticker.endswith(suffix):
-                ticker_without_exchange = ticker.replace(suffix, '')
+                ticker_without_exchange = ticker.replace(suffix, "")
                 break
 
         # get base name (everything before first hyphen)
-        if '-' in ticker_without_exchange:
-            base = ticker_without_exchange.split('-')[0]
+        if "-" in ticker_without_exchange:
+            base = ticker_without_exchange.split("-")[0]
         else:
             base = ticker_without_exchange
 
@@ -323,14 +323,14 @@ class TickerCleaner:
         """
         # remove exchange suffix first
         ticker_without_exchange = ticker
-        for suffix in ['.ST', '.TO', '.L', '.AX', '.HK', '.T']:
+        for suffix in [".ST", ".TO", ".L", ".AX", ".HK", ".T"]:
             if ticker.endswith(suffix):
-                ticker_without_exchange = ticker.replace(suffix, '')
+                ticker_without_exchange = ticker.replace(suffix, "")
                 break
 
         # extract share class (everything after first hyphen)
-        if '-' in ticker_without_exchange:
-            parts = ticker_without_exchange.split('-')
+        if "-" in ticker_without_exchange:
+            parts = ticker_without_exchange.split("-")
             if len(parts) >= 2:
                 return parts[1]
 
@@ -363,7 +363,7 @@ class TickerCleaner:
                 selected[base] = group[0]
             else:
                 # prefer B share if available
-                b_shares = [t for t in group if self._get_share_class(t) == 'B']
+                b_shares = [t for t in group if self._get_share_class(t) == "B"]
                 if b_shares:
                     selected[base] = b_shares[0]
                 else:
@@ -439,24 +439,16 @@ class TickerDownloader:
 
             logger.info(f"\ntotal duplicates removed: {self.cleaner.removed_count}")
 
-            self.tickers = {
-                'US': us_tickers_clean,
-                'SP500': sp500_tickers_clean,
-                'Sweden': swedish_tickers_clean
-            }
+            self.tickers = {"US": us_tickers_clean, "SP500": sp500_tickers_clean, "Sweden": swedish_tickers_clean}
         else:
-            self.tickers = {
-                'US': us_tickers,
-                'SP500': sp500_tickers,
-                'Sweden': swedish_tickers
-            }
+            self.tickers = {"US": us_tickers, "SP500": sp500_tickers, "Sweden": swedish_tickers}
 
         end_time = datetime.now()
         elapsed = (end_time - start_time).total_seconds()
 
-        us_final = self.tickers['US']
-        sp500_final = self.tickers['SP500']
-        swedish_final = self.tickers['Sweden']
+        us_final = self.tickers["US"]
+        sp500_final = self.tickers["SP500"]
+        swedish_final = self.tickers["Sweden"]
 
         logger.info("\n" + "=" * 70)
         logger.info("download complete")
@@ -469,15 +461,15 @@ class TickerDownloader:
 
         return self.tickers
 
-    def save_results(self, output_dir: Path = Path('data/tickers_data')):
+    def save_results(self, output_dir: Path = Path("data/tickers_data")):
         """save results to json"""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now().strftime('%Y%m%d')
+        timestamp = datetime.now().strftime("%Y%m%d")
 
-        json_file = output_dir / f'tickers_{timestamp}.json'
-        with open(json_file, 'w', encoding='utf-8') as f:
+        json_file = output_dir / f"tickers_{timestamp}.json"
+        with open(json_file, "w", encoding="utf-8") as f:
             json.dump(self.tickers, f, indent=2, ensure_ascii=False)
 
         logger.info(f"\nsaved: {json_file}")
@@ -502,5 +494,5 @@ def main():
         logger.error(f"error: {e}", exc_info=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

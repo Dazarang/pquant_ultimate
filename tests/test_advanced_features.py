@@ -5,25 +5,23 @@ Tests the new advanced feature engineering functions
 and the Stochastic momentum indicator.
 """
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from indicators.momentum import Stochastic, calculate_stochastic
-from indicators.pattern import find_pivots
 from indicators.advanced import (
+    add_time_features,
+    calculate_mean_reversion_signal,
+    create_all_advanced_features,
+    detect_bb_squeeze_breakdown,
+    detect_exhaustion_sequence,
     detect_multi_indicator_divergence,
-    detect_volume_exhaustion,
     detect_panic_selling,
     detect_support_tests,
-    detect_exhaustion_sequence,
-    detect_hidden_divergence,
-    calculate_mean_reversion_signal,
-    detect_bb_squeeze_breakdown,
-    add_time_features,
-    create_all_advanced_features,
+    detect_volume_exhaustion,
 )
 from indicators.calculator import IndicatorCalculator, IndicatorConfig
+from indicators.momentum import Stochastic, calculate_stochastic
+from indicators.pattern import find_pivots
 
 
 class TestStochastic:
@@ -47,7 +45,7 @@ class TestStochastic:
     def test_stochastic_extremes(self):
         """Test Stochastic at price extremes."""
         # Create test data with controlled extremes
-        dates = pd.date_range('2023-01-01', periods=50, freq='D')
+        dates = pd.date_range("2023-01-01", periods=50, freq="D")
 
         # Price oscillating between 90-110
         close = np.array([100] * 50)
@@ -57,13 +55,16 @@ class TestStochastic:
         # Make close hit high for several days
         close[30:35] = 110
 
-        df = pd.DataFrame({
-            'open': close,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': np.ones(50) * 1000,
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": close,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": np.ones(50) * 1000,
+            },
+            index=dates,
+        )
 
         slowk, slowd = Stochastic().calculate(df, fastk_period=14)
 
@@ -72,7 +73,7 @@ class TestStochastic:
 
         # Make close hit low for several days
         close[40:45] = 90
-        df['close'] = close
+        df["close"] = close
 
         slowk, slowd = Stochastic().calculate(df, fastk_period=14)
 
@@ -99,18 +100,18 @@ class TestMultiIndicatorDivergence:
 
         # Create pivots
         pivot_high, pivot_low = find_pivots(df, lb=8, rb=8, return_boolean=True)
-        df['PivotHigh'] = pivot_high.astype(int)
-        df['PivotLow'] = pivot_low.astype(int)
+        df["PivotHigh"] = pivot_high.astype(int)
+        df["PivotLow"] = pivot_low.astype(int)
 
         # Run divergence detection
         df = detect_multi_indicator_divergence(df)
 
         # Should have the column
-        assert 'multi_divergence_score' in df.columns
+        assert "multi_divergence_score" in df.columns
 
         # Scores should be 0-3
-        assert df['multi_divergence_score'].min() >= 0
-        assert df['multi_divergence_score'].max() <= 3
+        assert df["multi_divergence_score"].min() >= 0
+        assert df["multi_divergence_score"].max() <= 3
 
     def test_divergence_no_pivots(self, sample_ohlcv_data):
         """Test divergence when no pivots exist."""
@@ -119,8 +120,8 @@ class TestMultiIndicatorDivergence:
         df = detect_multi_indicator_divergence(df)
 
         # Should return all zeros when no pivots
-        assert 'multi_divergence_score' in df.columns
-        assert df['multi_divergence_score'].sum() == 0
+        assert "multi_divergence_score" in df.columns
+        assert df["multi_divergence_score"].sum() == 0
 
 
 class TestVolumePatterns:
@@ -133,14 +134,14 @@ class TestVolumePatterns:
         df = detect_volume_exhaustion(df)
 
         # Should have the columns
-        assert 'volume_exhaustion' in df.columns
-        assert 'exhaustion_strength' in df.columns
+        assert "volume_exhaustion" in df.columns
+        assert "exhaustion_strength" in df.columns
 
         # Binary column should be 0 or 1
-        assert set(df['volume_exhaustion'].unique()).issubset({0, 1})
+        assert set(df["volume_exhaustion"].unique()).issubset({0, 1})
 
         # Strength should be non-negative
-        assert df['exhaustion_strength'].min() >= 0
+        assert df["exhaustion_strength"].min() >= 0
 
     def test_panic_selling(self, sample_ohlcv_data):
         """Test panic selling detection."""
@@ -149,15 +150,15 @@ class TestVolumePatterns:
         df = detect_panic_selling(df)
 
         # Should have the columns
-        assert 'panic_selling' in df.columns
-        assert 'panic_severity' in df.columns
+        assert "panic_selling" in df.columns
+        assert "panic_severity" in df.columns
 
         # Binary column should be 0 or 1
-        assert set(df['panic_selling'].unique()).issubset({0, 1})
+        assert set(df["panic_selling"].unique()).issubset({0, 1})
 
         # Severity should be between 0 and 10
-        assert df['panic_severity'].min() >= 0
-        assert df['panic_severity'].max() <= 10
+        assert df["panic_severity"].min() >= 0
+        assert df["panic_severity"].max() <= 10
 
 
 class TestSupportLevels:
@@ -169,17 +170,17 @@ class TestSupportLevels:
 
         # Create pivots
         pivot_high, pivot_low = find_pivots(df, lb=8, rb=8, return_boolean=True)
-        df['PivotHigh'] = pivot_high.astype(int)
-        df['PivotLow'] = pivot_low.astype(int)
+        df["PivotHigh"] = pivot_high.astype(int)
+        df["PivotLow"] = pivot_low.astype(int)
 
         df = detect_support_tests(df, tolerance=0.02)
 
         # Should have the column
-        assert 'support_test_count' in df.columns
+        assert "support_test_count" in df.columns
 
         # Should be non-negative integers
-        assert df['support_test_count'].min() >= 0
-        assert df['support_test_count'].dtype in [np.int64, np.float64]
+        assert df["support_test_count"].min() >= 0
+        assert df["support_test_count"].dtype in [np.int64, np.float64]
 
     def test_support_no_pivots(self, sample_ohlcv_data):
         """Test support when no pivots exist."""
@@ -188,8 +189,8 @@ class TestSupportLevels:
         df = detect_support_tests(df)
 
         # Should return all zeros when no pivots
-        assert 'support_test_count' in df.columns
-        assert df['support_test_count'].sum() == 0
+        assert "support_test_count" in df.columns
+        assert df["support_test_count"].sum() == 0
 
 
 class TestExhaustionSequence:
@@ -202,15 +203,15 @@ class TestExhaustionSequence:
         df = detect_exhaustion_sequence(df)
 
         # Should have the columns
-        assert 'consecutive_down_days' in df.columns
-        assert 'exhaustion_signal' in df.columns
-        assert 'selling_acceleration' in df.columns
+        assert "consecutive_down_days" in df.columns
+        assert "exhaustion_signal" in df.columns
+        assert "selling_acceleration" in df.columns
 
         # Consecutive days should be non-negative
-        assert df['consecutive_down_days'].min() >= 0
+        assert df["consecutive_down_days"].min() >= 0
 
         # Signal should be binary
-        assert set(df['exhaustion_signal'].dropna().unique()).issubset({0, 1})
+        assert set(df["exhaustion_signal"].dropna().unique()).issubset({0, 1})
 
 
 class TestStatisticalFeatures:
@@ -223,17 +224,17 @@ class TestStatisticalFeatures:
         df = calculate_mean_reversion_signal(df)
 
         # Should have the columns
-        assert 'price_zscore' in df.columns
-        assert 'statistical_bottom' in df.columns
-        assert 'at_zscore_extreme' in df.columns
+        assert "price_zscore" in df.columns
+        assert "statistical_bottom" in df.columns
+        assert "at_zscore_extreme" in df.columns
 
         # Z-score should be reasonable
-        valid_z = df['price_zscore'].dropna()
+        valid_z = df["price_zscore"].dropna()
         assert valid_z.min() > -10, "Z-score unreasonably low"
         assert valid_z.max() < 10, "Z-score unreasonably high"
 
         # Binary columns should be 0 or 1
-        assert set(df['statistical_bottom'].dropna().unique()).issubset({0, 1})
+        assert set(df["statistical_bottom"].dropna().unique()).issubset({0, 1})
 
     def test_bb_squeeze(self, sample_ohlcv_data):
         """Test Bollinger Band squeeze detection."""
@@ -242,14 +243,14 @@ class TestStatisticalFeatures:
         df = detect_bb_squeeze_breakdown(df)
 
         # Should have the columns
-        assert 'bb_squeeze' in df.columns
-        assert 'below_lower_band' in df.columns
-        assert 'squeeze_breakdown' in df.columns
+        assert "bb_squeeze" in df.columns
+        assert "below_lower_band" in df.columns
+        assert "squeeze_breakdown" in df.columns
 
         # All should be binary
-        assert set(df['bb_squeeze'].dropna().unique()).issubset({0, 1})
-        assert set(df['below_lower_band'].dropna().unique()).issubset({0, 1})
-        assert set(df['squeeze_breakdown'].dropna().unique()).issubset({0, 1})
+        assert set(df["bb_squeeze"].dropna().unique()).issubset({0, 1})
+        assert set(df["below_lower_band"].dropna().unique()).issubset({0, 1})
+        assert set(df["squeeze_breakdown"].dropna().unique()).issubset({0, 1})
 
 
 class TestTimeFeatures:
@@ -262,19 +263,19 @@ class TestTimeFeatures:
         df = add_time_features(df)
 
         # Should have the columns
-        assert 'day_of_week' in df.columns
-        assert 'is_monday' in df.columns
-        assert 'is_friday' in df.columns
-        assert 'is_month_end' in df.columns
-        assert 'is_quarter_end' in df.columns
+        assert "day_of_week" in df.columns
+        assert "is_monday" in df.columns
+        assert "is_friday" in df.columns
+        assert "is_month_end" in df.columns
+        assert "is_quarter_end" in df.columns
 
         # Day of week should be 0-6
-        assert df['day_of_week'].min() >= 0
-        assert df['day_of_week'].max() <= 6
+        assert df["day_of_week"].min() >= 0
+        assert df["day_of_week"].max() <= 6
 
         # Binary features should be 0 or 1
-        assert set(df['is_monday'].unique()).issubset({0, 1})
-        assert set(df['is_friday'].unique()).issubset({0, 1})
+        assert set(df["is_monday"].unique()).issubset({0, 1})
+        assert set(df["is_friday"].unique()).issubset({0, 1})
 
 
 class TestIntegration:
@@ -286,21 +287,21 @@ class TestIntegration:
 
         # Add pivots first
         pivot_high, pivot_low = find_pivots(df, lb=8, rb=8, return_boolean=True)
-        df['PivotHigh'] = pivot_high.astype(int)
-        df['PivotLow'] = pivot_low.astype(int)
+        df["PivotHigh"] = pivot_high.astype(int)
+        df["PivotLow"] = pivot_low.astype(int)
 
         df = create_all_advanced_features(df)
 
         # Check key features exist
         expected_features = [
-            'multi_divergence_score',
-            'volume_exhaustion',
-            'panic_selling',
-            'support_test_count',
-            'consecutive_down_days',
-            'price_zscore',
-            'bb_squeeze',
-            'day_of_week',
+            "multi_divergence_score",
+            "volume_exhaustion",
+            "panic_selling",
+            "support_test_count",
+            "consecutive_down_days",
+            "price_zscore",
+            "bb_squeeze",
+            "day_of_week",
         ]
 
         for feature in expected_features:
@@ -322,12 +323,12 @@ class TestIntegration:
         result = calculator.calculate_all(df)
 
         # Should have base indicators
-        assert 'SMA_20' in result.columns
-        assert 'RSI_14' in result.columns
+        assert "SMA_20" in result.columns
+        assert "RSI_14" in result.columns
 
         # Should have advanced features
-        assert 'multi_divergence_score' in result.columns
-        assert 'volume_exhaustion' in result.columns
+        assert "multi_divergence_score" in result.columns
+        assert "volume_exhaustion" in result.columns
 
     def test_calculator_without_advanced(self, sample_ohlcv_data):
         """Test calculator doesn't add advanced features when disabled."""
@@ -343,11 +344,11 @@ class TestIntegration:
         result = calculator.calculate_all(df)
 
         # Should have base indicators
-        assert 'SMA_20' in result.columns
+        assert "SMA_20" in result.columns
 
         # Should NOT have advanced features
-        assert 'multi_divergence_score' not in result.columns
-        assert 'volume_exhaustion' not in result.columns
+        assert "multi_divergence_score" not in result.columns
+        assert "volume_exhaustion" not in result.columns
 
 
 class TestMultiStockSupport:
@@ -357,22 +358,22 @@ class TestMultiStockSupport:
         """Test divergence detection with multiple stocks."""
         # Create multi-stock DataFrame
         df1 = sample_ohlcv_data.copy()
-        df1['stock_id'] = 'AAPL'
+        df1["stock_id"] = "AAPL"
 
         df2 = sample_ohlcv_data.copy()
-        df2['stock_id'] = 'MSFT'
+        df2["stock_id"] = "MSFT"
 
         df = pd.concat([df1, df2], ignore_index=True)
 
         # Add pivots
         pivot_high, pivot_low = find_pivots(df, lb=8, rb=8, return_boolean=True)
-        df['PivotHigh'] = pivot_high.astype(int)
-        df['PivotLow'] = pivot_low.astype(int)
+        df["PivotHigh"] = pivot_high.astype(int)
+        df["PivotLow"] = pivot_low.astype(int)
 
         df = detect_multi_indicator_divergence(df)
 
         # Should work for both stocks
-        assert 'multi_divergence_score' in df.columns
+        assert "multi_divergence_score" in df.columns
         assert len(df) == len(df1) + len(df2)
 
     def test_single_stock_compatibility(self, sample_ohlcv_data):
@@ -385,6 +386,6 @@ class TestMultiStockSupport:
         df = detect_exhaustion_sequence(df)
 
         # Should have the features
-        assert 'volume_exhaustion' in df.columns
-        assert 'panic_selling' in df.columns
-        assert 'consecutive_down_days' in df.columns
+        assert "volume_exhaustion" in df.columns
+        assert "panic_selling" in df.columns
+        assert "consecutive_down_days" in df.columns

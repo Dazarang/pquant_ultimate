@@ -3,10 +3,9 @@ Base indicator class with validation and caching.
 """
 
 from abc import ABC, abstractmethod
-from typing import Union, Optional
-import pandas as pd
+
 import numpy as np
-from functools import lru_cache
+import pandas as pd
 
 
 class BaseIndicator(ABC):
@@ -20,7 +19,7 @@ class BaseIndicator(ABC):
         self._cache = {}
 
     @abstractmethod
-    def calculate(self, df: pd.DataFrame, **kwargs) -> Union[pd.Series, tuple]:
+    def calculate(self, df: pd.DataFrame, **kwargs) -> pd.Series | tuple:
         """
         Calculate the indicator.
 
@@ -49,10 +48,7 @@ class BaseIndicator(ABC):
 
         missing = [col for col in required_columns if col not in df.columns]
         if missing:
-            raise ValueError(
-                f"{self.name}: Missing required columns: {missing}. "
-                f"Available: {list(df.columns)}"
-            )
+            raise ValueError(f"{self.name}: Missing required columns: {missing}. Available: {list(df.columns)}")
 
         if len(df) == 0:
             raise ValueError(f"{self.name}: DataFrame is empty")
@@ -72,9 +68,7 @@ class BaseIndicator(ABC):
             raise TypeError(f"{self.name}: Period must be int, got {type(period)}")
 
         if period < min_period:
-            raise ValueError(
-                f"{self.name}: Period must be >= {min_period}, got {period}"
-            )
+            raise ValueError(f"{self.name}: Period must be >= {min_period}, got {period}")
 
     def validate_data_length(self, df: pd.DataFrame, min_length: int) -> None:
         """
@@ -88,14 +82,9 @@ class BaseIndicator(ABC):
             ValueError: If insufficient data
         """
         if len(df) < min_length:
-            raise ValueError(
-                f"{self.name}: Insufficient data. "
-                f"Need {min_length} rows, got {len(df)}"
-            )
+            raise ValueError(f"{self.name}: Insufficient data. Need {min_length} rows, got {len(df)}")
 
-    def handle_nan(
-        self, series: pd.Series, method: str = "ffill"
-    ) -> pd.Series:
+    def handle_nan(self, series: pd.Series, method: str = "ffill") -> pd.Series:
         """
         Handle NaN values in series.
 
@@ -132,9 +121,7 @@ class BaseIndicator(ABC):
         params_hash = hash(frozenset(kwargs.items()))
         return f"{self.name}_{df_hash}_{params_hash}"
 
-    def calculate_with_cache(
-        self, df: pd.DataFrame, **kwargs
-    ) -> Union[pd.Series, tuple]:
+    def calculate_with_cache(self, df: pd.DataFrame, **kwargs) -> pd.Series | tuple:
         """
         Calculate with caching for performance.
 
@@ -159,7 +146,7 @@ class BaseIndicator(ABC):
         self._cache.clear()
 
 
-def ensure_numpy_array(data: Union[pd.Series, np.ndarray]) -> np.ndarray:
+def ensure_numpy_array(data: pd.Series | np.ndarray) -> np.ndarray:
     """
     Convert input to numpy array.
 

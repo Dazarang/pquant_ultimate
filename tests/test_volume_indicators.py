@@ -4,10 +4,11 @@ Test volume indicators for accuracy and correctness.
 Uses reference implementations for validation to ensure algorithmic correctness.
 """
 
-import pytest
 import numpy as np
+import pytest
 import talib  # Reference implementation for validation only
-from indicators.volume import OBV, ADOSC
+
+from indicators.volume import ADOSC, OBV
 from tests.conftest import assert_series_close
 
 
@@ -37,9 +38,9 @@ class TestOBV:
         manual_obv = [df["volume"].iloc[0]]
 
         for i in range(1, len(df)):
-            if df["close"].iloc[i] > df["close"].iloc[i-1]:
+            if df["close"].iloc[i] > df["close"].iloc[i - 1]:
                 manual_obv.append(manual_obv[-1] + df["volume"].iloc[i])
-            elif df["close"].iloc[i] < df["close"].iloc[i-1]:
+            elif df["close"].iloc[i] < df["close"].iloc[i - 1]:
                 manual_obv.append(manual_obv[-1] - df["volume"].iloc[i])
             else:
                 manual_obv.append(manual_obv[-1])
@@ -60,24 +61,16 @@ class TestADOSC:
         custom_adosc = ADOSC().calculate(df, fastperiod=fast, slowperiod=slow)
 
         # Ta-lib
-        talib_adosc = talib.ADOSC(
-            df["high"], df["low"], df["close"], df["volume"],
-            fastperiod=fast, slowperiod=slow
-        )
+        talib_adosc = talib.ADOSC(df["high"], df["low"], df["close"], df["volume"], fastperiod=fast, slowperiod=slow)
 
         # Compare
-        assert_series_close(
-            custom_adosc, talib_adosc, tolerance_params["adosc"], f"ADOSC_{fast}_{slow}"
-        )
+        assert_series_close(custom_adosc, talib_adosc, tolerance_params["adosc"], f"ADOSC_{fast}_{slow}")
 
     def test_adosc_real_data(self, real_market_data, tolerance_params):
         """Test ADOSC on real market data."""
         df = real_market_data
 
         custom_adosc = ADOSC().calculate(df, fastperiod=3, slowperiod=10)
-        talib_adosc = talib.ADOSC(
-            df["high"], df["low"], df["close"], df["volume"],
-            fastperiod=3, slowperiod=10
-        )
+        talib_adosc = talib.ADOSC(df["high"], df["low"], df["close"], df["volume"], fastperiod=3, slowperiod=10)
 
         assert_series_close(custom_adosc, talib_adosc, tolerance_params["adosc"], "ADOSC_real")

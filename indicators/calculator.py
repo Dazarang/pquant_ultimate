@@ -3,17 +3,17 @@ IndicatorCalculator - orchestrator for computing all indicators.
 Efficient batch calculation with caching and parallel processing.
 """
 
-import pandas as pd
-from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 
-from indicators.trend import SMA, EMA, VWAP
-from indicators.momentum import RSI, MACD, ADX, ROC, MOM, Stochastic
-from indicators.volatility import BBands, ATR, ADR, APZ, SAR
-from indicators.volume import OBV, ADOSC
-from indicators.pattern import find_pivots, Hammer
-from indicators.cycle import HT_SINE, HT_TRENDMODE
+import pandas as pd
+
 from indicators.advanced import create_all_advanced_features
+from indicators.cycle import HT_SINE, HT_TRENDMODE
+from indicators.momentum import ADX, MACD, MOM, ROC, RSI, Stochastic
+from indicators.pattern import Hammer, find_pivots
+from indicators.trend import EMA, SMA, VWAP
+from indicators.volatility import ADR, APZ, ATR, SAR, BBands
+from indicators.volume import ADOSC, OBV
 
 
 @dataclass
@@ -21,30 +21,30 @@ class IndicatorConfig:
     """Configuration for indicator calculations."""
 
     # Trend periods
-    sma_periods: List[int] = field(default_factory=lambda: [5, 8, 21, 50, 55, 89, 200])
-    ema_periods: List[int] = field(default_factory=lambda: [5, 8, 21, 50, 55, 89])
+    sma_periods: list[int] = field(default_factory=lambda: [5, 8, 21, 50, 55, 89, 200])
+    ema_periods: list[int] = field(default_factory=lambda: [5, 8, 21, 50, 55, 89])
 
     # Momentum parameters
-    rsi_periods: List[int] = field(default_factory=lambda: [14])
-    macd_configs: List[tuple] = field(default_factory=lambda: [(12, 26, 9)])
-    adx_periods: List[int] = field(default_factory=lambda: [14])
-    roc_periods: List[int] = field(default_factory=lambda: [10])
-    mom_periods: List[int] = field(default_factory=lambda: [10])
-    stoch_configs: List[tuple] = field(default_factory=lambda: [(14, 3, 3)])  # (fastk, slowk, slowd)
+    rsi_periods: list[int] = field(default_factory=lambda: [14])
+    macd_configs: list[tuple] = field(default_factory=lambda: [(12, 26, 9)])
+    adx_periods: list[int] = field(default_factory=lambda: [14])
+    roc_periods: list[int] = field(default_factory=lambda: [10])
+    mom_periods: list[int] = field(default_factory=lambda: [10])
+    stoch_configs: list[tuple] = field(default_factory=lambda: [(14, 3, 3)])  # (fastk, slowk, slowd)
 
     # Volatility parameters
-    bbands_configs: List[tuple] = field(default_factory=lambda: [(20, 2.0, 2.0)])
-    atr_periods: List[int] = field(default_factory=lambda: [14])
-    adr_periods: List[int] = field(default_factory=lambda: [20])
-    apz_configs: List[tuple] = field(default_factory=lambda: [(21, 2.0)])
-    sar_configs: List[tuple] = field(default_factory=lambda: [(0.02, 0.2)])
+    bbands_configs: list[tuple] = field(default_factory=lambda: [(20, 2.0, 2.0)])
+    atr_periods: list[int] = field(default_factory=lambda: [14])
+    adr_periods: list[int] = field(default_factory=lambda: [20])
+    apz_configs: list[tuple] = field(default_factory=lambda: [(21, 2.0)])
+    sar_configs: list[tuple] = field(default_factory=lambda: [(0.02, 0.2)])
 
     # Volume parameters
-    obv_ema_periods: List[int] = field(default_factory=lambda: [8, 55])
-    adosc_configs: List[tuple] = field(default_factory=lambda: [(3, 10)])
+    obv_ema_periods: list[int] = field(default_factory=lambda: [8, 55])
+    adosc_configs: list[tuple] = field(default_factory=lambda: [(3, 10)])
 
     # Pattern parameters
-    pivot_configs: List[tuple] = field(default_factory=lambda: [(8, 8)])
+    pivot_configs: list[tuple] = field(default_factory=lambda: [(8, 8)])
 
     # Flags
     calculate_vwap: bool = True
@@ -63,7 +63,7 @@ class IndicatorCalculator:
     Provides batch computation with caching for performance.
     """
 
-    def __init__(self, config: Optional[IndicatorConfig] = None):
+    def __init__(self, config: IndicatorConfig | None = None):
         """
         Initialize calculator with configuration.
 
@@ -71,7 +71,7 @@ class IndicatorCalculator:
             config: Indicator configuration (uses defaults if None)
         """
         self.config = config or IndicatorConfig()
-        self._indicators_cache: Dict[str, pd.Series] = {}
+        self._indicators_cache: dict[str, pd.Series] = {}
 
     def calculate_all(
         self,
@@ -261,7 +261,7 @@ class IndicatorCalculator:
 
 def calculate_all_indicators(
     df: pd.DataFrame,
-    config: Optional[IndicatorConfig] = None,
+    config: IndicatorConfig | None = None,
 ) -> pd.DataFrame:
     """
     Convenience function to calculate all indicators.

@@ -2,9 +2,9 @@
 Integration tests for the complete indicator system.
 """
 
-import pytest
 import pandas as pd
-import numpy as np
+import pytest
+
 from indicators.calculator import IndicatorCalculator, IndicatorConfig
 
 
@@ -67,7 +67,7 @@ class TestIntegration:
         result = calculator.calculate_all(df)
 
         # Check that we have valid data in latter part
-        latter_half = result.iloc[len(result)//2:]
+        latter_half = result.iloc[len(result) // 2 :]
 
         for col in result.columns:
             if col in ["open", "high", "low", "close", "volume"]:
@@ -77,8 +77,9 @@ class TestIntegration:
             total_count = len(latter_half)
 
             # At least 50% should be valid in latter half
-            assert valid_count > total_count * 0.5, \
+            assert valid_count > total_count * 0.5, (
                 f"{col}: Only {valid_count}/{total_count} valid values in latter half"
+            )
 
     def test_caching(self, sample_ohlcv_data):
         """Test that caching works."""
@@ -131,7 +132,7 @@ class TestIntegration:
             valid_pct = df_with_indicators[col].notna().sum() / len(df_with_indicators)
             assert valid_pct > 0.7, f"{col}: Only {valid_pct:.1%} valid data"
 
-        print(f"\n✓ Real-world workflow test passed")
+        print("\n✓ Real-world workflow test passed")
         print(f"  Input: {df.shape}")
         print(f"  Output: {df_with_indicators.shape}")
         print(f"  Added {df_with_indicators.shape[1] - df.shape[1]} indicator columns")
@@ -151,13 +152,15 @@ class TestIntegration:
             calculator.calculate_all(invalid_df)
 
         # Too little data - should raise error for indicators requiring more data
-        df = pd.DataFrame({
-            "open": [1, 2],
-            "high": [2, 3],
-            "low": [0.5, 1.5],
-            "close": [1.5, 2.5],
-            "volume": [1000, 2000],
-        })
+        df = pd.DataFrame(
+            {
+                "open": [1, 2],
+                "high": [2, 3],
+                "low": [0.5, 1.5],
+                "close": [1.5, 2.5],
+                "volume": [1000, 2000],
+            }
+        )
 
         # Should raise error due to insufficient data
         with pytest.raises((ValueError, Exception)):

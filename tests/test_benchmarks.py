@@ -5,17 +5,16 @@ Compares performance against industry-standard reference implementations
 to ensure our optimizations maintain competitive speed.
 """
 
-import pytest
 import time
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+import pytest
 import talib  # Reference for performance comparison only
 
-from indicators.trend import SMA, EMA
-from indicators.momentum import RSI, MACD, ADX
-from indicators.volatility import BBands, ATR, SAR
-from indicators.volume import OBV, ADOSC
 from indicators.calculator import IndicatorCalculator
+from indicators.momentum import RSI
+from indicators.trend import SMA
 
 
 @pytest.fixture
@@ -31,13 +30,16 @@ def large_dataset():
     open_ = low + (high - low) * np.random.uniform(0.2, 0.8, n)
     volume = np.random.uniform(1e6, 1e7, n)
 
-    df = pd.DataFrame({
-        "open": open_,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    }, index=dates)
+    df = pd.DataFrame(
+        {
+            "open": open_,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        },
+        index=dates,
+    )
 
     return df
 
@@ -72,8 +74,7 @@ class TestPerformanceBenchmarks:
         talib_time = (time.perf_counter() - start) / 10
 
         speedup = talib_time / custom_time
-        print(f"\nSMA - Ours: {custom_time*1000:.2f}ms, Reference: {talib_time*1000:.2f}ms, "
-              f"Ratio: {speedup:.2f}x")
+        print(f"\nSMA - Ours: {custom_time * 1000:.2f}ms, Reference: {talib_time * 1000:.2f}ms, Ratio: {speedup:.2f}x")
 
         # Note: Reference implementation is C-optimized. Ours is Python/NumPy/Numba.
         # We prioritize correctness and maintainability over raw speed.
@@ -107,8 +108,7 @@ class TestPerformanceBenchmarks:
         talib_time = (time.perf_counter() - start) / 10
 
         speedup = talib_time / custom_time
-        print(f"\nRSI - Custom: {custom_time*1000:.2f}ms, Ta-lib: {talib_time*1000:.2f}ms, "
-              f"Speedup: {speedup:.2f}x")
+        print(f"\nRSI - Custom: {custom_time * 1000:.2f}ms, Ta-lib: {talib_time * 1000:.2f}ms, Speedup: {speedup:.2f}x")
 
         # With Numba JIT, should be competitive
         assert custom_time < talib_time * 3
@@ -130,7 +130,7 @@ class TestPerformanceBenchmarks:
         print(f"\nBatch calculation: {elapsed:.3f}s for {len(df)} bars")
         print(f"  Result shape: {result.shape}")
         print(f"  Columns: {result.shape[1]}")
-        print(f"  Throughput: {len(df)/elapsed:.0f} bars/sec")
+        print(f"  Throughput: {len(df) / elapsed:.0f} bars/sec")
 
         # Should complete in reasonable time
         assert elapsed < 5.0, "Batch calculation too slow"
@@ -153,9 +153,11 @@ class TestPerformanceBenchmarks:
         result_memory = sys.getsizeof(result)
         memory_ratio = result_memory / initial_memory
 
-        print(f"\nMemory - Initial: {initial_memory/1024:.1f}KB, "
-              f"Result: {result_memory/1024:.1f}KB, "
-              f"Ratio: {memory_ratio:.2f}x")
+        print(
+            f"\nMemory - Initial: {initial_memory / 1024:.1f}KB, "
+            f"Result: {result_memory / 1024:.1f}KB, "
+            f"Ratio: {memory_ratio:.2f}x"
+        )
 
         # Should not explode memory (indicators add columns but reuse index)
         assert memory_ratio < 20, "Memory usage too high"
@@ -181,8 +183,7 @@ class TestScalability:
 
         throughput = size / elapsed
 
-        print(f"\nSize {size}: {elapsed*1000:.2f}ms, "
-              f"Throughput: {throughput:.0f} bars/sec")
+        print(f"\nSize {size}: {elapsed * 1000:.2f}ms, Throughput: {throughput:.0f} bars/sec")
 
         # Should maintain reasonable throughput
         assert throughput > 1000, f"Throughput too low at size {size}"

@@ -3,9 +3,10 @@ Momentum indicators: RSI, MACD, ADX, ROC, MOM.
 Optimized with Numba JIT compilation for hot loops.
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from numba import njit
+
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 
@@ -120,6 +121,7 @@ class MACD(BaseIndicator):
 
         # Calculate ATR for normalization
         from indicators.volatility import calculate_atr
+
         atr = calculate_atr(df, period=slowperiod)
 
         # MACD normalized by ATR
@@ -131,9 +133,7 @@ class MACD(BaseIndicator):
 
 
 @njit
-def _calculate_adx_numba(
-    high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int
-) -> np.ndarray:
+def _calculate_adx_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int) -> np.ndarray:
     """
     Numba-optimized ADX calculation.
 
@@ -186,9 +186,9 @@ def _calculate_adx_numba(
     dx[:period] = np.nan
 
     # Initial values
-    atr[period] = np.mean(tr[:period + 1])
-    smoothed_plus_dm = np.mean(plus_dm[:period + 1])
-    smoothed_minus_dm = np.mean(minus_dm[:period + 1])
+    atr[period] = np.mean(tr[: period + 1])
+    smoothed_plus_dm = np.mean(plus_dm[: period + 1])
+    smoothed_minus_dm = np.mean(minus_dm[: period + 1])
 
     for i in range(period, n):
         if i > period:
@@ -210,7 +210,7 @@ def _calculate_adx_numba(
 
     start_idx = period * 2
     if start_idx < n:
-        adx[start_idx] = np.mean(dx[period:start_idx + 1])
+        adx[start_idx] = np.mean(dx[period : start_idx + 1])
 
         for i in range(start_idx + 1, n):
             adx[i] = (adx[i - 1] * (period - 1) + dx[i]) / period

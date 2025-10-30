@@ -9,21 +9,18 @@ Demonstrates three approaches:
 Run: uv run python example_indicator_import.py
 """
 
-import pandas as pd
-import numpy as np
 import yfinance as yf
-from datetime import datetime, timedelta
-
 
 # ============================================================================
 # APPROACH 1: IndicatorCalculator with Custom Config (RECOMMENDED)
 # ============================================================================
 
+
 def approach_1_calculator():
     """Use IndicatorCalculator - easiest way to get all indicators."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("APPROACH 1: IndicatorCalculator with Custom Config")
-    print("="*70)
+    print("=" * 70)
 
     from indicators import IndicatorCalculator, IndicatorConfig
 
@@ -37,35 +34,30 @@ def approach_1_calculator():
     # Configure with custom parameters
     config = IndicatorConfig(
         # Trend indicators
-        sma_periods=[20, 50, 200],           # 3 SMAs
-        ema_periods=[9, 21],                 # 2 EMAs
+        sma_periods=[20, 50, 200],  # 3 SMAs
+        ema_periods=[9, 21],  # 2 EMAs
         calculate_vwap=True,
-
         # Momentum indicators
-        rsi_periods=[14],                    # Standard RSI
-        macd_configs=[(12, 26, 9)],          # Standard MACD
+        rsi_periods=[14],  # Standard RSI
+        macd_configs=[(12, 26, 9)],  # Standard MACD
         adx_periods=[14],
         stoch_configs=[
-            (14, 3, 3),                      # Standard Stochastic
-            (5, 3, 3),                       # Fast Stochastic
+            (14, 3, 3),  # Standard Stochastic
+            (5, 3, 3),  # Fast Stochastic
         ],
-
         # Volatility indicators
         bbands_configs=[
-            (20, 2.0, 2.0),                  # Standard BB
-            (10, 1.5, 1.5),                  # Tight BB
+            (20, 2.0, 2.0),  # Standard BB
+            (10, 1.5, 1.5),  # Tight BB
         ],
         atr_periods=[14],
-
         # Volume indicators
         obv_ema_periods=[21],
-
         # Pattern recognition
-        pivot_configs=[(8, 13)],              # Pivot detection
+        pivot_configs=[(8, 13)],  # Pivot detection
         calculate_hammer=True,
-
         # Advanced ML features (optional)
-        calculate_advanced_features=False,   # Set to True to enable
+        calculate_advanced_features=False,  # Set to True to enable
     )
 
     # ONE LINE calculates everything
@@ -101,17 +93,18 @@ def approach_1_calculator():
 # APPROACH 2: Individual Indicator Imports
 # ============================================================================
 
+
 def approach_2_individual():
     """Import and use individual indicators for fine control."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("APPROACH 2: Individual Indicator Imports")
-    print("="*70)
+    print("=" * 70)
 
-    from indicators.trend import calculate_sma, calculate_ema, calculate_vwap
-    from indicators.momentum import calculate_rsi, calculate_macd, calculate_stochastic
-    from indicators.volatility import calculate_bbands, calculate_atr
-    from indicators.volume import OBV
+    from indicators.momentum import calculate_macd, calculate_rsi, calculate_stochastic
     from indicators.pattern import find_pivots
+    from indicators.trend import calculate_ema, calculate_sma, calculate_vwap
+    from indicators.volatility import calculate_atr, calculate_bbands
+    from indicators.volume import OBV
 
     # Fetch sample data
     print("\nFetching MSFT data...")
@@ -124,41 +117,41 @@ def approach_2_individual():
     print("\nCalculating indicators individually...")
 
     # Trend indicators
-    df['sma_10'] = calculate_sma(df, period=10)
-    df['sma_30'] = calculate_sma(df, period=30)
-    df['ema_12'] = calculate_ema(df, period=12)
-    df['vwap'] = calculate_vwap(df)
+    df["sma_10"] = calculate_sma(df, period=10)
+    df["sma_30"] = calculate_sma(df, period=30)
+    df["ema_12"] = calculate_ema(df, period=12)
+    df["vwap"] = calculate_vwap(df)
 
     # Momentum indicators
-    df['rsi_7'] = calculate_rsi(df, period=7)       # Fast RSI
-    df['rsi_21'] = calculate_rsi(df, period=21)     # Slow RSI
+    df["rsi_7"] = calculate_rsi(df, period=7)  # Fast RSI
+    df["rsi_21"] = calculate_rsi(df, period=21)  # Slow RSI
 
     macd, signal, hist = calculate_macd(df, fastperiod=5, slowperiod=13, signalperiod=5)
-    df['macd_fast'] = macd
-    df['macd_signal_fast'] = signal
+    df["macd_fast"] = macd
+    df["macd_signal_fast"] = signal
 
     stoch_k, stoch_d = calculate_stochastic(df, fastk_period=14, slowk_period=3, slowd_period=3)
-    df['stoch_k'] = stoch_k
-    df['stoch_d'] = stoch_d
+    df["stoch_k"] = stoch_k
+    df["stoch_d"] = stoch_d
 
     # Volatility indicators
     bb_upper, bb_middle, bb_lower = calculate_bbands(df, period=20, nbdevup=2.0, nbdevdn=2.0)
-    df['bb_upper'] = bb_upper
-    df['bb_middle'] = bb_middle
-    df['bb_lower'] = bb_lower
-    df['bb_width'] = (bb_upper - bb_lower) / bb_middle
+    df["bb_upper"] = bb_upper
+    df["bb_middle"] = bb_middle
+    df["bb_lower"] = bb_lower
+    df["bb_width"] = (bb_upper - bb_lower) / bb_middle
 
-    df['atr_14'] = calculate_atr(df, period=14)
+    df["atr_14"] = calculate_atr(df, period=14)
 
     # Volume indicators
     obv, obv_ema = OBV().calculate(df, ema_period=21)
-    df['obv'] = obv
-    df['obv_ema'] = obv_ema
+    df["obv"] = obv
+    df["obv_ema"] = obv_ema
 
     # Pattern recognition
     pivot_high, pivot_low = find_pivots(df, lb=8, rb=8, return_boolean=True)
-    df['pivot_high'] = pivot_high.astype(int)
-    df['pivot_low'] = pivot_low.astype(int)
+    df["pivot_high"] = pivot_high.astype(int)
+    df["pivot_low"] = pivot_low.astype(int)
 
     # Display results
     print(f"\nTotal columns: {len(df.columns)}")
@@ -183,14 +176,14 @@ def approach_2_individual():
 # APPROACH 3: Advanced ML Features
 # ============================================================================
 
+
 def approach_3_advanced_features():
     """Use advanced ML features for bottom detection."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("APPROACH 3: Advanced ML Features for Bottom Detection")
-    print("="*70)
+    print("=" * 70)
 
-    from indicators import IndicatorCalculator, IndicatorConfig, ADVANCED_FEATURE_COLUMNS
-    from indicators.pattern import find_pivots
+    from indicators import ADVANCED_FEATURE_COLUMNS, IndicatorCalculator, IndicatorConfig
 
     # Fetch sample data (need more history for advanced features)
     print("\nFetching NVDA data...")
@@ -256,12 +249,14 @@ def approach_3_advanced_features():
     print(f"    Days since last pivot: {latest['days_since_last_pivot']:.0f}")
 
     # Find recent bottom signals (multi-divergence score > 0)
-    bottoms = result[result['multi_divergence_score'] > 0].tail(5)
-    print(f"\n\nRecent bottom signals (multi-divergence):")
+    bottoms = result[result["multi_divergence_score"] > 0].tail(5)
+    print("\n\nRecent bottom signals (multi-divergence):")
     if len(bottoms) > 0:
         for idx, row in bottoms.iterrows():
-            print(f"  {idx.date()}: Score={row['multi_divergence_score']:.0f}, "
-                  f"Close=${row['close']:.2f}, RSI={row['RSI_14']:.1f}")
+            print(
+                f"  {idx.date()}: Score={row['multi_divergence_score']:.0f}, "
+                f"Close=${row['close']:.2f}, RSI={row['RSI_14']:.1f}"
+            )
     else:
         print("  No divergence signals found recently")
 
@@ -272,13 +267,15 @@ def approach_3_advanced_features():
 # COMPARISON: Show Performance Difference
 # ============================================================================
 
+
 def compare_approaches():
     """Compare calculation speed between approaches."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("PERFORMANCE COMPARISON")
-    print("="*70)
+    print("=" * 70)
 
     import time
+
     from indicators import IndicatorCalculator, IndicatorConfig
 
     # Get data
@@ -304,21 +301,22 @@ def compare_approaches():
     result = calculator.calculate_all(df)
     elapsed = time.perf_counter() - start
 
-    print(f"\nCalculator approach:")
+    print("\nCalculator approach:")
     print(f"  Time: {elapsed:.3f}s")
     print(f"  Indicators calculated: {len(result.columns) - len(df.columns)}")
-    print(f"  Throughput: {len(df)/elapsed:.0f} bars/sec")
+    print(f"  Throughput: {len(df) / elapsed:.0f} bars/sec")
 
 
 # ============================================================================
 # Main Function
 # ============================================================================
 
+
 def main():
     """Run all examples."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("INDICATOR IMPORT EXAMPLES")
-    print("="*70)
+    print("=" * 70)
     print("\nThis script demonstrates three ways to use indicators:")
     print("  1. IndicatorCalculator (recommended - easiest)")
     print("  2. Individual imports (fine control)")
@@ -331,9 +329,9 @@ def main():
         approach_3_advanced_features()
         compare_approaches()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("SUMMARY")
-        print("="*70)
+        print("=" * 70)
         print("\nRecommended approach: Use IndicatorCalculator with custom config")
         print("  - Clean, maintainable code")
         print("  - All settings in one place")
@@ -348,6 +346,7 @@ def main():
         print(f"\nError: {e}")
         print("\nMake sure you have internet connection for yfinance data download.")
         import traceback
+
         traceback.print_exc()
 
 

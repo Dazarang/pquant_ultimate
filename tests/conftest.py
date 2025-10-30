@@ -2,9 +2,9 @@
 Pytest configuration and shared fixtures for indicator tests.
 """
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 
 
 @pytest.fixture
@@ -20,13 +20,16 @@ def sample_ohlcv_data():
     open_ = low + (high - low) * np.random.uniform(0.2, 0.8, n)
     volume = np.random.uniform(1e6, 1e7, n)
 
-    df = pd.DataFrame({
-        "open": open_,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    }, index=dates)
+    df = pd.DataFrame(
+        {
+            "open": open_,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        },
+        index=dates,
+    )
 
     return df
 
@@ -69,13 +72,16 @@ def real_market_data():
         open_ = low + (high - low) * np.random.uniform(0.3, 0.7, n)
         volume = np.random.lognormal(15, 0.5, n)
 
-        df = pd.DataFrame({
-            "open": open_,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": volume,
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "open": open_,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+            },
+            index=dates,
+        )
 
         return df
 
@@ -147,5 +153,4 @@ def assert_series_close(
         f"Valid points: {valid_count}/{len(actual)}"
     )
 
-    print(f"✓ {name}: Max diff {max_diff:.2e}, Mean diff {mean_diff:.2e}, "
-          f"Valid points {valid_count}/{len(actual)}")
+    print(f"✓ {name}: Max diff {max_diff:.2e}, Mean diff {mean_diff:.2e}, Valid points {valid_count}/{len(actual)}")

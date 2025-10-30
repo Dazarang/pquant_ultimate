@@ -3,9 +3,10 @@ Volume indicators: OBV, ADOSC.
 Vectorized implementations for performance.
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from numba import njit
+
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 
@@ -42,9 +43,7 @@ class OBV(BaseIndicator):
     def __init__(self):
         super().__init__("OBV")
 
-    def calculate(
-        self, df: pd.DataFrame, ema_period: int = 55
-    ) -> tuple[pd.Series, pd.Series]:
+    def calculate(self, df: pd.DataFrame, ema_period: int = 55) -> tuple[pd.Series, pd.Series]:
         """
         Calculate OBV and its EMA.
 
@@ -73,9 +72,7 @@ class OBV(BaseIndicator):
 
 
 @njit
-def _calculate_ad_numba(
-    high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray
-) -> np.ndarray:
+def _calculate_ad_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray) -> np.ndarray:
     """
     Numba-optimized Accumulation/Distribution calculation.
 
@@ -113,9 +110,7 @@ class ADOSC(BaseIndicator):
     def __init__(self):
         super().__init__("ADOSC")
 
-    def calculate(
-        self, df: pd.DataFrame, fastperiod: int = 3, slowperiod: int = 10
-    ) -> pd.Series:
+    def calculate(self, df: pd.DataFrame, fastperiod: int = 3, slowperiod: int = 10) -> pd.Series:
         """
         Calculate Chaikin A/D Oscillator.
 
@@ -152,15 +147,11 @@ class ADOSC(BaseIndicator):
 
 
 # Convenience functions
-def calculate_obv(
-    df: pd.DataFrame, ema_period: int = 55
-) -> tuple[pd.Series, pd.Series]:
+def calculate_obv(df: pd.DataFrame, ema_period: int = 55) -> tuple[pd.Series, pd.Series]:
     """Calculate OBV - convenience function."""
     return OBV().calculate(df, ema_period)
 
 
-def calculate_adosc(
-    df: pd.DataFrame, fastperiod: int = 3, slowperiod: int = 10
-) -> pd.Series:
+def calculate_adosc(df: pd.DataFrame, fastperiod: int = 3, slowperiod: int = 10) -> pd.Series:
     """Calculate ADOSC - convenience function."""
     return ADOSC().calculate(df, fastperiod, slowperiod)

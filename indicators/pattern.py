@@ -3,9 +3,10 @@ Pattern recognition: find_pivots, Hammer candlestick patterns.
 Core labeling mechanism for ML model.
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from numba import njit
+
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 
@@ -124,16 +125,8 @@ def find_pivots(
         pivot_low = pd.Series(pivot_low_bool, index=df.index, name="PivotLow")
     else:
         # Return actual values at pivot points, NaN elsewhere
-        pivot_high = pd.Series(
-            np.where(pivot_high_bool, high, np.nan),
-            index=df.index,
-            name="PivotHigh"
-        )
-        pivot_low = pd.Series(
-            np.where(pivot_low_bool, low, np.nan),
-            index=df.index,
-            name="PivotLow"
-        )
+        pivot_high = pd.Series(np.where(pivot_high_bool, high, np.nan), index=df.index, name="PivotHigh")
+        pivot_low = pd.Series(np.where(pivot_low_bool, low, np.nan), index=df.index, name="PivotLow")
 
     return pivot_high, pivot_low
 
@@ -182,9 +175,9 @@ def _detect_hammer_numba(
 
         # Hammer criteria
         is_hammer = (
-            lower_shadow >= 2 * body and  # Long lower shadow
-            upper_shadow <= 0.1 * total_range and  # Small upper shadow
-            body <= 0.3 * total_range  # Small body
+            lower_shadow >= 2 * body  # Long lower shadow
+            and upper_shadow <= 0.1 * total_range  # Small upper shadow
+            and body <= 0.3 * total_range  # Small body
         )
 
         if is_hammer:

@@ -5,9 +5,9 @@ Uses reference implementations for validation to ensure algorithmic correctness.
 """
 
 import pytest
-import numpy as np
 import talib  # Reference implementation for validation only
-from indicators.volatility import BBands, ATR, ADR, SAR
+
+from indicators.volatility import ADR, ATR, SAR, BBands
 from tests.conftest import assert_series_close
 
 
@@ -21,9 +21,7 @@ class TestBBands:
         df = sample_ohlcv_data
 
         # Custom implementation
-        custom_upper, custom_middle, custom_lower = BBands().calculate(
-            df, period, nbdev, nbdev
-        )
+        custom_upper, custom_middle, custom_lower = BBands().calculate(df, period, nbdev, nbdev)
 
         # Ta-lib
         talib_upper, talib_middle, talib_lower = talib.BBANDS(

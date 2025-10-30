@@ -5,9 +5,9 @@ Uses reference implementations for validation to ensure algorithmic correctness.
 """
 
 import pytest
-import numpy as np
 import talib  # Reference implementation for validation only
-from indicators.trend import SMA, EMA, VWAP
+
+from indicators.trend import EMA, SMA, VWAP
 from tests.conftest import assert_series_close
 
 

@@ -1,7 +1,6 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import talib
-from sklearn.linear_model import LinearRegression
 from scipy.optimize import minimize
 
 
@@ -105,9 +104,7 @@ def calculate_adx(df: pd.DataFrame, period=14) -> pd.Series:
     return talib.ADX(df["high"], df["low"], df["close"], timeperiod=period)
 
 
-def calculate_macd(
-    df: pd.DataFrame, fastperiod: int = 12, slowperiod: int = 26, signalperiod: int = 9
-) -> tuple:
+def calculate_macd(df: pd.DataFrame, fastperiod: int = 12, slowperiod: int = 26, signalperiod: int = 9) -> tuple:
     """
     Calculates the Moving Average Convergence Divergence (MACD).
 
@@ -168,9 +165,7 @@ def calculate_adr(df: pd.DataFrame, length: int = 20) -> pd.Series:
     return adr
 
 
-def find_pivots(
-    df: pd.DataFrame, lb: int = 8, rb: int = 8, return_boolean: bool = True
-) -> tuple:
+def find_pivots(df: pd.DataFrame, lb: int = 8, rb: int = 8, return_boolean: bool = True) -> tuple:
     """
     Identifies pivot highs and lows in a DataFrame.
 
@@ -197,14 +192,8 @@ def find_pivots(
         return np.nan
 
     # Create rolling windows to find pivots
-    pivot_high = (
-        df["high"]
-        .rolling(window=lb + rb + 1, center=True)
-        .apply(is_pivot_high, raw=True)
-    )
-    pivot_low = (
-        df["low"].rolling(window=lb + rb + 1, center=True).apply(is_pivot_low, raw=True)
-    )
+    pivot_high = df["high"].rolling(window=lb + rb + 1, center=True).apply(is_pivot_high, raw=True)
+    pivot_low = df["low"].rolling(window=lb + rb + 1, center=True).apply(is_pivot_low, raw=True)
 
     if return_boolean:
         pivot_high = pivot_high.notna()
@@ -213,9 +202,7 @@ def find_pivots(
     return pivot_high, pivot_low
 
 
-def calculate_sar(
-    df: pd.DataFrame, acceleration: float = 0.02, maximum: float = 0.2
-) -> pd.Series:
+def calculate_sar(df: pd.DataFrame, acceleration: float = 0.02, maximum: float = 0.2) -> pd.Series:
     """
     Calculates the Parabolic SAR (Stop and Reverse).
 
@@ -289,9 +276,7 @@ def calculate_vwap(df: pd.DataFrame) -> pd.Series:
     return vwap
 
 
-def calculate_adosc(
-    df: pd.DataFrame, fastperiod: int = 3, slowperiod: int = 10
-) -> pd.Series:
+def calculate_adosc(df: pd.DataFrame, fastperiod: int = 3, slowperiod: int = 10) -> pd.Series:
     """
     Calculates the Chaikin A/D Oscillator (ADOSC).
 
@@ -379,16 +364,10 @@ def calculate_indicators(df):
     # Normalize indicators
     rsi_normalized = (rsi - 50) / 50  # Normalize RSI to range [-1, 1]
     macd_diff = macd - macd_signal
-    macd_normalized = macd_diff / np.max(
-        np.abs(macd_diff)
-    )  # Normalize MACD to range [-1, 1]
-    bb_value = (df["close"] - middle_band) / (
-        upper_band - lower_band
-    )  # Normalize Bollinger Bands
+    macd_normalized = macd_diff / np.max(np.abs(macd_diff))  # Normalize MACD to range [-1, 1]
+    bb_value = (df["close"] - middle_band) / (upper_band - lower_band)  # Normalize Bollinger Bands
     obv_normalized = obv_ema / np.max(np.abs(obv_ema))  # Normalize OBV EMA
-    ema_normalized = (
-        df["close"] - short_term_ema
-    ) / short_term_ema  # Normalize short-term EMA
+    ema_normalized = (df["close"] - short_term_ema) / short_term_ema  # Normalize short-term EMA
     roc_normalized = roc / np.max(np.abs(roc))  # Normalize ROC to range [-1, 1]
     mom_normalized = mom / np.max(np.abs(mom))  # Normalize Momentum to range [-1, 1]
 
@@ -488,10 +467,7 @@ def detect_rsi_divergence(df):
                     second_pivot_low_rsi = df.loc[second_pivot_low_index, "RSI"]
 
                     # Check for RSI divergence
-                    if (
-                        second_pivot_low_price < first_pivot_low_price
-                        and second_pivot_low_rsi > first_pivot_low_rsi
-                    ):
+                    if second_pivot_low_price < first_pivot_low_price and second_pivot_low_rsi > first_pivot_low_rsi:
                         df.loc[second_pivot_low_index, "RSI_Divergence"] = 1
 
                     # Update the first pivot low to the current one and continue the search
