@@ -89,18 +89,31 @@ def _find_pivot_low_numba(data: np.ndarray, lb: int, rb: int) -> np.ndarray:
 
 
 def find_pivots(
-    df: pd.DataFrame, lb: int = 8, rb: int = 13, return_boolean: bool = True
+    df: pd.DataFrame,
+    lb: int = 8,
+    rb: int = 13,
+    return_boolean: bool = True,
+    window_variations: list[int] | None = None,
+    use_close: bool = True,
 ) -> tuple[pd.Series, pd.Series]:
     """
     Identifies pivot highs and lows in DataFrame.
     CRITICAL: Core labeling mechanism for ML model.
 
     Args:
-        df: DataFrame with 'high' and 'low' columns
+        df: DataFrame with 'high', 'low', and 'close' columns
         lb: Number of bars to the left of pivot
         rb: Number of bars to the right of pivot
         return_boolean: If True, return boolean indicators;
                        otherwise return original values with NaNs
+        window_variations: Optional list of day offsets to expand base pivots.
+                          E.g., [-2, -1, 1, 2] will mark days at base_pivot±1
+                          and base_pivot±2 as pivots.
+                          If day X is a base pivot, then days X-2, X-1, X, X+1,
+                          X+2 will all be marked as pivots.
+                          Out-of-bounds indices are safely ignored.
+        use_close: If True, detect pivots using close price.
+                  If False, use high/low prices (legacy behavior).
 
     Returns:
         Tuple of (PivotHigh, PivotLow) series
@@ -108,25 +121,68 @@ def find_pivots(
     if not isinstance(df, pd.DataFrame):
         raise TypeError(f"Expected pd.DataFrame, got {type(df)}")
 
-    required_cols = ["high", "low"]
-    missing = [col for col in required_cols if col not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
+    if use_close:
+        required_cols = ["close"]
+        missing = [col for col in required_cols if col not in df.columns]
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
 
-    high = ensure_numpy_array(df["high"])
-    low = ensure_numpy_array(df["low"])
+        close = ensure_numpy_array(df["close"])
+        high_data = close
+        low_data = close
+    else:
+        required_cols = ["high", "low"]
+        missing = [col for col in required_cols if col not in df.columns]
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
 
-    # Use Numba-optimized detection
-    pivot_high_bool = _find_pivot_high_numba(high, lb, rb)
-    pivot_low_bool = _find_pivot_low_numba(low, lb, rb)
+        high_data = ensure_numpy_array(df["high"])
+        low_data = ensure_numpy_array(df["low"])
+
+    # Handle window variations
+    if window_variations is None:
+        # Default: single window
+        pivot_high_bool = _find_pivot_high_numba(high_data, lb, rb)
+        pivot_low_bool = _find_pivot_low_numba(low_data, lb, rb)
+    else:
+        # Find base pivots, then expand to adjacent days
+        n = len(high_data)
+        pivot_high_base = _find_pivot_high_numba(high_data, lb, rb)
+        pivot_low_base = _find_pivot_low_numba(low_data, lb, rb)
+
+        # Start with base pivots
+        pivot_high_bool = pivot_high_base.copy()
+        pivot_low_bool = pivot_low_base.copy()
+
+        # For each base pivot, mark adjacent days
+        high_indices = np.where(pivot_high_base)[0]
+        low_indices = np.where(pivot_low_base)[0]
+
+        for idx in high_indices:
+            for offset in window_variations:
+                adj_idx = idx + offset
+                if 0 <= adj_idx < n:
+                    pivot_high_bool[adj_idx] = True
+
+        for idx in low_indices:
+            for offset in window_variations:
+                adj_idx = idx + offset
+                if 0 <= adj_idx < n:
+                    pivot_low_bool[adj_idx] = True
 
     if return_boolean:
         pivot_high = pd.Series(pivot_high_bool, index=df.index, name="PivotHigh")
         pivot_low = pd.Series(pivot_low_bool, index=df.index, name="PivotLow")
     else:
         # Return actual values at pivot points, NaN elsewhere
-        pivot_high = pd.Series(np.where(pivot_high_bool, high, np.nan), index=df.index, name="PivotHigh")
-        pivot_low = pd.Series(np.where(pivot_low_bool, low, np.nan), index=df.index, name="PivotLow")
+        values_col = df["close"] if use_close else df["high"]
+        pivot_high = pd.Series(
+            np.where(pivot_high_bool, values_col, np.nan), index=df.index, name="PivotHigh"
+        )
+        values_col = df["close"] if use_close else df["low"]
+        pivot_low = pd.Series(
+            np.where(pivot_low_bool, values_col, np.nan), index=df.index, name="PivotLow"
+        )
 
     return pivot_high, pivot_low
 

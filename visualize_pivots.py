@@ -2,14 +2,15 @@
 Visualize pivot highs and lows on Apple stock chart.
 
 Usage:
-    python visualize_pivots.py                    # Default: lb=8, rb=8
+    python visualize_pivots.py                    # Default: lb=8, rb=13
     python visualize_pivots.py 5 5                # Custom: lb=5, rb=5
     python visualize_pivots.py 5 8                # Asymmetric: lb=5, rb=8
+    python visualize_pivots.py 8 13 -2,-1,1,2     # With window variations
 """
 
 import sys
 
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import yfinance as yf
 
 from indicators.pattern import find_pivots
@@ -17,7 +18,7 @@ from indicators.trend import calculate_ema, calculate_sma
 from indicators.volatility import calculate_bbands
 
 
-def main(left_bars=21, right_bars=21):
+def main(left_bars=21, right_bars=21, window_variations=None):
     """Main visualization workflow."""
 
     # Fetch data
@@ -33,91 +34,182 @@ def main(left_bars=21, right_bars=21):
     bb_upper, bb_middle, bb_lower = calculate_bbands(df, period=13)
 
     # Detect pivots
-    pivot_high, pivot_low = find_pivots(df, lb=left_bars, rb=right_bars, return_boolean=True)
+    pivot_high, pivot_low = find_pivots(
+        df, lb=left_bars, rb=right_bars, return_boolean=True, window_variations=window_variations
+    )
 
     # Create figure
-    fig, ax = plt.subplots(figsize=(15, 8))
+    fig = go.Figure()
 
-    # Plot price line
-    ax.plot(df.index, df["close"], color="black", linewidth=1.5, alpha=0.8, label="Close", zorder=3)
+    # Bollinger Bands fill
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=bb_upper,
+            mode="lines",
+            name="BB Upper",
+            line=dict(color="gray", width=1, dash="dot"),
+            opacity=0.5,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=bb_lower,
+            mode="lines",
+            name="BB Lower",
+            line=dict(color="gray", width=1, dash="dot"),
+            opacity=0.5,
+            fill="tonexty",
+            fillcolor="rgba(128, 128, 128, 0.1)",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=bb_middle,
+            mode="lines",
+            name="BB Middle",
+            line=dict(color="gray", width=1),
+            opacity=0.5,
+        )
+    )
 
-    # Plot SMAs
-    ax.plot(df.index, sma_50, color="orange", linewidth=1.2, alpha=0.7, label="SMA 50")
-    ax.plot(df.index, sma_200, color="purple", linewidth=1.2, alpha=0.7, label="SMA 200")
+    # SMAs
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=sma_50,
+            mode="lines",
+            name="SMA 50",
+            line=dict(color="orange", width=1.2),
+            opacity=0.7,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=sma_200,
+            mode="lines",
+            name="SMA 200",
+            line=dict(color="purple", width=1.2),
+            opacity=0.7,
+        )
+    )
 
-    # Plot EMAs
-    ax.plot(df.index, ema_50, color="green", linewidth=1.2, alpha=0.7, linestyle="--", label="EMA 50")
-    ax.plot(df.index, ema_200, color="brown", linewidth=1.2, alpha=0.7, linestyle="--", label="EMA 200")
+    # EMAs
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=ema_50,
+            mode="lines",
+            name="EMA 50",
+            line=dict(color="green", width=1.2, dash="dash"),
+            opacity=0.7,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=ema_200,
+            mode="lines",
+            name="EMA 200",
+            line=dict(color="brown", width=1.2, dash="dash"),
+            opacity=0.7,
+        )
+    )
 
-    # Plot Bollinger Bands
-    ax.plot(df.index, bb_upper, color="gray", linewidth=1, alpha=0.5, linestyle=":", label="BB Upper")
-    ax.plot(df.index, bb_middle, color="gray", linewidth=1, alpha=0.5, linestyle="-")
-    ax.plot(df.index, bb_lower, color="gray", linewidth=1, alpha=0.5, linestyle=":", label="BB Lower")
-    ax.fill_between(df.index, bb_lower, bb_upper, color="gray", alpha=0.1)
+    # Price line
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["close"],
+            mode="lines",
+            name="Close",
+            line=dict(color="black", width=1.5),
+            opacity=0.8,
+        )
+    )
 
-    # Get pivot locations
+    # Get pivot locations - use close price
     pivot_high_dates = df[pivot_high].index
     pivot_low_dates = df[pivot_low].index
+    pivot_high_values = df.loc[pivot_high_dates, "close"]
+    pivot_low_values = df.loc[pivot_low_dates, "close"]
 
-    # Plot pivot highs as red dots
-    pivot_high_close_prices = df.loc[pivot_high_dates, "close"]
-    ax.scatter(
-        pivot_high_dates,
-        pivot_high_close_prices,
-        color="red",
-        s=50,
-        marker="o",
-        zorder=5,
-        edgecolors="darkred",
-        linewidths=1,
-        label="Pivot High",
+    # Pivot highs
+    fig.add_trace(
+        go.Scatter(
+            x=pivot_high_dates,
+            y=pivot_high_values,
+            mode="markers",
+            name="Pivot High",
+            marker=dict(color="red", size=12, line=dict(color="darkred", width=2)),
+            text=[f"Close: ${v:.2f}" for v in pivot_high_values],
+            hovertemplate="Date: %{x}<br>%{text}<extra></extra>",
+        )
     )
 
-    # Plot pivot lows as blue dots
-    pivot_low_close_prices = df.loc[pivot_low_dates, "close"]
-    ax.scatter(
-        pivot_low_dates,
-        pivot_low_close_prices,
-        color="blue",
-        s=50,
-        marker="o",
-        zorder=5,
-        edgecolors="darkblue",
-        linewidths=1,
-        label="Pivot Low",
+    # Pivot lows
+    fig.add_trace(
+        go.Scatter(
+            x=pivot_low_dates,
+            y=pivot_low_values,
+            mode="markers",
+            name="Pivot Low",
+            marker=dict(color="blue", size=12, line=dict(color="darkblue", width=2)),
+            text=[f"Close: ${v:.2f}" for v in pivot_low_values],
+            hovertemplate="Date: %{x}<br>%{text}<extra></extra>",
+        )
     )
 
-    # Styling
-    ax.set_title(f"AAPL - Pivots (lb={left_bars}, rb={right_bars})", fontsize=14, fontweight="bold")
-    ax.set_xlabel("Date", fontsize=11)
-    ax.set_ylabel("Price ($)", fontsize=11)
-    ax.legend(loc="best", fontsize=9, ncol=2)
-    ax.grid(True, alpha=0.3)
-    plt.xticks(rotation=45)
-    plt.tight_layout()
+    # Title with window_variations info
+    title_suffix = f" (variations={window_variations})" if window_variations else ""
+    title = f"AAPL - Pivots (lb={left_bars}, rb={right_bars}){title_suffix}"
+
+    # Layout
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14)),
+        xaxis_title="Date",
+        yaxis_title="Price ($)",
+        hovermode="x unified",
+        template="plotly_white",
+        height=800,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
 
     # Save and show
-    output = "apple_pivots.png"
-    plt.savefig(output, dpi=300, bbox_inches="tight")
+    output = "apple_pivots.html"
+    fig.write_html(output)
     print(f"Saved: {output}")
     print(f"Detected: {len(pivot_high_dates)} highs, {len(pivot_low_dates)} lows")
 
-    plt.show()
+    fig.show()
 
 
 if __name__ == "__main__":
     # Parse command line arguments
-    if len(sys.argv) == 3:
+    left_bars = 8
+    right_bars = 13
+    window_variations = None
+
+    if len(sys.argv) >= 4:
+        # Format: lb rb variations (e.g., 8 13 -2,-1,1,2)
         left_bars = int(sys.argv[1])
         right_bars = int(sys.argv[2])
-        print(f"Using: left_bars={left_bars}, right_bars={right_bars}")
+        window_variations = [int(x) for x in sys.argv[3].split(",")]
+        print(f"Using: lb={left_bars}, rb={right_bars}, variations={window_variations}")
+    elif len(sys.argv) == 3:
+        left_bars = int(sys.argv[1])
+        right_bars = int(sys.argv[2])
+        print(f"Using: lb={left_bars}, rb={right_bars}")
     elif len(sys.argv) == 2:
         left_bars = right_bars = int(sys.argv[1])
-        print(f"Using: left_bars={left_bars}, right_bars={right_bars}")
+        print(f"Using: lb={left_bars}, rb={right_bars}")
     else:
-        left_bars = 8
-        right_bars = 13
-        print("Using default: left_bars=8, right_bars=8")
-        print("Usage: python visualize_pivots.py [left_bars] [right_bars]")
+        print(f"Using default: lb={left_bars}, rb={right_bars}")
+        print("Usage: python visualize_pivots.py [lb] [rb] [variations]")
+        print("Example: python visualize_pivots.py 8 13 -2,-1,1,2")
 
-    main(left_bars, right_bars)
+    main(left_bars, right_bars, window_variations)
