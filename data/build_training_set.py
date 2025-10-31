@@ -323,12 +323,12 @@ def enrich_with_metadata(stock_list, max_stocks=None):
                 market_cap = getattr(fast_info, "market_cap", None) or getattr(fast_info, "marketCap", None)
                 if market_cap is None:
                     market_cap = 0
-            except:
+            except Exception:
                 # Fallback to info if fast_info fails
                 try:
                     info = ticker_obj.info
                     market_cap = info.get("marketCap", 0) or info.get("market_cap", 0)
-                except:
+                except Exception:
                     market_cap = 0
 
             # Get sector/industry/country from info (not available in fast_info)
@@ -337,7 +337,7 @@ def enrich_with_metadata(stock_list, max_stocks=None):
                 sector = info.get("sector", "Unknown")
                 industry = info.get("industry", "Unknown")
                 country = info.get("country", "Unknown")
-            except:
+            except Exception:
                 sector = "Unknown"
                 industry = "Unknown"
                 country = "Unknown"
@@ -620,7 +620,7 @@ def main():
             .decode("utf-8")
             .strip()
         )
-    except:
+    except Exception:
         git_commit = "unknown"
 
     print("\nConfiguration:")
@@ -710,7 +710,9 @@ def main():
         },
         "git_commit": git_commit,
         "run_duration_seconds": run_duration_seconds,
-        "run_duration_human": f"{run_duration_seconds // 3600}h {(run_duration_seconds % 3600) // 60}m {run_duration_seconds % 60}s",
+        "run_duration_human": (
+            f"{run_duration_seconds // 3600}h {(run_duration_seconds % 3600) // 60}m {run_duration_seconds % 60}s"
+        ),
         "selection_stats": selection_stats,
     }
 

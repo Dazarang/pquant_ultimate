@@ -248,11 +248,9 @@ def _calculate_sar_numba(
         sar = sar + af * (ep - sar)
 
         # Check for reversal
-        reverse = False
 
         if is_long:
             if low[i] < sar:
-                reverse = True
                 sar = ep
                 ep = low[i]
                 af = acceleration
@@ -266,7 +264,6 @@ def _calculate_sar_numba(
                     sar = min(sar, low[i - 1], low[i - 2])
         else:
             if high[i] > sar:
-                reverse = True
                 sar = ep
                 ep = high[i]
                 af = acceleration

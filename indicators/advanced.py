@@ -92,7 +92,7 @@ def detect_multi_indicator_divergence(df: pd.DataFrame) -> pd.DataFrame:
     df["multi_divergence_score"] = 0
 
     # Process each stock separately (or single stock if no stock_id)
-    for stock_id, group in _get_groupby_or_single(df):
+    for stock_id, _group in _get_groupby_or_single(df):
         if _has_stock_id(df):
             stock_mask = df["stock_id"] == stock_id
             stock_data = df[stock_mask].copy()
@@ -235,7 +235,7 @@ def detect_support_tests(df: pd.DataFrame, tolerance: float = 0.02) -> pd.DataFr
     df["support_test_count"] = 0
 
     # Process each stock separately
-    for stock_id, group in _get_groupby_or_single(df):
+    for stock_id, _group in _get_groupby_or_single(df):
         if _has_stock_id(df):
             stock_mask = df["stock_id"] == stock_id
             stock_data = df[stock_mask].copy().reset_index(drop=True)
@@ -354,7 +354,7 @@ def detect_hidden_divergence(df: pd.DataFrame) -> pd.DataFrame:
 
     df["hidden_bullish_divergence"] = 0
 
-    for stock_id, group in _get_groupby_or_single(df):
+    for stock_id, _group in _get_groupby_or_single(df):
         if _has_stock_id(df):
             stock_mask = df["stock_id"] == stock_id
             stock_data = df[stock_mask].copy()

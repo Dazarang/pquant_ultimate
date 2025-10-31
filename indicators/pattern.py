@@ -24,7 +24,6 @@ def _find_pivot_high_numba(data: np.ndarray, lb: int, rb: int) -> np.ndarray:
         Boolean array indicating pivot highs
     """
     n = len(data)
-    window = lb + rb + 1
     result = np.zeros(n, dtype=np.bool_)
 
     for i in range(lb, n - rb):
@@ -63,7 +62,6 @@ def _find_pivot_low_numba(data: np.ndarray, lb: int, rb: int) -> np.ndarray:
         Boolean array indicating pivot lows
     """
     n = len(data)
-    window = lb + rb + 1
     result = np.zeros(n, dtype=np.bool_)
 
     for i in range(lb, n - rb):
@@ -176,13 +174,9 @@ def find_pivots(
     else:
         # Return actual values at pivot points, NaN elsewhere
         values_col = df["close"] if use_close else df["high"]
-        pivot_high = pd.Series(
-            np.where(pivot_high_bool, values_col, np.nan), index=df.index, name="PivotHigh"
-        )
+        pivot_high = pd.Series(np.where(pivot_high_bool, values_col, np.nan), index=df.index, name="PivotHigh")
         values_col = df["close"] if use_close else df["low"]
-        pivot_low = pd.Series(
-            np.where(pivot_low_bool, values_col, np.nan), index=df.index, name="PivotLow"
-        )
+        pivot_low = pd.Series(np.where(pivot_low_bool, values_col, np.nan), index=df.index, name="PivotLow")
 
     return pivot_high, pivot_low
 

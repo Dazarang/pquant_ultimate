@@ -89,7 +89,6 @@ class TestHammer:
 
         for idx in hammer_idx[:5]:  # Check first 5
             open_ = df.loc[idx, "open"]
-            high = df.loc[idx, "high"]
             low = df.loc[idx, "low"]
             close = df.loc[idx, "close"]
 

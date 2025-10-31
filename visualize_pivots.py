@@ -48,7 +48,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=bb_upper,
             mode="lines",
             name="BB Upper",
-            line=dict(color="gray", width=1, dash="dot"),
+            line={"color": "gray", "width": 1, "dash": "dot"},
             opacity=0.5,
         )
     )
@@ -58,7 +58,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=bb_lower,
             mode="lines",
             name="BB Lower",
-            line=dict(color="gray", width=1, dash="dot"),
+            line={"color": "gray", "width": 1, "dash": "dot"},
             opacity=0.5,
             fill="tonexty",
             fillcolor="rgba(128, 128, 128, 0.1)",
@@ -70,7 +70,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=bb_middle,
             mode="lines",
             name="BB Middle",
-            line=dict(color="gray", width=1),
+            line={"color": "gray", "width": 1},
             opacity=0.5,
         )
     )
@@ -82,7 +82,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=sma_50,
             mode="lines",
             name="SMA 50",
-            line=dict(color="orange", width=1.2),
+            line={"color": "orange", "width": 1.2},
             opacity=0.7,
         )
     )
@@ -92,7 +92,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=sma_200,
             mode="lines",
             name="SMA 200",
-            line=dict(color="purple", width=1.2),
+            line={"color": "purple", "width": 1.2},
             opacity=0.7,
         )
     )
@@ -104,7 +104,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=ema_50,
             mode="lines",
             name="EMA 50",
-            line=dict(color="green", width=1.2, dash="dash"),
+            line={"color": "green", "width": 1.2, "dash": "dash"},
             opacity=0.7,
         )
     )
@@ -114,7 +114,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=ema_200,
             mode="lines",
             name="EMA 200",
-            line=dict(color="brown", width=1.2, dash="dash"),
+            line={"color": "brown", "width": 1.2, "dash": "dash"},
             opacity=0.7,
         )
     )
@@ -126,7 +126,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=df["close"],
             mode="lines",
             name="Close",
-            line=dict(color="black", width=1.5),
+            line={"color": "black", "width": 1.5},
             opacity=0.8,
         )
     )
@@ -144,7 +144,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=pivot_high_values,
             mode="markers",
             name="Pivot High",
-            marker=dict(color="red", size=12, line=dict(color="darkred", width=2)),
+            marker={"color": "red", "size": 12, "line": {"color": "darkred", "width": 2}},
             text=[f"Close: ${v:.2f}" for v in pivot_high_values],
             hovertemplate="Date: %{x}<br>%{text}<extra></extra>",
         )
@@ -157,7 +157,7 @@ def main(left_bars=21, right_bars=21, window_variations=None):
             y=pivot_low_values,
             mode="markers",
             name="Pivot Low",
-            marker=dict(color="blue", size=12, line=dict(color="darkblue", width=2)),
+            marker={"color": "blue", "size": 12, "line": {"color": "darkblue", "width": 2}},
             text=[f"Close: ${v:.2f}" for v in pivot_low_values],
             hovertemplate="Date: %{x}<br>%{text}<extra></extra>",
         )
@@ -169,14 +169,14 @@ def main(left_bars=21, right_bars=21, window_variations=None):
 
     # Layout
     fig.update_layout(
-        title=dict(text=title, font=dict(size=14)),
+        title={"text": title, "font": {"size": 14}},
         xaxis_title="Date",
         yaxis_title="Price ($)",
         hovermode="x unified",
         template="plotly_white",
         height=800,
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
     )
 
     # Save and show
