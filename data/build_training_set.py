@@ -7,6 +7,7 @@ import json
 import pickle
 import re
 import subprocess
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,9 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 from tqdm import tqdm
+
+sys.path.insert(0, str(Path(__file__).parent))
+from ticker_file_utils import TickerFileFinder
 
 # ============================================================================
 # STEP 1: LOAD AND FILTER TICKERS
@@ -587,10 +591,16 @@ def main():
     print("STOCK BOTTOM DETECTION - TRAINING DATASET BUILDER")
     print("=" * 70)
 
-    # Configuration
-    TICKER_JSON_PATH = (
-        "/Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_validated_20251029.json"
-    )
+    # Find latest validated ticker file automatically
+    finder = TickerFileFinder()
+    ticker_file = finder.get_latest_validated()
+
+    if not ticker_file:
+        print("ERROR: No validated ticker files found matching pattern 'tickers_validated_*.json'")
+        print("Run validate_tickers.py first!")
+        return
+
+    TICKER_JSON_PATH = str(ticker_file)
     START_DATE = "2015-01-01"  # 10 years of data for pattern recognition
     END_DATE = "2024-12-31"  # ~2,500 trading days (250/year * 10)
     TARGET_US_SAMPLE = 2000  # How many US stocks to try downloading

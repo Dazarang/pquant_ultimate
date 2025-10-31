@@ -5,7 +5,12 @@ Pure filtering - no API calls, instant execution.
 """
 
 import json
+import sys
 from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from ticker_file_utils import TickerFileFinder
 
 
 def filter_junk_tickers(tickers):
@@ -118,9 +123,17 @@ def main():
     Filter tickers from raw JSON.
     Output: filtered JSON ready for validation.
     """
-    # Configuration
-    INPUT_JSON = "/Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_20251029.json"
-    OUTPUT_JSON = f"/Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_filtered_{datetime.now().strftime('%Y%m%d')}.json"
+    # Find latest ticker file automatically
+    finder = TickerFileFinder()
+    input_file = finder.get_latest_raw()
+
+    if not input_file:
+        print("ERROR: No ticker files found matching pattern 'tickers_*.json'")
+        print("Run get_tickers.py first!")
+        return
+
+    INPUT_JSON = str(input_file)
+    OUTPUT_JSON = str(input_file.parent / f"tickers_filtered_{datetime.now().strftime('%Y%m%d')}.json")
 
     print("=" * 70)
     print("TICKER FILTERING (NO API CALLS)")

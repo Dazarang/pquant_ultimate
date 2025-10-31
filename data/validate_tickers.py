@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from ticker_file_utils import TickerFileFinder
 from validators import TickerValidator
 
 
@@ -30,8 +31,17 @@ def main():
     # Configuration
     TEST_MODE = False  # Set to True for testing with 200 tickers/category
 
-    INPUT_JSON = "/Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_filtered_20251029.json"
-    OUTPUT_JSON = f"/Users/deaz/Developer/project_quant/pQuant_ultimate/data/tickers_data/tickers_validated_{datetime.now().strftime('%Y%m%d')}.json"
+    # Find latest filtered ticker file automatically
+    finder = TickerFileFinder()
+    input_file = finder.get_latest_filtered()
+
+    if not input_file:
+        print("ERROR: No filtered ticker files found matching pattern 'tickers_filtered_*.json'")
+        print("Run filter_tickers.py first!")
+        return
+
+    INPUT_JSON = str(input_file)
+    OUTPUT_JSON = str(input_file.parent / f"tickers_validated_{datetime.now().strftime('%Y%m%d')}.json")
 
     print("=" * 70)
     print("TICKER VALIDATION (API CALLS)")
