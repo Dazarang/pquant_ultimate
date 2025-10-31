@@ -9,5 +9,5 @@ wheels/
 # Virtual environments
 .venv
 
-# Virtual environments only
-# data files are tracked
+# Training data (too large for git)
+data/training_data/
