@@ -53,6 +53,40 @@ def _get_date_column(df: pd.DataFrame) -> pd.Series:
         return pd.to_datetime(df.index)
 
 
+def _detect_local_extrema_safe(
+    df: pd.DataFrame, price_col: str = "close", lookback_window: int = 8, find_lows: bool = True, find_highs: bool = False
+) -> pd.DataFrame:
+    """
+    Detect local extrema, handling multi-stock DataFrames properly.
+
+    If df has stock_id, processes each stock separately to avoid
+    cross-contamination in interleaved data.
+
+    Args:
+        df: DataFrame with price data
+        price_col: Column to detect extrema in
+        lookback_window: Window for extrema detection
+        find_lows: Whether to detect lows
+        find_highs: Whether to detect highs
+
+    Returns:
+        DataFrame with LocalLow and/or LocalHigh columns added
+    """
+    if _has_stock_id(df):
+        # Process per stock to avoid cross-contamination
+        result_dfs = []
+        for stock_id in df["stock_id"].unique():
+            stock_mask = df["stock_id"] == stock_id
+            stock_df = df[stock_mask].copy()
+            stock_df = find_local_extrema(
+                stock_df, price_col=price_col, lookback_window=lookback_window, find_lows=find_lows, find_highs=find_highs
+            )
+            result_dfs.append(stock_df)
+        return pd.concat(result_dfs, ignore_index=False).sort_index()
+    else:
+        return find_local_extrema(df, price_col=price_col, lookback_window=lookback_window, find_lows=find_lows, find_highs=find_highs)
+
+
 def detect_multi_indicator_divergence(
     df: pd.DataFrame, lookback_window: int = 8
 ) -> pd.DataFrame:
@@ -87,7 +121,7 @@ def detect_multi_indicator_divergence(
         df["stoch"] = stoch_k
 
     # Detect local lows using backward-looking method
-    df = find_local_extrema(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
+    df = _detect_local_extrema_safe(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
 
     df["multi_divergence_score"] = 0
 
@@ -156,6 +190,9 @@ def detect_volume_exhaustion(df: pd.DataFrame) -> pd.DataFrame:
 
     # Calculate 5-day volume change
     df["volume_change_5d"] = grouped["volume"].transform(lambda x: x.pct_change(5))
+
+    # Handle inf from pct_change when volume was 0 (holidays)
+    df["volume_change_5d"] = df["volume_change_5d"].replace([np.inf, -np.inf], 0)
 
     # Exhaustion: price down but volume also down
     df["volume_exhaustion"] = (
@@ -234,7 +271,7 @@ def detect_support_tests(
 
     # Detect local lows using backward-looking method
     if "LocalLow" not in df.columns:
-        df = find_local_extrema(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
+        df = _detect_local_extrema_safe(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
 
     df["support_test_count"] = 0
 
@@ -359,7 +396,7 @@ def detect_hidden_divergence(df: pd.DataFrame, lookback_window: int = 8) -> pd.D
 
     # Detect local lows using backward-looking method
     if "LocalLow" not in df.columns:
-        df = find_local_extrema(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
+        df = _detect_local_extrema_safe(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
 
     df["hidden_bullish_divergence"] = 0
 
@@ -508,7 +545,7 @@ def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFram
 
     # Detect local lows using backward-looking method
     if "LocalLow" not in df.columns:
-        df = find_local_extrema(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
+        df = _detect_local_extrema_safe(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
 
     # Days since last local low (per stock)
     def calculate_days_since_low(group):
@@ -526,7 +563,7 @@ def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFram
 
     if _has_stock_id(df):
         df["days_since_last_low"] = (
-            df.groupby("stock_id").apply(calculate_days_since_low).reset_index(level=0, drop=True)
+            df.groupby("stock_id", group_keys=False).apply(calculate_days_since_low)
         )
     else:
         df["days_since_last_low"] = calculate_days_since_low(df)

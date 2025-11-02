@@ -2,11 +2,6 @@
 - Be extremely concise. Sacrifice grammar for the sake of concision.
 - You will never use emojis or other such characters.
 
-# Python usage
-- We run python using `uv`
-- uv add *package* - never add packages manually in the toml.
-- uv add --dev *package*
-
 # Shell Tool Usage Guidelines
 
 <shell_tools> 
@@ -37,6 +32,14 @@ When you mention or need current date for e.g. web online search, run date comma
 
 - Always focus on clean architecture and system design.
 - When fixing code; do not comment the fix, future devs dont care that it was fix, just that its correct.
+
+<python_usage>
+
+- We run python using `uv`
+- uv add *package* - never add packages manually in the toml.
+- uv add --dev *package*
+
+<python_usage>
 
 <file_length_and_structure> 
 
