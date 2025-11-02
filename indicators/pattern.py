@@ -326,6 +326,49 @@ def _find_local_extrema_rolling(data: np.ndarray, window: int, find_max: bool) -
     return result
 
 
+def find_local_extrema(
+    df: pd.DataFrame,
+    price_col: str = "close",
+    lookback_window: int = 8,
+    find_lows: bool = True,
+    find_highs: bool = True,
+) -> pd.DataFrame:
+    """
+    Find local extrema (lows/highs) using backward-looking method.
+    NO LOOKAHEAD BIAS - safe for ML features.
+
+    Similar to find_pivots() but uses only historical data.
+    At position i, checks if value is min/max within [i-lookback_window+1, i].
+
+    Args:
+        df: DataFrame with price data
+        price_col: Column name for price data
+        lookback_window: Window size for extrema detection (similar to lb in pivots)
+        find_lows: If True, detect local lows
+        find_highs: If True, detect local highs
+
+    Returns:
+        DataFrame with added columns:
+        - LocalLow: 1 if local low detected, 0 otherwise
+        - LocalHigh: 1 if local high detected, 0 otherwise
+    """
+    if price_col not in df.columns:
+        raise ValueError(f"Column '{price_col}' not found in DataFrame")
+
+    df = df.copy()
+    price_data = ensure_numpy_array(df[price_col])
+
+    if find_lows:
+        local_lows = _find_local_extrema_rolling(price_data, lookback_window, find_max=False)
+        df["LocalLow"] = local_lows.astype(np.int32)
+
+    if find_highs:
+        local_highs = _find_local_extrema_rolling(price_data, lookback_window, find_max=True)
+        df["LocalHigh"] = local_highs.astype(np.int32)
+
+    return df
+
+
 def detect_rsi_divergence(
     df: pd.DataFrame,
     rsi_col: str = "RSI",

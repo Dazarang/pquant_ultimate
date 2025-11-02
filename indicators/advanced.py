@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from indicators.momentum import calculate_macd, calculate_rsi, calculate_stochastic
+from indicators.pattern import find_local_extrema
 from indicators.volatility import calculate_bbands
 
 
@@ -52,19 +53,21 @@ def _get_date_column(df: pd.DataFrame) -> pd.Series:
         return pd.to_datetime(df.index)
 
 
-def detect_multi_indicator_divergence(df: pd.DataFrame) -> pd.DataFrame:
+def detect_multi_indicator_divergence(
+    df: pd.DataFrame, lookback_window: int = 8
+) -> pd.DataFrame:
     """
     Detect bullish divergence across multiple indicators.
+    NO LOOKAHEAD BIAS - uses backward-looking local extrema.
 
     Bullish divergence = Lower low in PRICE but Higher low in INDICATOR.
     Checks across RSI, MACD, and Stochastic simultaneously.
 
     Score: 0=no divergence, 1=single, 2=double, 3=triple
 
-    Requires:
-        - PivotLow column (from find_pivots)
-        - close column
-        - Optional: rsi, macd, stoch columns (will calculate if missing)
+    Args:
+        df: DataFrame with price data
+        lookback_window: Window for local extrema detection (default 8, similar to pivot lb)
 
     Returns:
         DataFrame with new column: multi_divergence_score (0-3)
@@ -83,11 +86,8 @@ def detect_multi_indicator_divergence(df: pd.DataFrame) -> pd.DataFrame:
         stoch_k, _ = calculate_stochastic(df, fastk_period=14, slowk_period=3, slowd_period=3)
         df["stoch"] = stoch_k
 
-    # Check if PivotLow exists
-    if "PivotLow" not in df.columns:
-        # Return with zeros if pivot detection hasn't been run
-        df["multi_divergence_score"] = 0
-        return df
+    # Detect local lows using backward-looking method
+    df = find_local_extrema(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
 
     df["multi_divergence_score"] = 0
 
@@ -99,11 +99,11 @@ def detect_multi_indicator_divergence(df: pd.DataFrame) -> pd.DataFrame:
         else:
             stock_data = df.copy()
 
-        pivot_indices = stock_data[stock_data["PivotLow"] == 1].index.tolist()
+        local_low_indices = stock_data[stock_data["LocalLow"] == 1].index.tolist()
 
-        for i in range(len(pivot_indices) - 1):
-            first_idx = pivot_indices[i]
-            second_idx = pivot_indices[i + 1]
+        for i in range(len(local_low_indices) - 1):
+            first_idx = local_low_indices[i]
+            second_idx = local_low_indices[i + 1]
 
             first_price = df.loc[first_idx, "close"]
             second_price = df.loc[second_idx, "close"]
@@ -213,24 +213,28 @@ def detect_panic_selling(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def detect_support_tests(df: pd.DataFrame, tolerance: float = 0.02) -> pd.DataFrame:
+def detect_support_tests(
+    df: pd.DataFrame, tolerance: float = 0.02, lookback_window: int = 8
+) -> pd.DataFrame:
     """
     Count how many times price has tested similar support levels.
+    NO LOOKAHEAD BIAS - uses backward-looking local extrema.
 
     More tests = stronger support = higher probability bounce.
 
     Args:
-        df: DataFrame with PivotLow and close columns
+        df: DataFrame with price data
         tolerance: Price similarity tolerance (default 2%)
+        lookback_window: Window for local extrema detection (default 8)
 
     Returns:
         DataFrame with new column: support_test_count
     """
     df = df.copy()
 
-    if "PivotLow" not in df.columns:
-        df["support_test_count"] = 0
-        return df
+    # Detect local lows using backward-looking method
+    if "LocalLow" not in df.columns:
+        df = find_local_extrema(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
 
     df["support_test_count"] = 0
 
@@ -242,26 +246,26 @@ def detect_support_tests(df: pd.DataFrame, tolerance: float = 0.02) -> pd.DataFr
         else:
             stock_data = df.copy().reset_index(drop=True)
 
-        # Get all pivot lows with their original indices
-        pivot_data = []
+        # Get all local lows with their original indices
+        local_low_data = []
         for idx in stock_data.index:
-            if stock_data.loc[idx, "PivotLow"] == 1:
-                pivot_data.append(
+            if stock_data.loc[idx, "LocalLow"] == 1:
+                local_low_data.append(
                     {
                         "idx": idx,
                         "price": stock_data.loc[idx, "close"],
                     }
                 )
 
-        # For each row, count similar prior pivots
+        # For each row, count similar prior local lows
         for current_idx in stock_data.index:
             current_price = stock_data.loc[current_idx, "close"]
 
-            # Count prior pivots within tolerance
+            # Count prior local lows within tolerance
             test_count = 0
-            for pivot in pivot_data:
-                if pivot["idx"] < current_idx:  # Only prior pivots
-                    price_diff_pct = abs(pivot["price"] - current_price) / current_price
+            for local_low in local_low_data:
+                if local_low["idx"] < current_idx:  # Only prior lows
+                    price_diff_pct = abs(local_low["price"] - current_price) / current_price
                     if price_diff_pct < tolerance:  # Within tolerance
                         test_count += 1
 
@@ -329,9 +333,10 @@ def detect_exhaustion_sequence(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def detect_hidden_divergence(df: pd.DataFrame) -> pd.DataFrame:
+def detect_hidden_divergence(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFrame:
     """
     Detect hidden bullish divergence.
+    NO LOOKAHEAD BIAS - uses backward-looking local extrema.
 
     Hidden bullish divergence:
     - HIGHER low in price (making progress)
@@ -339,6 +344,10 @@ def detect_hidden_divergence(df: pd.DataFrame) -> pd.DataFrame:
 
     Different from regular divergence. Less useful for bottoms
     but can indicate false breakdowns.
+
+    Args:
+        df: DataFrame with price data
+        lookback_window: Window for local extrema detection (default 8)
 
     Returns:
         DataFrame with new column: hidden_bullish_divergence
@@ -348,9 +357,9 @@ def detect_hidden_divergence(df: pd.DataFrame) -> pd.DataFrame:
     if "rsi" not in df.columns:
         df["rsi"] = calculate_rsi(df, period=14)
 
-    if "PivotLow" not in df.columns:
-        df["hidden_bullish_divergence"] = 0
-        return df
+    # Detect local lows using backward-looking method
+    if "LocalLow" not in df.columns:
+        df = find_local_extrema(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
 
     df["hidden_bullish_divergence"] = 0
 
@@ -361,11 +370,11 @@ def detect_hidden_divergence(df: pd.DataFrame) -> pd.DataFrame:
         else:
             stock_data = df.copy()
 
-        pivot_indices = stock_data[stock_data["PivotLow"] == 1].index.tolist()
+        local_low_indices = stock_data[stock_data["LocalLow"] == 1].index.tolist()
 
-        for i in range(len(pivot_indices) - 1):
-            first_idx = pivot_indices[i]
-            second_idx = pivot_indices[i + 1]
+        for i in range(len(local_low_indices) - 1):
+            first_idx = local_low_indices[i]
+            second_idx = local_low_indices[i + 1]
 
             first_price = df.loc[first_idx, "close"]
             second_price = df.loc[second_idx, "close"]
@@ -462,20 +471,25 @@ def detect_bb_squeeze_breakdown(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFrame:
     """
     Add time-based features for temporal patterns.
+    NO LOOKAHEAD BIAS - uses backward-looking local extrema.
 
     Temporal patterns in bottoms:
     - Day of week effects
     - Days since last bottom (cyclicality)
     - Month-end and quarter-end effects
 
+    Args:
+        df: DataFrame with price data
+        lookback_window: Window for local extrema detection (default 8)
+
     Returns:
         DataFrame with new columns:
         - day_of_week (0-6)
         - is_monday, is_friday
-        - days_since_last_pivot
+        - days_since_last_low
         - is_month_end, is_quarter_end
     """
     df = df.copy()
@@ -492,30 +506,30 @@ def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
     df["is_monday"] = (df["day_of_week"] == 0).astype(int)
     df["is_friday"] = (df["day_of_week"] == 4).astype(int)
 
-    # Days since last pivot low (per stock)
-    if "PivotLow" in df.columns:
+    # Detect local lows using backward-looking method
+    if "LocalLow" not in df.columns:
+        df = find_local_extrema(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
 
-        def calculate_days_since_pivot(group):
-            result = pd.Series(np.nan, index=group.index)
-            last_pivot_date = None
+    # Days since last local low (per stock)
+    def calculate_days_since_low(group):
+        result = pd.Series(np.nan, index=group.index)
+        last_low_date = None
 
-            for idx in group.index:
-                if group.loc[idx, "PivotLow"] == 1:
-                    last_pivot_date = group.loc[idx, "date"]
-                    result[idx] = 0
-                elif last_pivot_date is not None:
-                    result[idx] = (group.loc[idx, "date"] - last_pivot_date).days
+        for idx in group.index:
+            if group.loc[idx, "LocalLow"] == 1:
+                last_low_date = group.loc[idx, "date"]
+                result[idx] = 0
+            elif last_low_date is not None:
+                result[idx] = (group.loc[idx, "date"] - last_low_date).days
 
-            return result
+        return result
 
-        if _has_stock_id(df):
-            df["days_since_last_pivot"] = (
-                df.groupby("stock_id").apply(calculate_days_since_pivot).reset_index(level=0, drop=True)
-            )
-        else:
-            df["days_since_last_pivot"] = calculate_days_since_pivot(df)
+    if _has_stock_id(df):
+        df["days_since_last_low"] = (
+            df.groupby("stock_id").apply(calculate_days_since_low).reset_index(level=0, drop=True)
+        )
     else:
-        df["days_since_last_pivot"] = np.nan
+        df["days_since_last_low"] = calculate_days_since_low(df)
 
     # Month-end indicator
     df["is_month_end"] = (df["date"].dt.is_month_end | (df["date"].dt.day >= 28)).astype(int)
