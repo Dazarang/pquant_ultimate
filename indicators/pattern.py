@@ -93,6 +93,7 @@ def find_pivots(
     return_boolean: bool = True,
     window_variations: list[int] | None = None,
     use_close: bool = True,
+    price_tolerance: float = 0.01,
 ) -> tuple[pd.Series, pd.Series]:
     """
     Identifies pivot highs and lows in DataFrame.
@@ -106,12 +107,16 @@ def find_pivots(
                        otherwise return original values with NaNs
         window_variations: Optional list of day offsets to expand base pivots.
                           E.g., [-2, -1, 1, 2] will mark days at base_pivot±1
-                          and base_pivot±2 as pivots.
-                          If day X is a base pivot, then days X-2, X-1, X, X+1,
-                          X+2 will all be marked as pivots.
+                          and base_pivot±2 as pivots, but ONLY if the adjacent
+                          day's close price is within price_tolerance of the
+                          base pivot's close price.
                           Out-of-bounds indices are safely ignored.
         use_close: If True, detect pivots using close price.
                   If False, use high/low prices (legacy behavior).
+        price_tolerance: Percentage tolerance for window variations (default 0.05 = 5%).
+                        Adjacent days only marked as pivots if their close price
+                        is within this percentage of base pivot's close.
+                        Only applies when window_variations is not None.
 
     Returns:
         Tuple of (PivotHigh, PivotLow) series
@@ -137,13 +142,17 @@ def find_pivots(
         high_data = ensure_numpy_array(df["high"])
         low_data = ensure_numpy_array(df["low"])
 
+    # Window variations require close prices for tolerance check
+    if window_variations is not None and "close" not in df.columns:
+        raise ValueError("window_variations requires 'close' column for price tolerance check")
+
     # Handle window variations
     if window_variations is None:
         # Default: single window
         pivot_high_bool = _find_pivot_high_numba(high_data, lb, rb)
         pivot_low_bool = _find_pivot_low_numba(low_data, lb, rb)
     else:
-        # Find base pivots, then expand to adjacent days
+        # Find base pivots, then expand to adjacent days with price tolerance
         n = len(high_data)
         pivot_high_base = _find_pivot_high_numba(high_data, lb, rb)
         pivot_low_base = _find_pivot_low_numba(low_data, lb, rb)
@@ -152,21 +161,34 @@ def find_pivots(
         pivot_high_bool = pivot_high_base.copy()
         pivot_low_bool = pivot_low_base.copy()
 
-        # For each base pivot, mark adjacent days
+        # Get close prices for tolerance check
+        close_prices = ensure_numpy_array(df["close"])
+
+        # For each base pivot, mark adjacent days within price tolerance
         high_indices = np.where(pivot_high_base)[0]
         low_indices = np.where(pivot_low_base)[0]
 
         for idx in high_indices:
+            base_price = close_prices[idx]
             for offset in window_variations:
                 adj_idx = idx + offset
                 if 0 <= adj_idx < n:
-                    pivot_high_bool[adj_idx] = True
+                    adj_price = close_prices[adj_idx]
+                    # Check if adjacent price is within tolerance
+                    price_diff = abs(adj_price - base_price) / base_price
+                    if price_diff <= price_tolerance:
+                        pivot_high_bool[adj_idx] = True
 
         for idx in low_indices:
+            base_price = close_prices[idx]
             for offset in window_variations:
                 adj_idx = idx + offset
                 if 0 <= adj_idx < n:
-                    pivot_low_bool[adj_idx] = True
+                    adj_price = close_prices[adj_idx]
+                    # Check if adjacent price is within tolerance
+                    price_diff = abs(adj_price - base_price) / base_price
+                    if price_diff <= price_tolerance:
+                        pivot_low_bool[adj_idx] = True
 
     if return_boolean:
         pivot_high = pd.Series(pivot_high_bool, index=df.index, name="PivotHigh")
