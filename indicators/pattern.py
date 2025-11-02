@@ -287,42 +287,148 @@ class Hammer(BaseIndicator):
         return pd.Series(result, index=df.index, name="Hammer")
 
 
-def detect_rsi_divergence(df: pd.DataFrame) -> pd.DataFrame:
+@njit
+def _find_local_extrema_rolling(data: np.ndarray, window: int, find_max: bool) -> np.ndarray:
     """
-    Detect RSI divergence at pivot lows.
-    From original code - preserved for ML features.
+    Find local extrema using rolling window (backward-looking only).
+    At position i, checks if data[i] is max/min within window [i-window+1, i].
 
     Args:
-        df: DataFrame with 'PivotLow', 'close', 'RSI' columns
+        data: Price or indicator array
+        window: Lookback window size
+        find_max: True for local maxima, False for local minima
 
     Returns:
-        DataFrame with 'RSI_Divergence' column added
+        Boolean array marking local extrema
     """
-    required_cols = ["PivotLow", "close", "RSI"]
+    n = len(data)
+    result = np.zeros(n, dtype=np.bool_)
+
+    for i in range(window - 1, n):
+        start_idx = i - window + 1
+        is_extreme = True
+
+        if find_max:
+            # Check if current value is maximum in window
+            for j in range(start_idx, i + 1):
+                if data[j] > data[i]:
+                    is_extreme = False
+                    break
+        else:
+            # Check if current value is minimum in window
+            for j in range(start_idx, i + 1):
+                if data[j] < data[i]:
+                    is_extreme = False
+                    break
+
+        result[i] = is_extreme
+
+    return result
+
+
+def detect_rsi_divergence(
+    df: pd.DataFrame,
+    rsi_col: str = "RSI",
+    price_col: str = "close",
+    lookback_window: int = 5,
+    max_lookback: int = 60,
+    min_distance: int = 5,
+) -> pd.DataFrame:
+    """
+    Detect RSI divergence using backward-looking method (NO LOOKAHEAD BIAS).
+    Suitable for real-time trading and ML features.
+
+    Bullish divergence: Price makes lower low, RSI makes higher low
+    Bearish divergence: Price makes higher high, RSI makes lower high
+
+    Args:
+        df: DataFrame with price and RSI columns
+        rsi_col: Name of RSI column
+        price_col: Name of price column
+        lookback_window: Window to detect local extrema (bars back for peak detection)
+        max_lookback: Maximum bars back to search for previous extreme
+        min_distance: Minimum bars between extrema to avoid noise
+
+    Returns:
+        DataFrame with added columns:
+        - Bullish_Divergence: 1 if bullish divergence detected, 0 otherwise
+        - Bearish_Divergence: 1 if bearish divergence detected, 0 otherwise
+        - Divergence_Strength: Normalized strength of divergence
+    """
+    required_cols = [price_col, rsi_col]
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
-    # Initialize divergence column
-    df["RSI_Divergence"] = 0
+    df = df.copy()
 
-    # Find pivot low indices
-    pivot_indices = df[df["PivotLow"] == 1].index.tolist()
+    # Find local lows and highs using backward-looking rolling window
+    price_data = ensure_numpy_array(df[price_col])
+    rsi_data = ensure_numpy_array(df[rsi_col])
 
-    # Compare consecutive pivots
-    for i in range(len(pivot_indices) - 1):
-        first_idx = pivot_indices[i]
-        second_idx = pivot_indices[i + 1]
+    local_lows = _find_local_extrema_rolling(price_data, lookback_window, find_max=False)
+    local_highs = _find_local_extrema_rolling(price_data, lookback_window, find_max=True)
 
-        first_price = df.loc[first_idx, "close"]
-        second_price = df.loc[second_idx, "close"]
+    # Initialize divergence columns
+    n = len(df)
+    bullish_div = np.zeros(n, dtype=np.int32)
+    bearish_div = np.zeros(n, dtype=np.int32)
+    div_strength = np.zeros(n, dtype=np.float64)
 
-        first_rsi = df.loc[first_idx, "RSI"]
-        second_rsi = df.loc[second_idx, "RSI"]
+    for i in range(n):
+        # Check for bullish divergence at local lows
+        if local_lows[i]:
+            # Find previous low within max_lookback and min_distance
+            search_start = max(0, i - max_lookback)
+            prev_low_idx = -1
 
-        # Bullish divergence: lower price, higher RSI
-        if second_price < first_price and second_rsi > first_rsi:
-            df.loc[second_idx, "RSI_Divergence"] = 1
+            for j in range(i - min_distance, search_start - 1, -1):
+                if local_lows[j]:
+                    prev_low_idx = j
+                    break
+
+            if prev_low_idx >= 0:
+                curr_price = price_data[i]
+                prev_price = price_data[prev_low_idx]
+                curr_rsi = rsi_data[i]
+                prev_rsi = rsi_data[prev_low_idx]
+
+                # Bullish divergence: lower price, higher RSI
+                if curr_price < prev_price and curr_rsi > prev_rsi:
+                    bullish_div[i] = 1
+                    # Strength: normalized by price/RSI differences
+                    price_drop = (prev_price - curr_price) / prev_price
+                    rsi_rise = (curr_rsi - prev_rsi) / 100.0
+                    div_strength[i] = (price_drop + rsi_rise) / 2.0
+
+        # Check for bearish divergence at local highs
+        if local_highs[i]:
+            # Find previous high within max_lookback and min_distance
+            search_start = max(0, i - max_lookback)
+            prev_high_idx = -1
+
+            for j in range(i - min_distance, search_start - 1, -1):
+                if local_highs[j]:
+                    prev_high_idx = j
+                    break
+
+            if prev_high_idx >= 0:
+                curr_price = price_data[i]
+                prev_price = price_data[prev_high_idx]
+                curr_rsi = rsi_data[i]
+                prev_rsi = rsi_data[prev_high_idx]
+
+                # Bearish divergence: higher price, lower RSI
+                if curr_price > prev_price and curr_rsi < prev_rsi:
+                    bearish_div[i] = 1
+                    # Strength: normalized by price/RSI differences
+                    price_rise = (curr_price - prev_price) / prev_price
+                    rsi_drop = (prev_rsi - curr_rsi) / 100.0
+                    div_strength[i] = (price_rise + rsi_drop) / 2.0
+
+    df["Bullish_Divergence"] = bullish_div
+    df["Bearish_Divergence"] = bearish_div
+    df["Divergence_Strength"] = div_strength
 
     return df
 
