@@ -153,11 +153,9 @@ class TestPerformanceBenchmarks:
         result_memory = sys.getsizeof(result)
         memory_ratio = result_memory / initial_memory
 
-        print(
-            f"\nMemory - Initial: {initial_memory / 1024:.1f}KB, "
-            f"Result: {result_memory / 1024:.1f}KB, "
-            f"Ratio: {memory_ratio:.2f}x"
-        )
+        initial_kb = initial_memory / 1024
+        result_kb = result_memory / 1024
+        print(f"\nMemory - Initial: {initial_kb:.1f}KB, Result: {result_kb:.1f}KB, Ratio: {memory_ratio:.2f}x")
 
         # Should not explode memory (indicators add columns but reuse index)
         assert memory_ratio < 20, "Memory usage too high"

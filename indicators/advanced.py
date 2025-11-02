@@ -54,7 +54,11 @@ def _get_date_column(df: pd.DataFrame) -> pd.Series:
 
 
 def _detect_local_extrema_safe(
-    df: pd.DataFrame, price_col: str = "close", lookback_window: int = 8, find_lows: bool = True, find_highs: bool = False
+    df: pd.DataFrame,
+    price_col: str = "close",
+    lookback_window: int = 8,
+    find_lows: bool = True,
+    find_highs: bool = False,
 ) -> pd.DataFrame:
     """
     Detect local extrema, handling multi-stock DataFrames properly.
@@ -79,17 +83,21 @@ def _detect_local_extrema_safe(
             stock_mask = df["stock_id"] == stock_id
             stock_df = df[stock_mask].copy()
             stock_df = find_local_extrema(
-                stock_df, price_col=price_col, lookback_window=lookback_window, find_lows=find_lows, find_highs=find_highs
+                stock_df,
+                price_col=price_col,
+                lookback_window=lookback_window,
+                find_lows=find_lows,
+                find_highs=find_highs,
             )
             result_dfs.append(stock_df)
         return pd.concat(result_dfs, ignore_index=False).sort_index()
     else:
-        return find_local_extrema(df, price_col=price_col, lookback_window=lookback_window, find_lows=find_lows, find_highs=find_highs)
+        return find_local_extrema(
+            df, price_col=price_col, lookback_window=lookback_window, find_lows=find_lows, find_highs=find_highs
+        )
 
 
-def detect_multi_indicator_divergence(
-    df: pd.DataFrame, lookback_window: int = 8
-) -> pd.DataFrame:
+def detect_multi_indicator_divergence(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFrame:
     """
     Detect bullish divergence across multiple indicators.
     NO LOOKAHEAD BIAS - uses backward-looking local extrema.
@@ -121,7 +129,9 @@ def detect_multi_indicator_divergence(
         df["stoch"] = stoch_k
 
     # Detect local lows using backward-looking method
-    df = _detect_local_extrema_safe(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
+    df = _detect_local_extrema_safe(
+        df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False
+    )
 
     df["multi_divergence_score"] = 0
 
@@ -250,9 +260,7 @@ def detect_panic_selling(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def detect_support_tests(
-    df: pd.DataFrame, tolerance: float = 0.02, lookback_window: int = 8
-) -> pd.DataFrame:
+def detect_support_tests(df: pd.DataFrame, tolerance: float = 0.02, lookback_window: int = 8) -> pd.DataFrame:
     """
     Count how many times price has tested similar support levels.
     NO LOOKAHEAD BIAS - uses backward-looking local extrema.
@@ -271,7 +279,9 @@ def detect_support_tests(
 
     # Detect local lows using backward-looking method
     if "LocalLow" not in df.columns:
-        df = _detect_local_extrema_safe(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
+        df = _detect_local_extrema_safe(
+            df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False
+        )
 
     df["support_test_count"] = 0
 
@@ -396,7 +406,9 @@ def detect_hidden_divergence(df: pd.DataFrame, lookback_window: int = 8) -> pd.D
 
     # Detect local lows using backward-looking method
     if "LocalLow" not in df.columns:
-        df = _detect_local_extrema_safe(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
+        df = _detect_local_extrema_safe(
+            df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False
+        )
 
     df["hidden_bullish_divergence"] = 0
 
@@ -545,7 +557,9 @@ def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFram
 
     # Detect local lows using backward-looking method
     if "LocalLow" not in df.columns:
-        df = _detect_local_extrema_safe(df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False)
+        df = _detect_local_extrema_safe(
+            df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False
+        )
 
     # Days since last local low (per stock)
     def calculate_days_since_low(group):
@@ -562,9 +576,7 @@ def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFram
         return result
 
     if _has_stock_id(df):
-        df["days_since_last_low"] = (
-            df.groupby("stock_id", group_keys=False).apply(calculate_days_since_low)
-        )
+        df["days_since_last_low"] = df.groupby("stock_id", group_keys=False).apply(calculate_days_since_low)
     else:
         df["days_since_last_low"] = calculate_days_since_low(df)
 

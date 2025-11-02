@@ -36,8 +36,9 @@ When you mention or need current date for e.g. web online search, run date comma
 <python_usage>
 
 - We run python using `uv`
-- uv add *package* - never add packages manually in the toml.
-- uv add --dev *package*
+- `uv add *package*` - never add packages manually in the toml.
+- `uv add --dev *package*`
+- Run `uv run ruff check . --fix; uv run ruff format .` : fixes issues that arise.
 
 <python_usage>
 

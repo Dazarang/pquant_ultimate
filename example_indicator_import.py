@@ -253,10 +253,10 @@ def approach_3_advanced_features():
     print("\n\nRecent bottom signals (multi-divergence):")
     if len(bottoms) > 0:
         for idx, row in bottoms.iterrows():
-            print(
-                f"  {idx.date()}: Score={row['multi_divergence_score']:.0f}, "
-                f"Close=${row['close']:.2f}, RSI={row['RSI_14']:.1f}"
-            )
+            score = row["multi_divergence_score"]
+            close = row["close"]
+            rsi = row["RSI_14"]
+            print(f"  {idx.date()}: Score={score:.0f}, Close=${close:.2f}, RSI={rsi:.1f}")
     else:
         print("  No divergence signals found recently")
 

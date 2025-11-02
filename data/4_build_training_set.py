@@ -739,6 +739,13 @@ def main():
         json.dump(selection_stats, f, indent=2, default=str)
     print(f"✓ Saved: {stats_path.name}")
 
+    # Save all tickers list
+    tickers_path = output_dir / "all_tickers.json"
+    all_tickers = sorted(combined_df["ticker"].unique())
+    with open(tickers_path, "w") as f:
+        json.dump(all_tickers, f, indent=2)
+    print(f"✓ Saved: {tickers_path.name}")
+
     print("\n✅ COMPLETE!")
     print(f"   Output: {output_dir}")
     print(f"   Total stocks: {len(final_data)}")

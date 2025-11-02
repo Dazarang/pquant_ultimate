@@ -103,10 +103,8 @@ def main():
         valid_sweden = validator.filter_ticker_list(sweden_tickers, verbose=True)
         validated_data["Sweden"] = valid_sweden
 
-        print(
-            f"\nSwedish stocks: {len(sweden_tickers)} -> {len(valid_sweden)} "
-            f"(removed {len(sweden_tickers) - len(valid_sweden)})"
-        )
+        removed_count = len(sweden_tickers) - len(valid_sweden)
+        print(f"\nSwedish stocks: {len(sweden_tickers)} -> {len(valid_sweden)} (removed {removed_count})")
 
     # Save validated data
     print(f"\n{'=' * 70}")
@@ -125,10 +123,9 @@ def main():
     print(f"{'=' * 70}")
     print(f"Filtered input: {original_total}")
     print(f"Validated output: {validated_total}")
-    print(
-        f"Removed (delisted): {original_total - validated_total} "
-        f"({(original_total - validated_total) / original_total:.1%})"
-    )
+    removed = original_total - validated_total
+    removal_pct = removed / original_total if original_total > 0 else 0
+    print(f"Removed (delisted): {removed} ({removal_pct:.1%})")
 
     print("\nNext step: Run build_training_set.py")
 
