@@ -26,11 +26,8 @@ Scripts 1-5 for ticker acquisition and training data generation:
 
 See `data/README.md` for usage, `data/docs/` for deep dives.
 
-### Pipeline (`pipeline/`)
-ML pipeline infrastructure:
-- `config.py` - Configuration management
-- `data_loader.py` - Data loading utilities
-- `features/` - Feature extraction modules
+### Pipeline (`pipeline/`) - DEPRECATED
+To be replaced by `lib/` + `training/`. See `PLAN.md`.
 
 ### Indicators (`indicators/`)
 Technical indicator library organized by category:
@@ -44,6 +41,14 @@ See `indicators/README_INDICATORS.md` for usage.
 ---
 
 ## Journal Entries
+
+### 2026-01-15
+Designed new project structure. Created README.md and PLAN.md. Key decisions:
+- Restructure data/ (scripts subfolder, unified run.py entry point)
+- Add lib/ for shared utilities (data, features, eval)
+- Add training/ with config-driven model selection
+- Add backtesting/, prediction/, runs/
+- Deprecate pipeline/ (over-engineered)
 
 ### 2026-01-15
 Initial journal setup.
