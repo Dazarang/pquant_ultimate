@@ -41,7 +41,7 @@ def run_full_pipeline() -> None:
         "2_filter_tickers.py",
         "3_validate_tickers.py",
         "4_build_ohlcv.py",
-        # "6_build_features.py",  # TODO: implement
+        "6_build_features.py",
     ]
 
     for script in scripts:
@@ -58,7 +58,7 @@ def run_update() -> None:
     """Update existing dataset with new data."""
     scripts = [
         "5_update_ohlcv.py",
-        # "6_build_features.py",  # TODO: implement
+        "6_build_features.py",
     ]
 
     for script in scripts:
@@ -73,9 +73,13 @@ def run_update() -> None:
 
 def run_features_only() -> None:
     """Build features from existing OHLCV data."""
-    # TODO: implement 6_build_features.py
-    print("6_build_features.py not yet implemented")
-    print("See PLAN.md for details")
+    if not run_script("6_build_features.py"):
+        print("\nFeature building failed")
+        return
+
+    print("\n" + "=" * 70)
+    print("Features built!")
+    print("=" * 70)
 
 
 def run_ohlcv_only() -> None:

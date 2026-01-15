@@ -16,6 +16,13 @@ and multi-stock DataFrames (auto-detects stock_id column).
 import numpy as np
 import pandas as pd
 
+from indicators._numba_core import (
+    count_consecutive_down_numba,
+    count_support_tests_numba,
+    days_since_last_low_numba,
+    detect_divergence_pairs_numba,
+    detect_hidden_divergence_numba,
+)
 from indicators.momentum import calculate_macd, calculate_rsi, calculate_stochastic
 from indicators.pattern import find_local_extrema
 from indicators.volatility import calculate_bbands
@@ -135,40 +142,28 @@ def detect_multi_indicator_divergence(df: pd.DataFrame, lookback_window: int = 8
 
     df["multi_divergence_score"] = 0
 
-    # Process each stock separately (or single stock if no stock_id)
-    for stock_id, _group in _get_groupby_or_single(df):
-        if _has_stock_id(df):
+    # Process each stock using numba
+    if _has_stock_id(df):
+        for stock_id in df["stock_id"].unique():
             stock_mask = df["stock_id"] == stock_id
-            stock_data = df[stock_mask].copy()
-        else:
-            stock_data = df.copy()
+            prices = df.loc[stock_mask, "close"].values
+            rsi = df.loc[stock_mask, "rsi"].values
+            macd = df.loc[stock_mask, "macd"].values
+            stoch = df.loc[stock_mask, "stoch"].values
+            local_low_mask = df.loc[stock_mask, "LocalLow"].values.astype(np.int32)
 
-        local_low_indices = stock_data[stock_data["LocalLow"] == 1].index.tolist()
+            scores = detect_divergence_pairs_numba(prices, rsi, macd, stoch, local_low_mask)
+            df.loc[stock_mask, "multi_divergence_score"] = scores
+    else:
+        prices = df["close"].values
+        rsi = df["rsi"].values
+        macd = df["macd"].values
+        stoch = df["stoch"].values
+        local_low_mask = df["LocalLow"].values.astype(np.int32)
 
-        for i in range(len(local_low_indices) - 1):
-            first_idx = local_low_indices[i]
-            second_idx = local_low_indices[i + 1]
-
-            first_price = df.loc[first_idx, "close"]
-            second_price = df.loc[second_idx, "close"]
-
-            # Only check if lower low in price
-            if second_price < first_price:
-                divergence_count = 0
-
-                # Check RSI: higher low?
-                if df.loc[second_idx, "rsi"] > df.loc[first_idx, "rsi"]:
-                    divergence_count += 1
-
-                # Check MACD: higher low?
-                if df.loc[second_idx, "macd"] > df.loc[first_idx, "macd"]:
-                    divergence_count += 1
-
-                # Check Stochastic: higher low?
-                if df.loc[second_idx, "stoch"] > df.loc[first_idx, "stoch"]:
-                    divergence_count += 1
-
-                df.loc[second_idx, "multi_divergence_score"] = divergence_count
+        df["multi_divergence_score"] = detect_divergence_pairs_numba(
+            prices, rsi, macd, stoch, local_low_mask
+        )
 
     return df
 
@@ -285,43 +280,19 @@ def detect_support_tests(df: pd.DataFrame, tolerance: float = 0.02, lookback_win
 
     df["support_test_count"] = 0
 
-    # Process each stock separately
-    for stock_id, _group in _get_groupby_or_single(df):
-        if _has_stock_id(df):
+    # Process each stock using vectorized numba function
+    if _has_stock_id(df):
+        for stock_id in df["stock_id"].unique():
             stock_mask = df["stock_id"] == stock_id
-            stock_data = df[stock_mask].copy().reset_index(drop=True)
-        else:
-            stock_data = df.copy().reset_index(drop=True)
+            prices = df.loc[stock_mask, "close"].values
+            local_low_mask = df.loc[stock_mask, "LocalLow"].values.astype(np.int32)
 
-        # Get all local lows with their original indices
-        local_low_data = []
-        for idx in stock_data.index:
-            if stock_data.loc[idx, "LocalLow"] == 1:
-                local_low_data.append(
-                    {
-                        "idx": idx,
-                        "price": stock_data.loc[idx, "close"],
-                    }
-                )
-
-        # For each row, count similar prior local lows
-        for current_idx in stock_data.index:
-            current_price = stock_data.loc[current_idx, "close"]
-
-            # Count prior local lows within tolerance
-            test_count = 0
-            for local_low in local_low_data:
-                if local_low["idx"] < current_idx:  # Only prior lows
-                    price_diff_pct = abs(local_low["price"] - current_price) / current_price
-                    if price_diff_pct < tolerance:  # Within tolerance
-                        test_count += 1
-
-            # Update original dataframe
-            if _has_stock_id(df):
-                original_idx = df[stock_mask].index[current_idx]
-            else:
-                original_idx = stock_data.index[current_idx]
-            df.loc[original_idx, "support_test_count"] = test_count
+            counts = count_support_tests_numba(prices, local_low_mask, tolerance)
+            df.loc[stock_mask, "support_test_count"] = counts
+    else:
+        prices = df["close"].values
+        local_low_mask = df["LocalLow"].values.astype(np.int32)
+        df["support_test_count"] = count_support_tests_numba(prices, local_low_mask, tolerance)
 
     return df
 
@@ -351,19 +322,15 @@ def detect_exhaustion_sequence(df: pd.DataFrame) -> pd.DataFrame:
 
     df["ret_1d"] = grouped["close"].transform(lambda x: x.pct_change(fill_method=None))
 
-    # Count consecutive down days (per stock)
-    def count_consecutive_down(series):
-        result = pd.Series(0, index=series.index)
-        count = 0
-        for idx in series.index:
-            if pd.notna(series[idx]) and series[idx] < 0:
-                count += 1
-            else:
-                count = 0
-            result[idx] = count
-        return result
-
-    df["consecutive_down_days"] = grouped["ret_1d"].transform(count_consecutive_down)
+    # Count consecutive down days using numba (per stock)
+    if _has_stock_id(df):
+        df["consecutive_down_days"] = 0
+        for stock_id in df["stock_id"].unique():
+            stock_mask = df["stock_id"] == stock_id
+            returns = df.loc[stock_mask, "ret_1d"].values
+            df.loc[stock_mask, "consecutive_down_days"] = count_consecutive_down_numba(returns)
+    else:
+        df["consecutive_down_days"] = count_consecutive_down_numba(df["ret_1d"].values)
 
     # Selling acceleration/deceleration
     df["ret_1d_prev"] = grouped["ret_1d"].shift(1)
@@ -412,27 +379,21 @@ def detect_hidden_divergence(df: pd.DataFrame, lookback_window: int = 8) -> pd.D
 
     df["hidden_bullish_divergence"] = 0
 
-    for stock_id, _group in _get_groupby_or_single(df):
-        if _has_stock_id(df):
+    # Process each stock using numba
+    if _has_stock_id(df):
+        for stock_id in df["stock_id"].unique():
             stock_mask = df["stock_id"] == stock_id
-            stock_data = df[stock_mask].copy()
-        else:
-            stock_data = df.copy()
+            prices = df.loc[stock_mask, "close"].values
+            rsi = df.loc[stock_mask, "rsi"].values
+            local_low_mask = df.loc[stock_mask, "LocalLow"].values.astype(np.int32)
 
-        local_low_indices = stock_data[stock_data["LocalLow"] == 1].index.tolist()
-
-        for i in range(len(local_low_indices) - 1):
-            first_idx = local_low_indices[i]
-            second_idx = local_low_indices[i + 1]
-
-            first_price = df.loc[first_idx, "close"]
-            second_price = df.loc[second_idx, "close"]
-            first_rsi = df.loc[first_idx, "rsi"]
-            second_rsi = df.loc[second_idx, "rsi"]
-
-            # Hidden bullish: Higher low in price + Lower low in RSI
-            if (second_price > first_price) and (second_rsi < first_rsi):
-                df.loc[second_idx, "hidden_bullish_divergence"] = 1
+            flags = detect_hidden_divergence_numba(prices, rsi, local_low_mask)
+            df.loc[stock_mask, "hidden_bullish_divergence"] = flags
+    else:
+        prices = df["close"].values
+        rsi = df["rsi"].values
+        local_low_mask = df["LocalLow"].values.astype(np.int32)
+        df["hidden_bullish_divergence"] = detect_hidden_divergence_numba(prices, rsi, local_low_mask)
 
     return df
 
@@ -561,24 +522,23 @@ def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFram
             df, price_col="close", lookback_window=lookback_window, find_lows=True, find_highs=False
         )
 
-    # Days since last local low (per stock)
-    def calculate_days_since_low(group):
-        result = pd.Series(np.nan, index=group.index)
-        last_low_date = None
-
-        for idx in group.index:
-            if group.loc[idx, "LocalLow"] == 1:
-                last_low_date = group.loc[idx, "date"]
-                result[idx] = 0
-            elif last_low_date is not None:
-                result[idx] = (group.loc[idx, "date"] - last_low_date).days
-
-        return result
+    # Days since last local low using numba (per stock)
+    # Convert dates to day offsets for numba
+    reference_date = df["date"].min()
 
     if _has_stock_id(df):
-        df["days_since_last_low"] = df.groupby("stock_id", group_keys=False).apply(calculate_days_since_low)
+        df["days_since_last_low"] = np.nan
+        for stock_id in df["stock_id"].unique():
+            stock_mask = df["stock_id"] == stock_id
+            local_low_mask = df.loc[stock_mask, "LocalLow"].values.astype(np.int32)
+            day_offsets = (df.loc[stock_mask, "date"] - reference_date).dt.days.values.astype(np.int64)
+
+            days = days_since_last_low_numba(local_low_mask, day_offsets)
+            df.loc[stock_mask, "days_since_last_low"] = days
     else:
-        df["days_since_last_low"] = calculate_days_since_low(df)
+        local_low_mask = df["LocalLow"].values.astype(np.int32)
+        day_offsets = (df["date"] - reference_date).dt.days.values.astype(np.int64)
+        df["days_since_last_low"] = days_since_last_low_numba(local_low_mask, day_offsets)
 
     # Month-end indicator
     df["is_month_end"] = (df["date"].dt.is_month_end | (df["date"].dt.day >= 28)).astype(int)
@@ -594,6 +554,7 @@ def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFram
 def create_all_advanced_features(
     df: pd.DataFrame,
     support_tolerance: float = 0.02,
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Create all advanced ML features for bottom detection.
@@ -604,6 +565,7 @@ def create_all_advanced_features(
     Args:
         df: DataFrame with OHLCV data and base indicators
         support_tolerance: Price tolerance for support testing (default 2%)
+        verbose: Print progress with timing
 
     Returns:
         DataFrame with all advanced features added
@@ -620,34 +582,26 @@ def create_all_advanced_features(
         - day_of_week, is_monday, is_friday, days_since_last_pivot
         - is_month_end, is_quarter_end
     """
+    from tqdm import tqdm
+
     df = df.copy()
 
-    # 1. Multi-indicator divergence (strongest signal)
-    df = detect_multi_indicator_divergence(df)
+    steps = [
+        ("divergence", lambda d: detect_multi_indicator_divergence(d)),
+        ("vol_exhaust", lambda d: detect_volume_exhaustion(d)),
+        ("panic", lambda d: detect_panic_selling(d)),
+        ("support", lambda d: detect_support_tests(d, tolerance=support_tolerance)),
+        ("exhaust_seq", lambda d: detect_exhaustion_sequence(d)),
+        ("hidden_div", lambda d: detect_hidden_divergence(d)),
+        ("mean_rev", lambda d: calculate_mean_reversion_signal(d)),
+        ("bb_squeeze", lambda d: detect_bb_squeeze_breakdown(d)),
+        ("time", lambda d: add_time_features(d)),
+    ]
 
-    # 2. Volume exhaustion
-    df = detect_volume_exhaustion(df)
-
-    # 3. Panic selling detection
-    df = detect_panic_selling(df)
-
-    # 4. Support level testing
-    df = detect_support_tests(df, tolerance=support_tolerance)
-
-    # 5. Exhaustion sequence
-    df = detect_exhaustion_sequence(df)
-
-    # 6. Hidden divergence
-    df = detect_hidden_divergence(df)
-
-    # 7. Mean reversion
-    df = calculate_mean_reversion_signal(df)
-
-    # 9. Bollinger Band squeeze
-    df = detect_bb_squeeze_breakdown(df)
-
-    # 10. Time-based features
-    df = add_time_features(df)
+    iterator = tqdm(steps, desc="    Advanced", disable=not verbose, ncols=80)
+    for name, func in iterator:
+        iterator.set_postfix_str(name)
+        df = func(df)
 
     return df
 
