@@ -10,4 +10,4 @@ wheels/
 .venv
 
 # Training data (too large for git)
-data/training_data/
+data/datasets/

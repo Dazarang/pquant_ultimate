@@ -124,7 +124,7 @@ Each training run saves to `runs/YYYYMMDD_HHMMSS/`:
 
 ## Order of Execution
 
-1. [ ] Phase 1: Restructure data/ (mostly file moves + run.py)
+1. [x] Phase 1: Restructure data/ (mostly file moves + run.py)
 2. [ ] Phase 2: Add lib/ (extract from notebook)
 3. [ ] Phase 3: Add training/ (refactor from old notebook)
 4. [ ] Phase 4: Add backtesting/

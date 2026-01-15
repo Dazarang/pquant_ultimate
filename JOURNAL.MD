@@ -9,7 +9,7 @@ This journal has three sections:
 2. **Journal Entries** - Chronological log of changes. Newest entries at TOP. Format:
    ```
    ### YYYY-MM-DD
-   Brief description of what was done.
+   Brief description of what was done. Be extremely concise. Sacrifice grammar for the sake of concision.
    ```
 
 ---
@@ -17,14 +17,12 @@ This journal has three sections:
 ## Current State
 
 ### Data Pipeline (`data/`)
-Scripts 1-5 for ticker acquisition and training data generation:
-- `1_get_tickers.py` - Fetch tickers from various sources
-- `2_filter_tickers.py` - Filter by criteria (volume, price, etc.)
-- `3_validate_tickers.py` - Validate data quality
-- `4_build_training_set.py` - Build training dataset with features
-- `5_update_training_data.py` - Incremental updates to training data
+- `run.py` - Unified entry point (interactive menu or --flags)
+- `scripts/` - Pipeline steps (1-6)
+- `tickers/` - Ticker JSON files
+- `datasets/YYYYMMDD/` - Output (ohlcv.parquet, dataset.parquet)
 
-See `data/README.md` for usage, `data/docs/` for deep dives.
+See `data/README.md` for usage.
 
 ### Pipeline (`pipeline/`) - DEPRECATED
 To be replaced by `lib/` + `training/`. See `PLAN.md`.
