@@ -24,7 +24,7 @@ class TrainingDataUpdater:
         Initialize updater.
 
         Args:
-            dataset_dir: Path to existing dataset directory (e.g., data/training_data/20251031)
+            dataset_dir: Path to existing dataset directory (e.g., data/datasets/20251031)
             buffer_days: Number of days to subtract from 'now' to avoid incomplete data
         """
         self.dataset_dir = Path(dataset_dir)
@@ -51,7 +51,7 @@ class TrainingDataUpdater:
 
     def load_existing_data(self) -> pd.DataFrame:
         """Load existing training data from parquet."""
-        parquet_path = self.dataset_dir / "training_stocks_data.parquet"
+        parquet_path = self.dataset_dir / "ohlcv.parquet"
         if not parquet_path.exists():
             raise FileNotFoundError(f"Training data not found: {parquet_path}")
 
@@ -204,7 +204,7 @@ class TrainingDataUpdater:
         print(f"\nSaving updated dataset to: {output_dir}")
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        parquet_path = output_dir / "training_stocks_data.parquet"
+        parquet_path = output_dir / "ohlcv.parquet"
         merged_df.to_parquet(parquet_path)
         print(f"  Saved: {parquet_path.name}")
 
@@ -233,12 +233,12 @@ def main():
     print("TRAINING DATA INCREMENTAL UPDATE")
     print("=" * 70)
 
-    base_dir = Path(__file__).parent
-    training_data_dir = base_dir / "training_data"
+    base_dir = Path(__file__).parent.parent
+    datasets_dir = base_dir / "datasets"
 
-    existing_datasets = sorted(training_data_dir.glob("????????"), reverse=True)
+    existing_datasets = sorted(datasets_dir.glob("????????"), reverse=True)
     if not existing_datasets:
-        print("ERROR: No existing training datasets found in data/training_data/")
+        print("ERROR: No existing datasets found in data/datasets/")
         return
 
     latest_dataset = existing_datasets[0]
@@ -270,7 +270,7 @@ def main():
     merged_df = updater.merge_data(existing_df, new_data)
 
     output_date = datetime.now().strftime("%Y%m%d")
-    output_dir = training_data_dir / output_date
+    output_dir = datasets_dir / output_date
     updater.save_updated_data(merged_df, output_dir)
 
     print(f"\nNew dataset: {output_dir}")

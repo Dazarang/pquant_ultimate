@@ -657,8 +657,8 @@ def main():
     print("=" * 70)
 
     # Create dated output directory
-    base_dir = Path(__file__).parent
-    output_dir = base_dir / "training_data" / dataset_date
+    base_dir = Path(__file__).parent.parent
+    output_dir = base_dir / "datasets" / dataset_date
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Output directory: {output_dir}")
 
@@ -729,7 +729,7 @@ def main():
     print(f"✓ Saved: {pkl_path.name}")
 
     # Save parquet
-    parquet_path = output_dir / "training_stocks_data.parquet"
+    parquet_path = output_dir / "ohlcv.parquet"
     combined_df.to_parquet(parquet_path)
     print(f"✓ Saved: {parquet_path.name}")
 

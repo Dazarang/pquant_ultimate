@@ -19,7 +19,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("data/tickers_data/ticker_download.log", mode="w", encoding="utf-8"),
+        logging.FileHandler("data/tickers/ticker_download.log", mode="w", encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )
@@ -461,7 +461,7 @@ class TickerDownloader:
 
         return self.tickers
 
-    def save_results(self, output_dir: Path = Path("data/tickers_data")):
+    def save_results(self, output_dir: Path = Path("data/tickers")):
         """save results to json"""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)

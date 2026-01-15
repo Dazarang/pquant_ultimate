@@ -1,64 +1,66 @@
 # Data Pipeline
 
-4-step pipeline: download tickers, filter junk, validate alive, build training set.
+Ticker acquisition and OHLCV data generation.
 
-## Quick Start
+## Structure
 
-```bash
-cd data/
-
-# Step 1: Download tickers (~30s, run once/month)
-uv run python 1_get_tickers.py
-
-# Step 2: Filter junk (instant, no API)
-uv run python 2_filter_tickers.py
-
-# Step 3: Validate alive (~1-2h, API calls)
-uv run python 3_validate_tickers.py
-
-# Step 4: Build training set (~1h, API calls)
-uv run python 4_build_training_set.py
-
-# Optional: Incremental update (fetches new data for existing set)
-uv run python 5_update_training_data.py
+```
+data/
+├── run.py              # Unified entry point
+├── scripts/            # Pipeline steps
+│   ├── 1_get_tickers.py
+│   ├── 2_filter_tickers.py
+│   ├── 3_validate_tickers.py
+│   ├── 4_build_ohlcv.py
+│   ├── 5_update_ohlcv.py
+│   └── 6_build_features.py   # TODO
+├── tickers/            # Ticker lists
+│   ├── tickers_YYYYMMDD.json
+│   ├── tickers_filtered_YYYYMMDD.json
+│   └── tickers_validated_YYYYMMDD.json
+└── datasets/           # Output data
+    └── YYYYMMDD/
+        ├── ohlcv.parquet     # Raw price data
+        ├── dataset.parquet   # ML-ready (after 6_build_features)
+        └── metadata.json
 ```
 
-## Daily Usage
-
-Once you have a training set built, **only script 5 is needed** to keep data fresh:
+## Usage
 
 ```bash
-uv run python 5_update_training_data.py
+# Interactive menu
+uv run python data/run.py
+
+# Or with flags
+uv run python data/run.py --full      # Full pipeline (1-5)
+uv run python data/run.py --update    # Update OHLCV (5)
+uv run python data/run.py --features  # Build features (6)
+uv run python data/run.py --ohlcv     # OHLCV only (1-4)
 ```
 
-It auto-detects latest dataset, fetches only new data, merges, and skips if already up-to-date.
+## Daily Workflow
 
-**When to re-run scripts 1-4:**
-- Initial build (first time)
-- Adding new tickers (new IPOs, expanding coverage)
-- Full rebuild (data corruption, schema changes)
+Once initial dataset exists, only update is needed:
+
+```bash
+uv run python data/run.py --update
+```
 
 ## Pipeline Flow
 
 ```
-1_get_tickers.py       → tickers_data/tickers_YYYYMMDD.json          (~13k raw)
-2_filter_tickers.py    → tickers_data/tickers_filtered_YYYYMMDD.json (~8.7k clean)
-3_validate_tickers.py  → tickers_data/tickers_validated_YYYYMMDD.json (~6-7k valid)
-4_build_training_set.py → training_data/YYYYMMDD/                     (1.5k stocks, 10yr)
+1_get_tickers     → tickers/tickers_YYYYMMDD.json           (~13k raw)
+2_filter_tickers  → tickers/tickers_filtered_YYYYMMDD.json  (~8.7k clean)
+3_validate_tickers→ tickers/tickers_validated_YYYYMMDD.json (~6-7k valid)
+4_build_ohlcv     → datasets/YYYYMMDD/ohlcv.parquet         (1.5k stocks)
+5_update_ohlcv    → datasets/YYYYMMDD/ohlcv.parquet         (incremental)
+6_build_features  → datasets/YYYYMMDD/dataset.parquet       (ML-ready)
 ```
 
-## Output Files
+## When to Re-run Full Pipeline
 
-`training_data/YYYYMMDD/` contains:
-- `training_data.pkl` - Full dataset (~140MB)
-- `training_stocks_data.parquet` - Parquet format (~95MB)
-- `metadata.json` - Run configuration
-- `selection_stats.json` - Stratification stats
-
-## Key Design
-
-- Filter BEFORE validate (saves 33% API calls)
-- Market cap stratification (US vs Swedish thresholds)
-- 10% failed stocks kept (anti-survivorship bias)
+- Initial setup (first time)
+- Adding new tickers (IPOs, expanding coverage)
+- Major schema changes
 
 See `docs/quick-start.md` for detailed documentation.

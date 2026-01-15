@@ -10,7 +10,7 @@ class TickerFileFinder:
     """finds latest ticker json files based on date patterns"""
 
     def __init__(self, base_dir: Path | str = None):
-        self.base_dir = Path(base_dir) if base_dir else Path(__file__).parent / "tickers_data"
+        self.base_dir = Path(base_dir) if base_dir else Path(__file__).parent.parent / "tickers"
 
     def _extract_date(self, filename: str) -> int:
         """extract date from filename like tickers_20251029.json -> 20251029"""
