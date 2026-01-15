@@ -1130,10 +1130,12 @@ dependencies = [
     { name = "fastparquet" },
     { name = "matplotlib" },
     { name = "nbformat" },
+    { name = "numba" },
     { name = "pip" },
     { name = "plotly" },
     { name = "pyarrow" },
     { name = "ta-lib" },
+    { name = "tqdm" },
 ]
 
 [package.dev-dependencies]
@@ -1152,10 +1154,12 @@ requires-dist = [
     { name = "fastparquet", specifier = ">=2024.11.0" },
     { name = "matplotlib", specifier = ">=3.10.7" },
     { name = "nbformat", specifier = ">=5.10.4" },
+    { name = "numba", specifier = ">=0.62.1" },
     { name = "pip", specifier = ">=25.3" },
     { name = "plotly", specifier = ">=6.3.1" },
     { name = "pyarrow", specifier = ">=22.0.0" },
     { name = "ta-lib", specifier = ">=0.6.8" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [package.metadata.requires-dev]
