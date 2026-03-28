@@ -52,7 +52,7 @@ def build_model(y_train):
     model = LGBMClassifier(
         n_estimators=300,
         max_depth=7,
-        num_leaves=31,
+        num_leaves=63,
         learning_rate=0.05,
         subsample=0.8,
         subsample_freq=1,
