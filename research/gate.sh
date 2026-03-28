@@ -28,6 +28,7 @@ PROTECTED_FILES=(
     "lib/__init__.py"
     "research/gate.sh"
     "research/baseline.py"
+    "research/model_wrappers.py"
 )
 
 for f in "${PROTECTED_FILES[@]}"; do

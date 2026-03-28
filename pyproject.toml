@@ -33,6 +33,12 @@ dev = [
     "ruff>=0.14.2",
 ]
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:X does not have valid feature names:UserWarning",
+    "ignore:Stochastic Optimizer.*hasn't converged:sklearn.exceptions.ConvergenceWarning",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"

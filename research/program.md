@@ -90,45 +90,78 @@ Call `list_features("base")` to get the list, or `list_features(["base", "advanc
 6. Try ensemble/stacking of models
 7. Try threshold tuning
 
-### Model menu (all installed and ready to import)
+### Model menu
 
-**Gradient boosting:**
+**Gradient boosting (installed):**
 ```python
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
-from catboost import CatBoostClassifier      # Use verbose=0
+from catboost import CatBoostClassifier      # verbose=0 to suppress output
 ```
 
-**Sklearn:**
+**Sklearn (installed):**
 ```python
 from sklearn.ensemble import (
-    GradientBoostingClassifier,
-    RandomForestClassifier,
-    ExtraTreesClassifier,
-    StackingClassifier,
-    VotingClassifier,
+    GradientBoostingClassifier, RandomForestClassifier,
+    ExtraTreesClassifier, StackingClassifier, VotingClassifier,
+    BaggingClassifier, AdaBoostClassifier,
 )
 from sklearn.neural_network import MLPClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.svm import SVC  # probability=True for predict_proba
+from sklearn.neighbors import KNeighborsClassifier
 ```
 
 **Ensembling:**
 ```python
-from sklearn.ensemble import StackingClassifier
-model = StackingClassifier(
-    estimators=[
-        ("lgbm", LGBMClassifier(...)),
-        ("xgb", XGBClassifier(...)),
-        ("cat", CatBoostClassifier(...)),
-    ],
-    final_estimator=LogisticRegression(),
-    cv=5,
-)
+from sklearn.ensemble import StackingClassifier, VotingClassifier
+# Combine any models. Final estimator blends predictions.
 ```
 
-**Not compatible with this loop:**
-- LSTM/RNN: data is cross-sectional, lag features capture time dependency.
-- RL: requires different pipeline (env, reward, episodes).
+**Neural networks (torch installed, runs on MPS/Apple Silicon):**
+```python
+# Ready-to-use wrappers in research/model_wrappers.py:
+from research.model_wrappers import TorchClassifier, TorchMLP
+
+def build_model(y_train):
+    neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
+    return TorchClassifier(
+        module=TorchMLP(input_dim=54, hidden_dims=(128, 64)),
+        epochs=50, lr=1e-3, batch_size=512,
+        pos_weight=neg / pos,
+    )
+```
+
+**Sequence models (LSTM, GRU -- torch installed):**
+```python
+# Data is sequential per stock. Skip lag features, feed raw windows instead.
+from research.model_wrappers import SequenceClassifier, LSTMNet
+
+def build_model(y_train):
+    neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
+    return SequenceClassifier(
+        module=LSTMNet(input_dim=54, hidden_dim=64, num_layers=2),
+        window=10, epochs=30, lr=1e-3, batch_size=256,
+        pos_weight=neg / pos,
+    )
+```
+
+**Custom PyTorch models:**
+```python
+# Build any nn.Module, wrap with TorchClassifier. Must output single logit.
+# TorchClassifier handles training loop, MPS device, and predict_proba.
+```
+
+**MLX (installed, native Apple Silicon):**
+```python
+import mlx.core as mx
+import mlx.nn as nn
+# Build custom MLX models. Wrap with fit()/predict_proba() interface.
+```
+
+**Pipeline constraint:** `build_model()` must return an object with `.fit(X, y)` and `.predict_proba(X)` methods. All wrappers in `research/model_wrappers.py` satisfy this.
+
+**Hyperparameters are fully yours to control.** Every parameter shown in examples above (hidden_dims, epochs, lr, batch_size, window, num_layers, dropout, pos_weight, etc.) can be changed, added, or removed. The wrappers accept any valid arguments for their underlying models. You can also pass different constructor args to the nn.Module classes (e.g. different hidden_dim, add layers, change activation). The examples are starting points, not constraints.
 
 ### Class imbalance is critical
 - ~5% positive rate (1:20 ratio). Default threshold 0.5 may produce too few signals.

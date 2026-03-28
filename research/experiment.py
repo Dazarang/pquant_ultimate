@@ -27,16 +27,16 @@ from research.features_lab import add_custom_features  # noqa: E402
 DATASET_PATH = "data/datasets/20260115/dataset.parquet"
 
 # Stock universe: None = all, "AAPL" = single, ["AAPL", "MSFT", ...] = subset
-STOCKS = ["AAPL", "MSFT", "GOOG", "AMZN", "TSLA"]
+STOCKS = None
 
-# Features: list_features("base"), list_features(["base", "advanced"]), or hand-picked
-FEATURE_GROUPS = ["base"]
+# Feature groups: see list_features() for options
+FEATURE_GROUPS = None  # None = all
 
 # Temporal split boundaries
 TRAIN_END = "2022-12-31"
 VAL_END = "2023-12-31"
 
-# Prediction threshold (default 0.5 may be too high for imbalanced data)
+# Prediction threshold
 THRESHOLD = 0.5
 
 # ===========================================================================

@@ -1,0 +1,195 @@
+"""Ready-to-use model wrappers for non-sklearn models.
+
+All wrappers expose sklearn-compatible .fit(X, y) and .predict_proba(X) methods.
+Import and use in experiment.py's build_model().
+
+This file is IMMUTABLE -- do not edit during research.
+"""
+
+import numpy as np
+import torch
+from scipy.special import expit
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
+
+
+# ---------------------------------------------------------------------------
+# Shared base
+# ---------------------------------------------------------------------------
+
+
+class _BaseTorchClassifier:
+
+    def __init__(self, module, epochs, lr, batch_size, pos_weight):
+        self.module = module
+        self.epochs = epochs
+        self.lr = lr
+        self.batch_size = batch_size
+        self.pos_weight = pos_weight
+        self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+
+    def _train(self, X_t, y_t):
+        self.module.to(self.device)
+        self.module.train()
+        loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
+        pw = torch.tensor([self.pos_weight], dtype=torch.float32, device=self.device)
+        criterion = nn.BCEWithLogitsLoss(pos_weight=pw)
+        optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
+        for _ in range(self.epochs):
+            for xb, yb in loader:
+                xb, yb = xb.to(self.device), yb.to(self.device)
+                optimizer.zero_grad()
+                criterion(self.module(xb), yb).backward()
+                optimizer.step()
+
+    def _batched_logits(self, X):
+        """Run batched inference on numpy array, return flat logits."""
+        self.module.eval()
+        all_logits = []
+        with torch.no_grad():
+            for i in range(0, len(X), self.batch_size):
+                batch = torch.tensor(X[i:i + self.batch_size], dtype=torch.float32).to(self.device)
+                all_logits.append(self.module(batch).cpu().numpy().flatten())
+        return np.concatenate(all_logits)
+
+    def predict(self, X):
+        return (self.predict_proba(X)[:, 1] > 0.5).astype(int)
+
+
+# ---------------------------------------------------------------------------
+# PyTorch MLP wrapper
+# ---------------------------------------------------------------------------
+
+
+class TorchMLP(nn.Module):
+    """Configurable MLP for tabular classification."""
+
+    def __init__(self, input_dim, hidden_dims=(128, 64), dropout=0.3):
+        super().__init__()
+        layers = []
+        prev = input_dim
+        for h in hidden_dims:
+            layers.extend([nn.Linear(prev, h), nn.ReLU(), nn.Dropout(dropout)])
+            prev = h
+        layers.append(nn.Linear(prev, 1))
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class TorchClassifier(_BaseTorchClassifier):
+    """Sklearn-compatible wrapper for any PyTorch binary classifier.
+
+    Usage in experiment.py:
+        from research.model_wrappers import TorchClassifier, TorchMLP
+
+        def build_model(y_train):
+            return TorchClassifier(
+                module=TorchMLP(input_dim=54, hidden_dims=(128, 64)),
+                epochs=50, lr=1e-3, batch_size=512,
+                pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
+            )
+    """
+
+    def __init__(self, module, epochs=50, lr=1e-3, batch_size=512, pos_weight=1.0):
+        super().__init__(module, epochs, lr, batch_size, pos_weight)
+
+    def fit(self, X, y):
+        X_t = torch.tensor(X, dtype=torch.float32)
+        y_t = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
+        self._train(X_t, y_t)
+        return self
+
+    def predict_proba(self, X):
+        logits = self._batched_logits(X)
+        proba_1 = expit(logits)
+        return np.column_stack([1 - proba_1, proba_1])
+
+
+# ---------------------------------------------------------------------------
+# PyTorch LSTM wrapper
+# ---------------------------------------------------------------------------
+
+
+class LSTMNet(nn.Module):
+    """LSTM for sequential tabular data."""
+
+    def __init__(self, input_dim, hidden_dim=64, num_layers=2, dropout=0.3):
+        super().__init__()
+        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True, dropout=dropout)
+        self.head = nn.Linear(hidden_dim, 1)
+
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        return self.head(out[:, -1, :])
+
+
+class SequenceClassifier(_BaseTorchClassifier):
+    """Sklearn-compatible wrapper for sequence models (LSTM, GRU, Transformer).
+
+    Reshapes flat (samples, features) into (samples, window, features) via
+    sliding windows. Pass groups= to fit/predict_proba to prevent windows
+    from crossing stock boundaries.
+
+    Usage in experiment.py:
+        from research.model_wrappers import SequenceClassifier, LSTMNet
+
+        def build_model(y_train):
+            return SequenceClassifier(
+                module=LSTMNet(input_dim=54, hidden_dim=64),
+                window=10, epochs=30, lr=1e-3, batch_size=256,
+                pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
+            )
+    """
+
+    def __init__(self, module, window=10, epochs=30, lr=1e-3, batch_size=256, pos_weight=1.0):
+        super().__init__(module, epochs, lr, batch_size, pos_weight)
+        self.window = window
+
+    def _build_sequences(self, X, y=None, groups=None):
+        """Build sliding windows. When groups provided, windows don't cross group boundaries."""
+        w = self.window
+        n = X.shape[0]
+        sequences = []
+        labels = [] if y is not None else None
+        valid = []
+
+        if groups is None:
+            for i in range(w, n):
+                sequences.append(X[i - w: i])
+                valid.append(i)
+                if y is not None:
+                    labels.append(y[i])
+        else:
+            for g in np.unique(groups):
+                idx = np.where(groups == g)[0]
+                X_g = X[idx]
+                for j in range(w, len(X_g)):
+                    sequences.append(X_g[j - w: j])
+                    valid.append(idx[j])
+                    if y is not None:
+                        labels.append(y[idx[j]])
+
+        sequences = np.array(sequences)
+        valid = np.array(valid)
+        if y is not None:
+            return sequences, np.array(labels), valid
+        return sequences, valid
+
+    def fit(self, X, y, groups=None):
+        X_seq, y_seq, _ = self._build_sequences(X, y, groups)
+        X_t = torch.tensor(X_seq, dtype=torch.float32)
+        y_t = torch.tensor(y_seq, dtype=torch.float32).unsqueeze(1)
+        self._train(X_t, y_t)
+        return self
+
+    def predict_proba(self, X, groups=None):
+        X_seq, valid = self._build_sequences(X, groups=groups)
+        logits = self._batched_logits(X_seq)
+        proba_1 = np.full(len(X), 0.5)
+        proba_1[valid] = expit(logits)
+        return np.column_stack([1 - proba_1, proba_1])
+
+    def predict(self, X, groups=None):
+        return (self.predict_proba(X, groups)[:, 1] > 0.5).astype(int)

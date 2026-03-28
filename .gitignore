@@ -11,3 +11,4 @@ wheels/
 
 # Training data (too large for git)
 data/datasets/
+catboost_info/
