@@ -293,3 +293,103 @@ def tiered_eval(
 
     results["passed"] = True
     return results
+
+
+# ---------------------------------------------------------------------------
+# Benchmark: random entry on same stocks
+# ---------------------------------------------------------------------------
+
+
+def benchmark_random_entry(
+    df: pd.DataFrame,
+    y_pred: np.ndarray,
+    horizon: int = 10,
+    n_simulations: int = 500,
+    seed: int = 42,
+) -> dict:
+    """Compare model signals against random entry on the same stocks.
+
+    For each simulation, picks random entry dates for each signal's stock
+    (within the same date range), measures forward returns, and compares.
+    Tests whether the model has timing skill vs just picking volatile stocks.
+
+    Not part of the autoresearch gate -- use for post-research validation.
+    """
+    from scipy import stats
+
+    rng = np.random.default_rng(seed)
+    df = df.copy()
+    df["_pred"] = y_pred
+
+    signals = df[df["_pred"] == 1]
+    if len(signals) == 0:
+        return {"error": "no signals"}
+
+    # Compute forward returns for each signal
+    signal_returns = []
+    signal_stocks = []
+    for stock_id, group in signals.groupby("stock_id"):
+        stock_df = df[df["stock_id"] == stock_id].sort_values("date").reset_index(drop=True)
+        opens = stock_df["open"].values
+        dates_idx = {d: i for i, d in enumerate(stock_df["date"])}
+
+        for _, row in group.iterrows():
+            idx = dates_idx.get(row["date"])
+            if idx is None or idx + 1 >= len(opens) or idx + horizon + 1 >= len(opens):
+                continue
+            entry = opens[idx + 1]
+            exit_ = opens[idx + horizon + 1]
+            signal_returns.append((exit_ - entry) / entry)
+            signal_stocks.append(stock_id)
+
+    if not signal_returns:
+        return {"error": "no valid forward returns"}
+
+    signal_returns = np.array(signal_returns)
+    model_mean = signal_returns.mean()
+
+    # Random simulations: for each signal, pick a random date in the same stock
+    random_means = []
+    for _ in range(n_simulations):
+        sim_returns = []
+        for stock_id in signal_stocks:
+            stock_df = df[df["stock_id"] == stock_id].sort_values("date").reset_index(drop=True)
+            opens = stock_df["open"].values
+            max_idx = len(opens) - horizon - 2
+            if max_idx <= 0:
+                continue
+            rand_idx = rng.integers(0, max_idx)
+            entry = opens[rand_idx + 1]
+            exit_ = opens[rand_idx + horizon + 1]
+            sim_returns.append((exit_ - entry) / entry)
+        if sim_returns:
+            random_means.append(np.mean(sim_returns))
+
+    random_means = np.array(random_means)
+    random_mean = random_means.mean()
+    random_std = random_means.std()
+
+    z = (model_mean - random_mean) / random_std if random_std > 0 else 0.0
+    p = 1 - stats.norm.cdf(z)
+
+    result = {
+        "model_mean": model_mean,
+        "random_mean": random_mean,
+        "excess_return": model_mean - random_mean,
+        "z_score": z,
+        "p_value": p,
+        "significant": p < 0.05,
+        "n_signals": len(signal_returns),
+        "n_simulations": n_simulations,
+    }
+
+    print(f"\nBenchmark: Random Entry (same stocks, {horizon}d)")
+    print(f"  Model mean:    {model_mean:+.2%}")
+    print(f"  Random mean:   {random_mean:+.2%}")
+    print(f"  Excess return: {result['excess_return']:+.2%}")
+    print(f"  z-score:       {z:.2f}")
+    print(f"  p-value:       {p:.4f}")
+    print(f"  Significant:   {result['significant']}")
+    print(f"  ({len(signal_returns)} signals, {n_simulations} simulations)")
+
+    return result

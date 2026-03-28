@@ -1,0 +1,126 @@
+# Autoresearch: How It Works
+
+Autonomous ML research loop inspired by [Karpathy's autoresearch](https://github.com/karpathy/autoresearch). An LLM agent iteratively edits experiment code, runs it, keeps improvements, reverts failures, and documents everything.
+
+## Architecture
+
+```
+research/
+├── experiment.py       # MUTABLE -- model, hyperparams, features, stocks, threshold
+├── features_lab.py     # MUTABLE -- custom feature engineering (accumulates on wins)
+├── baseline.py         # IMMUTABLE -- logistic regression reference point
+├── program.md          # Agent instructions, constraints, dead ends
+├── gate.sh             # Verification gate (immutability, timeout, sanity)
+├── run.sh              # Outer loop orchestrator
+├── results.tsv         # Score log for plotting (iter, score, status, description)
+├── RESEARCH_LOG.md     # Human-readable iteration log
+├── COMBAT_LOG.md       # What failed and why (knowledge preservation)
+├── metrics.md          # Metric definitions reference
+├── plot.py             # Generates progress.png from results.tsv
+└── .best_score         # Current best composite score
+```
+
+## The Loop
+
+```
+./research/run.sh 20
+
+for each iteration:
+  1. Agent reads: program.md, COMBAT_LOG.md, experiment.py, features_lab.py
+  2. Agent makes ONE focused edit to experiment.py and/or features_lab.py
+  3. gate.sh runs:
+     a. Verify lib/ unchanged (anti-gaming -- judge stays out of arena)
+     b. Run experiment.py (15 min timeout)
+     c. Extract COMPOSITE_SCORE from stdout
+     d. Check all 3 tiers passed
+  4. If score > best → commit, update .best_score, log to results.tsv (keep)
+  5. If score <= best → log diff to COMBAT_LOG.md, revert, log to results.tsv (discard)
+  6. Update progress.png plot
+```
+
+## What the Agent Controls (6 levers)
+
+| Lever | Location | Example |
+|-------|----------|---------|
+| Stock universe | experiment.py `STOCKS` | `["AAPL", "MSFT"]` or `None` for all |
+| Feature selection | experiment.py `FEATURE_GROUPS` | `["base", "advanced"]` or hand-picked list |
+| Custom features | features_lab.py | New backward-looking features |
+| Split boundaries | experiment.py `TRAIN_END/VAL_END` | `"2023-06-30"` |
+| Model + hyperparams | experiment.py `build_model()` | XGBoost, LightGBM, depth, lr, etc. |
+| Prediction threshold | experiment.py `THRESHOLD` | `0.3` (lower = more signals) |
+
+## What's Immutable (anti-gaming)
+
+| File | Why |
+|------|-----|
+| `lib/data.py` | Can't change how data loads/splits |
+| `lib/eval.py` | Can't change how metrics are computed |
+| `lib/features.py` | Feature catalog is reference only |
+| `research/gate.sh` | Can't weaken verification |
+| `research/baseline.py` | Fixed comparison point |
+
+## The Metric: Composite Score
+
+```
+score = 0.4 * mean_10d_return * 100    (are signals profitable?)
+      + 0.3 * win_rate                 (consistency)
+      - 0.2 * |worst_decile| * 100     (penalize blowups)
+      - 0.1 * knife_rate * 100         (penalize falling knives)
+```
+
+Hard gates before composite score:
+- Tier 1: avg_precision > 0.05 (model better than random)
+- Tier 2: mean 10d forward return > 0% (signals make money)
+
+## Two Loss Functions
+
+| What | Purpose | Used by |
+|------|---------|---------|
+| XGBoost logloss | Train the model to learn patterns | `model.fit()` |
+| Composite score | Judge if patterns translate to profitable trades | `gate.sh` keep/discard |
+
+These are intentionally different. The model optimizes logloss to find patterns. We evaluate whether those patterns make money. A model can have great logloss but terrible composite score (predicts labels accurately but the "bottoms" it finds keep dropping).
+
+## From Research to Production
+
+```
+PHASE 1: Autoresearch
+    Run ./research/run.sh 50 overnight
+    Output: winning experiment.py + features_lab.py
+
+PHASE 2: Validate winner
+    Run benchmark_random_entry() -- statistical significance test
+    Run tiered_eval on TEST set (never seen during research)
+    Run on more stocks -- does the edge hold at scale?
+
+PHASE 3: Promote features
+    Copy proven features from features_lab.py → lib/features.py
+    Update FEATURES catalog
+    Rebuild dataset with new features
+
+PHASE 4: Productionize (PLAN.md Phase 3)
+    Hardcode winning config into training/train.py + config.yaml
+    Input: dataset.parquet → Output: runs/YYYYMMDD/model.pkl
+
+PHASE 5: Deploy (PLAN.md Phases 4-5)
+    prediction/predict.py -- live signals
+    backtesting/backtest.py -- full historical backtest
+
+PHASE 6: Re-run periodically
+    New data → rebuild dataset → run autoresearch again
+    Research is never "done"
+```
+
+## Mapping to Karpathy's Design
+
+| Concept | Karpathy | Ours |
+|---------|----------|------|
+| Mutable code | `train.py` (1 file) | `experiment.py` + `features_lab.py` (2 files) |
+| Immutable code | `prepare.py` | `lib/` (data, eval, features) |
+| Metric | val_bpb (lower=better) | composite_score (higher=better) |
+| Agent loop | Internal (agent never stops) | Bash outer loop (`run.sh`) |
+| Tracking | `results.tsv` (untracked) | `results.tsv` + `RESEARCH_LOG.md` |
+| Knowledge preservation | None for failures | `COMBAT_LOG.md` (diffs + analysis) |
+| Anti-gaming | Fixed eval function | Immutable lib/ + gate diff checks |
+| Visualization | `analysis.ipynb` → `progress.png` | `plot.py` → `progress.png` |
+| Time budget | 5 min/experiment | 15 min/experiment |

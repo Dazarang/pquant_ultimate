@@ -1,0 +1,2 @@
+iter	score	status	description
+0	1.0868	keep	baseline: XGBoost 5 stocks base features threshold=0.5

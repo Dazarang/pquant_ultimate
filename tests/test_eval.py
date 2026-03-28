@@ -7,6 +7,7 @@ import pytest
 from lib.data import LABEL_COL, load_dataset, scale, temporal_split
 from lib.eval import (
     backtest_quick,
+    benchmark_random_entry,
     composite_score,
     evaluate,
     forward_returns,
@@ -266,3 +267,44 @@ class TestBacktestQuick:
         df["prediction"] = y_pred
         trades = backtest_quick(df, target_pct=0.05, stop_pct=0.03, max_hold_days=10)
         assert isinstance(trades, pd.DataFrame)
+
+
+# ---------------------------------------------------------------------------
+# Benchmark: random entry
+# ---------------------------------------------------------------------------
+
+
+class TestBenchmarkRandomEntry:
+    def test_returns_dict(self, val_split, simulated_preds):
+        val, _, _ = val_split
+        _, y_pred, _ = simulated_preds
+        result = benchmark_random_entry(val, y_pred, n_simulations=50)
+        assert isinstance(result, dict)
+
+    def test_required_keys(self, val_split, simulated_preds):
+        val, _, _ = val_split
+        _, y_pred, _ = simulated_preds
+        result = benchmark_random_entry(val, y_pred, n_simulations=50)
+        for key in ["model_mean", "random_mean", "excess_return", "z_score", "p_value", "significant"]:
+            assert key in result
+
+    def test_p_value_bounded(self, val_split, simulated_preds):
+        val, _, _ = val_split
+        _, y_pred, _ = simulated_preds
+        result = benchmark_random_entry(val, y_pred, n_simulations=50)
+        assert 0.0 <= result["p_value"] <= 1.0
+
+    def test_no_signals_returns_error(self, val_split):
+        val, _, _ = val_split
+        y_pred = np.zeros(len(val), dtype=int)
+        result = benchmark_random_entry(val, y_pred, n_simulations=10)
+        assert "error" in result
+
+    def test_actual_labels_significant(self, val_split):
+        """Actual PivotLow labels should beat random entry."""
+        val, _, _ = val_split
+        y_pred = val[LABEL_COL].values
+        if y_pred.sum() < 5:
+            pytest.skip("Not enough signals in val")
+        result = benchmark_random_entry(val, y_pred, n_simulations=100)
+        assert result["excess_return"] > 0

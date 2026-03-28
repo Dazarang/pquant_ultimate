@@ -27,8 +27,8 @@ See `data/README.md` for usage.
 ### Lib (`lib/`)
 Shared utilities:
 - `features.py` - build_features() for ML dataset creation
-- `data.py` - load_dataset(), temporal_split(), scale()
-- `eval.py` - evaluate(), print_report(), plot_confusion(), backtest_quick()
+- `data.py` - load_dataset(), temporal_split(), scale(), list_features(), preview()
+- `eval.py` - 3-tier eval (evaluate, forward_returns, composite_score, tiered_eval), backtest_quick, plot_confusion
 
 ### Pipeline (`pipeline/`) - DEPRECATED
 To be deleted in Phase 7. See `PLAN.md`.
@@ -44,10 +44,28 @@ See `indicators/README_INDICATORS.md` for usage.
 
 ---
 
+### Research (`research/`)
+Autoresearch system (Karpathy-style autonomous ML research):
+- `experiment.py` - Mutable: model, hyperparams, features, stocks
+- `features_lab.py` - Mutable: custom feature engineering
+- `baseline.py` - Immutable: logistic regression reference
+- `program.md` - Agent instructions and constraints
+- `gate.sh` - Verification gate (immutability, timeout, sanity)
+- `run.sh` - Outer loop (agent dispatch or manual mode)
+- `RESEARCH_LOG.md` / `COMBAT_LOG.md` - Experiment tracking
+
+---
+
 ## Journal Entries
 
+### 2026-03-28
+Built autoresearch system (research/). Karpathy-style autonomous loop: agent edits experiment.py + features_lab.py, gate.sh verifies immutability + runs + extracts composite score, run.sh orchestrates keep/revert/log. Baseline score: -0.25 (logistic regression). Starting experiment score: 2.21 (GradientBoosting, 5 stocks, base features). Added xgboost, lightgbm deps.
+
+### 2026-03-28
+Phase 2 finalized. Added: embargo gap (13 sessions) in temporal_split, stock/feature filtering in load_dataset, FEATURES catalog in features.py, list_features() and preview() in data.py, 3-tier eval (classification + forward returns + composite score) with tiered_eval() funnel. Tests: test_data.py (29) + test_eval.py (23) = 52 passing.
+
 ### 2026-03-27
-Phase 2 complete. Added lib/data.py (load_dataset, temporal_split, scale) and lib/eval.py (evaluate, print_report, plot_confusion, backtest_quick). PivotLow only -- PivotHigh dropped on load. Added scikit-learn dependency.
+Phase 2 started. Added lib/data.py (load_dataset, temporal_split, scale) and lib/eval.py. PivotLow only -- PivotHigh dropped on load. Added scikit-learn dependency.
 
 ### 2026-01-15
 Added validate_incremental.py to sanity check incremental updates. Validates: overlapping data consistency, new data exists, column match, no data loss.
