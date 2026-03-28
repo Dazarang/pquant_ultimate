@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from indicators import (
+    ADVANCED_FEATURE_COLUMNS,
     calculate_adosc,
     calculate_adr,
     calculate_adx,
@@ -31,6 +32,66 @@ from indicators import (
     detect_rsi_divergence,
     find_pivots,
 )
+
+# ---------------------------------------------------------------------------
+# Feature catalog -- kept here next to the code that creates them.
+# Update this when adding/removing features in the functions below.
+# ---------------------------------------------------------------------------
+
+# Features created by _calculate_base_indicators
+_BASE_FEATURES = [
+    "ret_1d", "ret_5d", "ret_10d", "ret_20d",
+    "sma_20", "sma_50", "sma_200", "ema_20", "vwap",
+    "price_to_sma20", "price_to_sma50", "price_to_sma200", "price_to_vwap", "sma20_to_sma50",
+    "rsi_14", "rsi_30",
+    "macd", "macd_signal", "macd_hist", "macd_cross",
+    "adx", "roc", "mom_10", "mom_20", "stoch_k", "stoch_d",
+    "bb_upper", "bb_middle", "bb_lower", "bb_position", "bb_width",
+    "atr_14", "adr", "sar", "apz_upper", "apz_lower",
+    "volatility_20d", "vol_z",
+    "obv", "obv_ema", "obv_ratio", "adosc",
+    "volume_ma20", "volume_ratio", "volume_z",
+    "hammer", "rsi_bullish_div", "rsi_bearish_div", "rsi_div_strength",
+    "ht_sine", "ht_leadsine", "ht_trendmode",
+    "high_252", "drawdown",
+]
+
+# Features from _add_lagged_features
+_LAG_BASE_FEATURES = [
+    "close", "ret_1d", "rsi_14", "macd_hist", "adx", "stoch_k",
+    "volatility_20d", "bb_position", "atr_14", "volume_ratio",
+    "obv_ratio", "drawdown", "price_to_sma20", "price_to_sma50",
+]
+_LAG_PERIODS = [1, 2, 3, 5, 10]
+
+# Features from _add_rolling_features
+_ROLLING_BASE_FEATURES = ["ret_1d", "rsi_14", "volatility_20d", "volume_z"]
+_ROLLING_STATS = ["mean", "std", "min", "max"]
+_ROLLING_WINDOWS = [5, 10, 20, 60]
+
+_ROC_FEATURES = [
+    "rsi_change_5d", "rsi_change_10d", "volume_change_10d",
+    "atr_change_20d", "macd_change_5d",
+]
+_PERCENTILE_FEATURES = ["close_percentile_252", "rsi_percentile_60"]
+_INTERACTION_FEATURES = [
+    "rsi_volume_interaction", "drawdown_panic_interaction", "rsi_volatility_interaction",
+]
+
+# Assembled catalog
+FEATURES: dict[str, list[str]] = {
+    "base": _BASE_FEATURES,
+    "advanced": list(ADVANCED_FEATURE_COLUMNS),
+    "lag": [f"{f}_lag{n}" for f in _LAG_BASE_FEATURES for n in _LAG_PERIODS],
+    "rolling": [
+        f"{f}_rolling_{s}_{w}"
+        for f in _ROLLING_BASE_FEATURES for s in _ROLLING_STATS for w in _ROLLING_WINDOWS
+    ],
+    "roc": _ROC_FEATURES,
+    "percentile": _PERCENTILE_FEATURES,
+    "interaction": _INTERACTION_FEATURES,
+}
+
 
 
 def _calculate_base_indicators(stock_df: pd.DataFrame) -> pd.DataFrame:

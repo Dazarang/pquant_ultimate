@@ -8,8 +8,33 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
+from lib.features import FEATURES
+
 META_COLS = ["date", "stock_id", "open", "high", "low", "close", "volume"]
 LABEL_COL = "PivotLow"
+
+
+def list_features(groups: str | list[str] | None = None) -> list[str]:
+    """Return feature names, optionally filtered by group.
+
+    Args:
+        groups: None = all, "base" = base only, ["base", "advanced"] = combined.
+                Available: base, advanced, lag, rolling, roc, percentile, interaction.
+    """
+    if groups is None:
+        groups = list(FEATURES.keys())
+    elif isinstance(groups, str):
+        groups = [groups]
+
+    result = []
+    for g in groups:
+        if g not in FEATURES:
+            print(f"  WARNING: unknown group '{g}'. Available: {list(FEATURES.keys())}")
+            continue
+        result.extend(FEATURES[g])
+
+    print(f"  {len(result)} features from groups: {groups}")
+    return result
 
 
 def load_dataset(
@@ -57,6 +82,17 @@ def load_dataset(
 
     print(f"Loaded {len(df):,} rows, {df['stock_id'].nunique()} stocks, {len(feature_cols)} features")
     return df, feature_cols
+
+
+def preview(df: pd.DataFrame, feature_cols: list[str], n: int = 5) -> pd.DataFrame:
+    """Quick glimpse of the dataset: first n rows with meta + label + features."""
+    cols = [c for c in META_COLS if c in df.columns] + feature_cols + [LABEL_COL]
+    sample = df[cols].head(n)
+    print(f"Shape: {df.shape} | Stocks: {df['stock_id'].nunique()} | Features: {len(feature_cols)}")
+    print(f"Date range: {df['date'].min().date()} to {df['date'].max().date()}")
+    pos = (df[LABEL_COL] == 1).sum()
+    print(f"Label: {pos:,} positives / {len(df):,} total ({pos/len(df)*100:.2f}%)")
+    return sample
 
 
 def temporal_split(
