@@ -43,6 +43,29 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     )
     new_features.append("volume_climax")
 
+    # Return acceleration: 2nd derivative of 5-day returns
+    # Positive = decline decelerating (bottom), Negative = still accelerating (knife)
+    def _ret_accel(close):
+        r5 = close.pct_change(5)
+        return r5 - r5.shift(5)
+
+    df["ret_acceleration"] = g["close"].transform(_ret_accel)
+    new_features.append("ret_acceleration")
+
+    # Lower wick ratio: long lower wick = buying pressure defending lows
+    body_bottom = df[["open", "close"]].min(axis=1)
+    df["lower_wick_ratio"] = (body_bottom - df["low"]) / (df["high"] - df["low"] + 1e-8)
+    new_features.append("lower_wick_ratio")
+
+    # Close position within 5-day range: higher = already bouncing (less knife risk)
+    def _close_vs_low(close):
+        lo = close.rolling(5, min_periods=1).min()
+        hi = close.rolling(5, min_periods=1).max()
+        return (close - lo) / (hi - lo + 1e-8)
+
+    df["close_vs_5d_low"] = g["close"].transform(_close_vs_low)
+    new_features.append("close_vs_5d_low")
+
     # --- END researcher section ---
 
     return df, new_features
