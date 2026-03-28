@@ -66,6 +66,20 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     df["close_vs_5d_low"] = g["close"].transform(_close_vs_low)
     new_features.append("close_vs_5d_low")
 
+    # Overnight gap: (open - prev_close) / prev_close
+    # Large negative gap = panic/capitulation, positive gap = gap-up recovery
+    prev_close = g["close"].shift(1)
+    df["overnight_gap"] = (df["open"] - prev_close) / (prev_close.abs() + 1e-8)
+    new_features.append("overnight_gap")
+
+    # Volume-price divergence: volume change when price is declining over 5d
+    # Negative = volume shrinking during selloff = selling exhaustion (bullish)
+    # Positive = volume rising during selloff = heavy selling (bearish/knife)
+    price_chg_5d = g["close"].transform(lambda x: x.pct_change(5))
+    vol_chg_5d = g["volume"].transform(lambda x: x.pct_change(5))
+    df["vol_price_divergence"] = vol_chg_5d.where(price_chg_5d < 0, 0)
+    new_features.append("vol_price_divergence")
+
     # --- END researcher section ---
 
     return df, new_features
