@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -142,7 +143,7 @@ def clean_dataset(df: pd.DataFrame, feature_cols: list[str]) -> pd.DataFrame:
     print("\nCleaning NaN from features...")
 
     before = len(df)
-    result = df.dropna(subset=feature_cols).reset_index(drop=True)
+    result = df.dropna(subset=feature_cols)
     result = result.sort_values(["date", "stock_id"]).reset_index(drop=True)
     total_dropped = before - len(result)
 
@@ -183,8 +184,9 @@ def optimize_dtypes(df: pd.DataFrame, meta_cols: list[str] | None = None) -> pd.
 
     for col in feature_cols:
         if df[col].dtype == np.float64:
-            unique = df[col].dropna().unique()
-            if len(unique) <= 2 and set(unique).issubset({0.0, 1.0}):
+            col_min = df[col].min()
+            col_max = df[col].max()
+            if col_min >= 0.0 and col_max <= 1.0 and df[col].isin([0.0, 1.0]).all():
                 df[col] = df[col].fillna(0).astype(np.int8)
             else:
                 df[col] = df[col].astype(np.float32)

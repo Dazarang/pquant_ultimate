@@ -8,7 +8,7 @@ import numpy as np
 from numba import njit
 
 
-@njit(cache=True, fastmath=True)
+@njit(cache=True)
 def count_support_tests_numba(
     prices: np.ndarray,
     local_low_mask: np.ndarray,

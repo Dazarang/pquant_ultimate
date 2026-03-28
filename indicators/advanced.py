@@ -33,20 +33,6 @@ def _has_stock_id(df: pd.DataFrame) -> bool:
     return "stock_id" in df.columns
 
 
-def _get_groupby_or_single(df: pd.DataFrame):
-    """
-    Return groupby object if multi-stock, else return dict with single key.
-
-    This allows writing code once that works for both cases:
-    for stock_id, group in _get_groupby_or_single(df):
-        # process group
-    """
-    if _has_stock_id(df):
-        return df.groupby("stock_id")
-    else:
-        return [(None, df)]
-
-
 def _get_date_column(df: pd.DataFrame) -> pd.Series:
     """
     Get date column from DataFrame.
@@ -427,7 +413,6 @@ def calculate_mean_reversion_signal(df: pd.DataFrame, copy: bool = True) -> pd.D
         df["price_ma252"] = df["close"].rolling(252, min_periods=100).mean()
         df["price_std252"] = df["close"].rolling(252, min_periods=100).std()
 
-    # Z-score: (current - mean) / std
     df["price_zscore"] = (df["close"] - df["price_ma252"]) / df["price_std252"].replace(0, 1)
 
     # Extreme oversold (2 std devs below mean)
@@ -473,7 +458,6 @@ def detect_bb_squeeze_breakdown(df: pd.DataFrame, copy: bool = True) -> pd.DataF
     df["bb_middle"] = middle
     df["bb_lower"] = lower
 
-    # Band width (normalized)
     df["bb_width"] = (upper - lower) / middle
 
     # Is width at 20-day low? (squeeze)
@@ -532,7 +516,6 @@ def add_time_features(df: pd.DataFrame, lookback_window: int = 8, copy: bool = T
     else:
         df["date"] = date_series
 
-    # Day of week (0=Monday, 4=Friday)
     df["day_of_week"] = df["date"].dt.dayofweek
     df["is_monday"] = (df["day_of_week"] == 0).astype(int)
     df["is_friday"] = (df["day_of_week"] == 4).astype(int)

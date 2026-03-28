@@ -4,7 +4,7 @@ Efficient batch calculation with caching and parallel processing.
 """
 
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -18,6 +18,26 @@ from indicators.volatility import ADR, APZ, ATR, SAR, BBands
 from indicators.volume import ADOSC, OBV
 
 _MAX_WORKERS = min(8, os.cpu_count() or 4)
+
+
+def _assign_result(df: pd.DataFrame, descriptor: str | tuple, result) -> None:
+    """Unpack a future result into df columns based on descriptor shape."""
+    if isinstance(descriptor, str):
+        df[descriptor] = result
+        return
+    kind, names = descriptor
+    if kind == "single":
+        df[names] = result
+    elif kind == "pair":
+        df[names[0]], df[names[1]] = result
+    elif kind == "triple":
+        df[names[0]], df[names[1]], df[names[2]] = result
+
+
+def _collect_results(df: pd.DataFrame, futures: dict[Future, str | tuple]) -> None:
+    """Wait for all futures and assign results to df."""
+    for future in as_completed(futures):
+        _assign_result(df, futures[future], future.result())
 
 
 @dataclass
@@ -75,28 +95,18 @@ class IndicatorCalculator:
             config: Indicator configuration (uses defaults if None)
         """
         self.config = config or IndicatorConfig()
-        self._indicators_cache: dict[str, pd.Series] = {}
 
-    def calculate_all(
-        self,
-        df: pd.DataFrame,
-        use_cache: bool = True,
-    ) -> pd.DataFrame:
+    def calculate_all(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate all configured indicators and add to DataFrame.
 
         Args:
             df: DataFrame with OHLCV data
-            use_cache: Whether to use cached results
 
         Returns:
             DataFrame with all indicators added
         """
         result_df = df.copy()
-
-        # Clear cache if not using it
-        if not use_cache:
-            self._indicators_cache.clear()
 
         # Calculate trend indicators
         result_df = self._add_trend_indicators(result_df)
@@ -133,9 +143,7 @@ class IndicatorCalculator:
                 futures[pool.submit(EMA().calculate, ohlcv, period)] = f"EMA_{period}"
             if self.config.calculate_vwap:
                 futures[pool.submit(VWAP().calculate, ohlcv)] = "VWAP"
-
-        for future in as_completed(futures):
-            df[futures[future]] = future.result()
+        _collect_results(df, futures)
         return df
 
     def _add_momentum_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -147,7 +155,7 @@ class IndicatorCalculator:
                 futures[pool.submit(RSI().calculate, ohlcv, period)] = ("single", f"RSI_{period}")
             for fast, slow, signal in self.config.macd_configs:
                 futures[pool.submit(MACD().calculate, ohlcv, fast, slow, signal)] = (
-                    "macd",
+                    "triple",
                     (f"MACD_{fast}_{slow}", f"MACD_signal_{fast}_{slow}", f"MACD_hist_{fast}_{slow}"),
                 )
             for period in self.config.adx_periods:
@@ -161,16 +169,7 @@ class IndicatorCalculator:
                     "pair",
                     (f"STOCH_K_{fastk}", f"STOCH_D_{fastk}"),
                 )
-
-        for future in as_completed(futures):
-            kind, names = futures[future]
-            result = future.result()
-            if kind == "single":
-                df[names] = result
-            elif kind == "pair":
-                df[names[0]], df[names[1]] = result
-            elif kind == "macd":
-                df[names[0]], df[names[1]], df[names[2]] = result
+        _collect_results(df, futures)
         return df
 
     def _add_volatility_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -194,16 +193,7 @@ class IndicatorCalculator:
                 )
             for accel, maximum in self.config.sar_configs:
                 futures[pool.submit(SAR().calculate, ohlcv, accel, maximum)] = ("single", "SAR")
-
-        for future in as_completed(futures):
-            kind, names = futures[future]
-            result = future.result()
-            if kind == "single":
-                df[names] = result
-            elif kind == "pair":
-                df[names[0]], df[names[1]] = result
-            elif kind == "triple":
-                df[names[0]], df[names[1]], df[names[2]] = result
+        _collect_results(df, futures)
         return df
 
     def _add_volume_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -213,19 +203,12 @@ class IndicatorCalculator:
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
             for ema_period in self.config.obv_ema_periods:
                 futures[pool.submit(OBV().calculate, ohlcv, ema_period)] = (
-                    "obv",
+                    "pair",
                     ("OBV", f"OBV_EMA_{ema_period}"),
                 )
             for fast, slow in self.config.adosc_configs:
                 futures[pool.submit(ADOSC().calculate, ohlcv, fast, slow)] = ("single", f"ADOSC_{fast}_{slow}")
-
-        for future in as_completed(futures):
-            kind, names = futures[future]
-            result = future.result()
-            if kind == "single":
-                df[names] = result
-            elif kind == "obv":
-                df[names[0]], df[names[1]] = result
+        _collect_results(df, futures)
         return df
 
     def _add_pattern_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -235,21 +218,21 @@ class IndicatorCalculator:
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
             for lb, rb in self.config.pivot_configs:
                 futures[pool.submit(find_pivots, ohlcv, lb, rb, return_boolean=True)] = (
-                    "pivot",
+                    "pair",
                     ("PivotHigh", "PivotLow"),
                 )
             if self.config.calculate_hammer:
                 futures[pool.submit(Hammer().calculate, ohlcv)] = ("single", "Hammer")
 
+        # Pivots need int cast
         for future in as_completed(futures):
-            kind, names = futures[future]
+            descriptor = futures[future]
             result = future.result()
-            if kind == "single":
-                df[names] = result
-            elif kind == "pivot":
-                pivot_high, pivot_low = result
-                df[names[0]] = pivot_high.astype(int)
-                df[names[1]] = pivot_low.astype(int)
+            if isinstance(descriptor, tuple) and descriptor[0] == "pair" and descriptor[1][0] == "PivotHigh":
+                df["PivotHigh"] = result[0].astype(int)
+                df["PivotLow"] = result[1].astype(int)
+            else:
+                _assign_result(df, descriptor, result)
         return df
 
     def _add_cycle_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -267,14 +250,7 @@ class IndicatorCalculator:
                 )
             if self.config.calculate_ht_trendmode:
                 futures[pool.submit(HT_TRENDMODE().calculate, ohlcv)] = ("single", "HT_TRENDMODE")
-
-        for future in as_completed(futures):
-            kind, names = futures[future]
-            result = future.result()
-            if kind == "single":
-                df[names] = result
-            elif kind == "pair":
-                df[names[0]], df[names[1]] = result
+        _collect_results(df, futures)
         return df
 
     def _add_advanced_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -289,11 +265,6 @@ class IndicatorCalculator:
             support_tolerance=self.config.support_tolerance,
         )
         return df
-
-    def clear_cache(self) -> None:
-        """Clear indicator cache."""
-        self._indicators_cache.clear()
-
 
 def calculate_all_indicators(
     df: pd.DataFrame,

@@ -369,7 +369,7 @@ def find_local_extrema(
     return df
 
 
-@njit(cache=True, fastmath=True)
+@njit(cache=True)
 def _detect_rsi_divergence_numba(
     price_data: np.ndarray,
     rsi_data: np.ndarray,
