@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 
 import numpy as np  # noqa: F401 -- available for researcher
+from lightgbm import LGBMClassifier
+from sklearn.ensemble import VotingClassifier
 from xgboost import XGBClassifier
 
 # Ensure project root is on path
@@ -49,7 +51,7 @@ def build_model(y_train):
     neg = (y_train == 0).sum()
     pos = (y_train == 1).sum()
 
-    model = XGBClassifier(
+    xgb = XGBClassifier(
         n_estimators=300,
         max_depth=6,
         learning_rate=0.05,
@@ -60,6 +62,23 @@ def build_model(y_train):
         random_state=42,
         n_jobs=-1,
         verbosity=0,
+    )
+
+    lgbm = LGBMClassifier(
+        n_estimators=300,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        scale_pos_weight=neg / pos,
+        random_state=43,
+        n_jobs=-1,
+        verbose=-1,
+    )
+
+    model = VotingClassifier(
+        estimators=[("xgb", xgb), ("lgbm", lgbm)],
+        voting="soft",
     )
     return model
 
