@@ -79,7 +79,7 @@ def build_model(y_train):
     )
 
     et = ExtraTreesClassifier(
-        n_estimators=400,
+        n_estimators=800,
         max_depth=12,
         min_samples_leaf=40,
         class_weight="balanced",
