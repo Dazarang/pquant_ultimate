@@ -110,6 +110,21 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     )
     new_features.append("sign_flip_ratio_10d")
 
+    # Consecutive down days: running count of consecutive negative-return days
+    # Captures discrete decline structure that rolling windows smooth away
+    # Longer streaks = higher reversal probability (mean reversion after sustained decline)
+    is_down = (df["ret_1d"] < 0).astype(int)
+    streak_groups = (1 - is_down).groupby(df["stock_id"]).cumsum()
+    df["consec_down_days"] = is_down.groupby([df["stock_id"], streak_groups]).cumsum()
+    new_features.append("consec_down_days")
+
+    # Streak depth: cumulative return during current down streak
+    # More negative = deeper capitulation = closer to exhaustion point
+    df["streak_depth"] = (df["ret_1d"] * is_down).groupby(
+        [df["stock_id"], streak_groups]
+    ).cumsum()
+    new_features.append("streak_depth")
+
     # --- END researcher section ---
 
     return df, new_features
