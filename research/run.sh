@@ -58,7 +58,7 @@ get_change_description() {
     diff=$(git diff -- research/experiment.py research/features_lab.py)
     # Extract added lines (skip diff headers), take first meaningful ones
     local desc
-    desc=$(echo "$diff" | grep "^+" | grep -v "^+++" | head -5 | sed 's/^+//' | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | cut -c1-80)
+    desc=$(echo "$diff" | grep "^+" | grep -v "^+++" | head -5 | sed 's/^+//' | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' | cut -c1-80 || true)
     if [ -z "$desc" ]; then
         desc="unknown change"
     fi
@@ -93,7 +93,7 @@ You may ONLY edit:
 
 Do NOT edit anything in lib/, research/gate.sh, or research/baseline.py.
 
-Make ONE focused change. Commit nothing -- gate.sh handles that.
+Test ONE hypothesis. Multiple changes are fine if they serve a single testable idea. Commit nothing -- gate.sh handles that.
 After editing, stop. The outer loop will run gate.sh.
 
 If COMBAT_LOG.md shows your idea was already tried, pick something different."
@@ -202,8 +202,20 @@ EOF
         echo "Gate FAILED."
         echo "$GATE_OUTPUT" | tail -10
 
+        FAIL_REASON=$(echo "$GATE_OUTPUT" | grep "GATE VIOLATION:" | head -1 || true)
+
         # TSV log
-        printf "%d\t%s\t%s\t%s\n" "$i" "0" "crash" "$DESCRIPTION" >> "$RESULTS_TSV"
+        printf "%d\t%s\t%s\t%s\n" "$i" "NA" "crash" "$DESCRIPTION" >> "$RESULTS_TSV"
+
+        # Combat log (before revert)
+        echo "" >> "$COMBAT_LOG"
+        echo "### Iteration $i -- GATE FAILED" >> "$COMBAT_LOG"
+        echo "Reason: $FAIL_REASON" >> "$COMBAT_LOG"
+        echo "Change: $DESCRIPTION" >> "$COMBAT_LOG"
+        DIFF=$(git diff -- research/experiment.py research/features_lab.py | head -60)
+        echo '```diff' >> "$COMBAT_LOG"
+        echo "$DIFF" >> "$COMBAT_LOG"
+        echo '```' >> "$COMBAT_LOG"
 
         # Revert
         git checkout -- research/experiment.py research/features_lab.py
@@ -212,7 +224,6 @@ EOF
         # Markdown log
         echo "" >> "$RESEARCH_LOG"
         echo "### Iteration $i -- GATE FAILED" >> "$RESEARCH_LOG"
-        FAIL_REASON=$(echo "$GATE_OUTPUT" | grep "GATE VIOLATION:" | head -1)
         echo "Reason: $FAIL_REASON" >> "$RESEARCH_LOG"
         echo "Change: $DESCRIPTION" >> "$RESEARCH_LOG"
     fi
@@ -221,6 +232,16 @@ EOF
     if [ "$CONSECUTIVE_FAILS" -ge "$MAX_CONSECUTIVE_FAILS" ]; then
         echo "STOP: $MAX_CONSECUTIVE_FAILS consecutive failures. Circuit breaker."
         break
+    fi
+
+    # --- Trim combat log to last 30 entries ---
+    ENTRY_COUNT=$(grep -c "^### " "$COMBAT_LOG" 2>/dev/null || echo 0)
+    if [ "$ENTRY_COUNT" -gt 30 ]; then
+        HEADER=$(head -3 "$COMBAT_LOG")
+        # Find the line number where the 31st-from-last entry starts
+        KEEP_FROM=$(grep -n "^### " "$COMBAT_LOG" | tail -30 | head -1 | cut -d: -f1)
+        { echo "$HEADER"; echo ""; tail -n +"$KEEP_FROM" "$COMBAT_LOG"; } > "$COMBAT_LOG.tmp"
+        mv "$COMBAT_LOG.tmp" "$COMBAT_LOG"
     fi
 
     # --- Update plot ---
