@@ -65,6 +65,30 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     ).transform(lambda x: x.rolling(5, min_periods=1).mean())
     new_features.append("overnight_gap_trend_5d")
 
+    # Selling exhaustion: recent (5d) down-day volume as fraction of 20d total
+    # Declining ratio = selling volume drying up = genuine bottom forming
+    # Targets knife_rate: falling knives have sustained/increasing sell volume
+    down_vol = df["volume"] * (df["ret_1d"] < 0).astype(float)
+    recent_down_vol = down_vol.groupby(df["stock_id"]).transform(
+        lambda x: x.rolling(5, min_periods=1).sum()
+    )
+    total_down_vol_20d = down_vol.groupby(df["stock_id"]).transform(
+        lambda x: x.rolling(20, min_periods=5).sum()
+    )
+    df["sell_vol_exhaustion"] = recent_down_vol / total_down_vol_20d.replace(
+        0, float("nan")
+    )
+    new_features.append("sell_vol_exhaustion")
+
+    # Volume-weighted momentum (10d): returns scaled by relative volume
+    # Heavy-volume drops dominate; as volume thins on declines, this rises toward zero
+    # Complements sell_vol_exhaustion with directional momentum context
+    vol_wt_ret = df["ret_1d"] * df["volume_ratio"]
+    df["vol_wtd_momentum_10d"] = vol_wt_ret.groupby(df["stock_id"]).transform(
+        lambda x: x.rolling(10, min_periods=3).mean()
+    )
+    new_features.append("vol_wtd_momentum_10d")
+
     # --- END researcher section ---
 
     return df, new_features
