@@ -89,6 +89,27 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     )
     new_features.append("vol_wtd_momentum_10d")
 
+    # Variance ratio (5d/1d): mean-reversion vs trending regime
+    # VR < 1 = mean-reverting (stabilizing, safer bottom entry)
+    # VR > 1 = trending (directional, falling knife risk)
+    ret_5d = g["close"].transform(lambda x: x.pct_change(5))
+    var_1d = g["ret_1d"].transform(lambda x: x.rolling(20, min_periods=5).var())
+    var_5d = ret_5d.groupby(df["stock_id"]).transform(
+        lambda x: x.rolling(20, min_periods=5).var()
+    )
+    df["variance_ratio"] = var_5d / (5 * var_1d).replace(0, float("nan"))
+    new_features.append("variance_ratio")
+
+    # Sign-flip frequency: fraction of consecutive return sign changes in 10 days
+    # High = choppy/mean-reverting (bottoming pattern)
+    # Low = persistent direction (trending, knife risk)
+    ret_lag1 = g["ret_1d"].shift(1)
+    sign_flip = ((df["ret_1d"] * ret_lag1) < 0).astype(float)
+    df["sign_flip_ratio_10d"] = sign_flip.groupby(df["stock_id"]).transform(
+        lambda x: x.rolling(10, min_periods=3).mean()
+    )
+    new_features.append("sign_flip_ratio_10d")
+
     # --- END researcher section ---
 
     return df, new_features
