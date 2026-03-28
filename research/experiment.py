@@ -37,7 +37,7 @@ TRAIN_END = "2022-12-31"
 VAL_END = "2023-12-31"
 
 # Prediction threshold
-THRESHOLD = 0.60
+THRESHOLD = 0.65
 
 # ===========================================================================
 # MODEL -- researcher edits this section
