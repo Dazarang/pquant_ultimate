@@ -52,7 +52,7 @@ def build_model(y_train):
     pos = (y_train == 1).sum()
 
     xgb = XGBClassifier(
-        n_estimators=300,
+        n_estimators=400,
         max_depth=6,
         learning_rate=0.05,
         min_child_weight=3,
@@ -67,7 +67,7 @@ def build_model(y_train):
     )
 
     lgbm = LGBMClassifier(
-        n_estimators=300,
+        n_estimators=400,
         max_depth=6,
         learning_rate=0.05,
         subsample=0.8,
@@ -79,7 +79,7 @@ def build_model(y_train):
     )
 
     et = ExtraTreesClassifier(
-        n_estimators=300,
+        n_estimators=400,
         max_depth=12,
         min_samples_leaf=40,
         class_weight="balanced",
