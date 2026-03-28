@@ -97,6 +97,9 @@ def load_dataset(
 
 def preview(df: pd.DataFrame, feature_cols: list[str], n: int = 5) -> pd.DataFrame:
     """Quick glimpse of the dataset: first n rows with meta + label + features."""
+    if df.empty:
+        print("Empty DataFrame")
+        return df.head(0)
     cols = [c for c in META_COLS if c in df.columns] + feature_cols + [LABEL_COL]
     sample = df[cols].head(n)
     print(f"Shape: {df.shape} | Stocks: {df['stock_id'].nunique()} | Features: {len(feature_cols)}")
@@ -136,9 +139,12 @@ def temporal_split(
     test = df[df["date"] >= test_start].copy()
 
     for name, split in [("Train", train), ("Val", val), ("Test", test)]:
-        d = split["date"]
-        n_stocks = split["stock_id"].nunique()
-        print(f"  {name}: {len(split):>9,} rows | {n_stocks:>5} stocks | {d.min().date()} to {d.max().date()}")
+        if split.empty:
+            print(f"  {name}:         0 rows | (empty)")
+        else:
+            d = split["date"]
+            n_stocks = split["stock_id"].nunique()
+            print(f"  {name}: {len(split):>9,} rows | {n_stocks:>5} stocks | {d.min().date()} to {d.max().date()}")
 
     return train, val, test
 

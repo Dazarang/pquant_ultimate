@@ -295,6 +295,8 @@ def _add_rolling_features(stock_df: pd.DataFrame) -> pd.DataFrame:
 
     if "drawdown" in stock_df.columns and "panic_severity" in stock_df.columns:
         new_cols["drawdown_panic_interaction"] = (stock_df["drawdown"] * stock_df["panic_severity"]).values
+    elif "drawdown" in stock_df.columns:
+        new_cols["drawdown_panic_interaction"] = np.zeros(len(stock_df))
 
     if "rsi_14" in stock_df.columns and "vol_z" in stock_df.columns:
         new_cols["rsi_volatility_interaction"] = (stock_df["rsi_14"] * stock_df["vol_z"]).values

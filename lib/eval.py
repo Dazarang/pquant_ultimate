@@ -22,7 +22,7 @@ def evaluate(y_true: np.ndarray, y_pred: np.ndarray, y_pred_proba: np.ndarray | 
         "f1": f1_score(y_true, y_pred, zero_division=0),
     }
 
-    if y_pred_proba is not None:
+    if y_pred_proba is not None and len(np.unique(y_true)) > 1:
         metrics["roc_auc"] = roc_auc_score(y_true, y_pred_proba)
         metrics["avg_precision"] = average_precision_score(y_true, y_pred_proba)
 
@@ -237,7 +237,7 @@ def composite_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) -> 
     score = (
         0.4 * mean_return * 100
         + 0.3 * win_rate
-        - 0.2 * abs(worst_decile) * 100
+        - 0.2 * abs(min(0, worst_decile)) * 100
         - 0.1 * knife_rate * 100
     )
 

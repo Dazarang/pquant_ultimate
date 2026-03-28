@@ -113,7 +113,7 @@ def find_pivots(
                           Out-of-bounds indices are safely ignored.
         use_close: If True, detect pivots using close price.
                   If False, use high/low prices (legacy behavior).
-        price_tolerance: Percentage tolerance for window variations (default 0.05 = 5%).
+        price_tolerance: Percentage tolerance for window variations (default 0.01 = 1%).
                         Adjacent days only marked as pivots if their close price
                         is within this percentage of base pivot's close.
                         Only applies when window_variations is not None.

@@ -96,9 +96,9 @@ class BaseIndicator(ABC):
             Cleaned series
         """
         if method == "ffill":
-            return series.fillna(method="ffill")
+            return series.ffill()
         elif method == "bfill":
-            return series.fillna(method="bfill")
+            return series.bfill()
         elif method == "drop":
             return series.dropna()
         elif method == "zero":

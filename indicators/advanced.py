@@ -221,12 +221,12 @@ def detect_panic_selling(df: pd.DataFrame, copy: bool = True) -> pd.DataFrame:
         g = df.groupby("stock_id")
         df["volume_ma20"] = g["volume"].rolling(20).mean().droplevel(0).sort_index()
         df["volume_spike_ratio"] = df["volume"] / df["volume_ma20"].replace(0, 1)
-        df["ret_1d"] = g["close"].pct_change(fill_method=None)
+        df["ret_1d"] = g["close"].pct_change()
         df["volatility_20d"] = g["ret_1d"].rolling(20).std().droplevel(0).sort_index()
     else:
         df["volume_ma20"] = df["volume"].rolling(20).mean()
         df["volume_spike_ratio"] = df["volume"] / df["volume_ma20"].replace(0, 1)
-        df["ret_1d"] = df["close"].pct_change(fill_method=None)
+        df["ret_1d"] = df["close"].pct_change()
         df["volatility_20d"] = df["ret_1d"].rolling(20).std()
 
     # Panic conditions
@@ -307,7 +307,7 @@ def detect_exhaustion_sequence(df: pd.DataFrame, copy: bool = True) -> pd.DataFr
 
     if _has_stock_id(df):
         g = df.groupby("stock_id")
-        df["ret_1d"] = g["close"].pct_change(fill_method=None)
+        df["ret_1d"] = g["close"].pct_change()
 
         # Count consecutive down days using numba (per stock)
         df["consecutive_down_days"] = 0
@@ -318,7 +318,7 @@ def detect_exhaustion_sequence(df: pd.DataFrame, copy: bool = True) -> pd.DataFr
 
         df["ret_1d_prev"] = g["ret_1d"].shift(1)
     else:
-        df["ret_1d"] = df["close"].pct_change(fill_method=None)
+        df["ret_1d"] = df["close"].pct_change()
         df["consecutive_down_days"] = count_consecutive_down_numba(df["ret_1d"].values)
         df["ret_1d_prev"] = df["ret_1d"].shift(1)
     df["selling_acceleration"] = df["ret_1d"] - df["ret_1d_prev"]
@@ -583,7 +583,7 @@ def create_all_advanced_features(
         - hidden_bullish_divergence
         - price_zscore, statistical_bottom, at_zscore_extreme
         - bb_squeeze, below_lower_band, squeeze_breakdown
-        - day_of_week, is_monday, is_friday, days_since_last_pivot
+        - day_of_week, is_monday, is_friday, days_since_last_low
         - is_month_end, is_quarter_end
     """
     from tqdm import tqdm
@@ -639,7 +639,7 @@ ADVANCED_FEATURE_COLUMNS = [
     "day_of_week",  # 0-6
     "is_monday",  # 0 or 1
     "is_friday",  # 0 or 1
-    "days_since_last_pivot",  # days
+    "days_since_last_low",  # days
     "is_month_end",  # 0 or 1
     "is_quarter_end",  # 0 or 1
 ]
