@@ -66,7 +66,7 @@ interaction  (3)  rsi*volume, drawdown*panic, rsi*volatility
 
 `list_features("base")` or `list_features(["base", "advanced"])` to inspect individual columns.
 
-## Hardware: Apple Silicon M5 Pro
+## Hardware: Apple Silicon M5 Pro: 48GB RAM, 15 CPU, 16 GPU
 - XGBoost/sklearn: `tree_method="hist"`, `n_jobs=-1` (CPU, no GPU backend on Apple Silicon)
 - Neural: PyTorch MPS (`device = torch.device("mps")`) or MLX (`import mlx.core as mx`)
 
