@@ -184,3 +184,103 @@ index af3e4f4..38d3b67 100644
  # Temporal split boundaries
  TRAIN_END = "2022-12-31"
 ```
+
+### Iteration 1 -- REVERTED (-0.0646)
+Score: -2.4770 vs best -2.4124
+Change: THRESHOLD = 0.90 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 4c92c61..0baa5ee 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -37,7 +37,7 @@ TRAIN_END = "2022-12-31"
+ VAL_END = "2023-12-31"
+ 
+ # Prediction threshold
+-THRESHOLD = 0.85
++THRESHOLD = 0.90
+ 
+ # ===========================================================================
+ # MODEL -- researcher edits this section
+```
+
+### Iteration 3 -- REVERTED (-0.0829)
+Score: -2.4262 vs best -2.3433
+Change:         gamma=1.0, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 4c92c61..377fe5f 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -53,6 +53,7 @@ def build_model(y_train):
+         n_estimators=300,
+         max_depth=6,
+         learning_rate=0.05,
++        gamma=1.0,
+         subsample=0.8,
+         colsample_bytree=0.8,
+         scale_pos_weight=neg / pos,
+```
+
+### Iteration 5 -- REVERTED (-0.0208)
+Score: -2.3281 vs best -2.3073
+Change:     # Momentum acceleration (2nd derivative of returns):     # Positive during d
+```diff
+diff --git a/research/features_lab.py b/research/features_lab.py
+index 870bf73..1257438 100644
+--- a/research/features_lab.py
++++ b/research/features_lab.py
+@@ -65,6 +65,13 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+     ).transform(lambda x: x.rolling(5, min_periods=1).mean())
+     new_features.append("overnight_gap_trend_5d")
+ 
++    # Momentum acceleration (2nd derivative of returns):
++    # Positive during downtrend = decline decelerating = bottom forming
++    # Targets knife_rate reduction by filtering false bottoms still in freefall
++    ret_ma_5d = g["ret_1d"].transform(lambda x: x.rolling(5, min_periods=2).mean())
++    df["momentum_accel"] = ret_ma_5d - ret_ma_5d.groupby(df["stock_id"]).shift(5)
++    new_features.append("momentum_accel")
++
+     # --- END researcher section ---
+ 
+     return df, new_features
+```
+
+### Iteration 7 -- GATE FAILED
+Reason: GATE VIOLATION: Experiment crashed (exit code 1).
+Change: from catboost import CatBoostClassifier     cat = CatBoostClassifier(         it
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 81c9b10..dd13538 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -11,6 +11,7 @@ import sys
+ from pathlib import Path
+ 
+ import numpy as np  # noqa: F401 -- available for researcher
++from catboost import CatBoostClassifier
+ from lightgbm import LGBMClassifier
+ from sklearn.ensemble import VotingClassifier
+ from xgboost import XGBClassifier
+@@ -76,8 +77,19 @@ def build_model(y_train):
+         verbose=-1,
+     )
+ 
++    cat = CatBoostClassifier(
++        iterations=300,
++        depth=6,
++        learning_rate=0.05,
++        scale_pos_weight=neg / pos,
++        random_seed=44,
++        thread_count=-1,
++        verbose=0,
++        allow_writing_files=False,
++    )
++
+     model = VotingClassifier(
+-        estimators=[("xgb", xgb), ("lgbm", lgbm)],
++        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat)],
+         voting="soft",
+     )
+     return model
+```

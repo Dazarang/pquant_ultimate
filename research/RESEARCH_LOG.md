@@ -49,3 +49,52 @@ Commit: 48ef559
 ### Iteration 11 -- IMPROVED (+0.1551)
 Score: -4.3006 | THRESHOLD = 0.70 
 Commit: 845411a
+
+### Iteration 12 -- IMPROVED (+0.3282)
+Score: -3.9724 | THRESHOLD = 0.75 
+Commit: e133fb5
+
+### Iteration 13 -- IMPROVED (+0.6464)
+Score: -3.3260 | THRESHOLD = 0.80 
+Commit: 7a2cdbf
+
+### Iteration 14 -- IMPROVED (+0.9136)
+Score: -2.4124 | THRESHOLD = 0.85 
+Commit: 4e3ae9e
+
+### Iteration 15 -- KNOWLEDGE
+No code changes.
+
+### Iteration 16 -- KNOWLEDGE
+No code changes.
+
+### Iteration 17 -- KNOWLEDGE
+No code changes.
+
+### Iteration 18 -- KNOWLEDGE
+No code changes.
+
+### Iteration 1 -- REVERTED (-0.0646)
+Score: -2.4770 | THRESHOLD = 0.90 
+
+### Iteration 2 -- IMPROVED (+0.0691)
+Score: -2.3433 |     g = df.groupby("stock_id")     daily_range = df["high"] - df["low"]      # R
+Commit: 867c6e7
+
+### Iteration 3 -- REVERTED (-0.0829)
+Score: -2.4262 |         gamma=1.0, 
+
+### Iteration 4 -- IMPROVED (+0.0360)
+Score: -2.3073 |     # Overnight gap: (open - prev_close) / ATR     # Captures pre-market/after-h
+Commit: 037e7d6
+
+### Iteration 5 -- REVERTED (-0.0208)
+Score: -2.3281 |     # Momentum acceleration (2nd derivative of returns):     # Positive during d
+
+### Iteration 6 -- IMPROVED (+0.1912)
+Score: -2.1161 | from lightgbm import LGBMClassifier from sklearn.ensemble import VotingClassifie
+Commit: 7c04390
+
+### Iteration 7 -- GATE FAILED
+Reason: GATE VIOLATION: Experiment crashed (exit code 1).
+Change: from catboost import CatBoostClassifier     cat = CatBoostClassifier(         it

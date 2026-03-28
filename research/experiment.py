@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np  # noqa: F401 -- available for researcher
 from lightgbm import LGBMClassifier
-from sklearn.ensemble import VotingClassifier
+from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier
 from xgboost import XGBClassifier
 
 # Ensure project root is on path
@@ -76,8 +76,17 @@ def build_model(y_train):
         verbose=-1,
     )
 
+    et = ExtraTreesClassifier(
+        n_estimators=300,
+        max_depth=20,
+        min_samples_leaf=20,
+        class_weight="balanced",
+        random_state=44,
+        n_jobs=-1,
+    )
+
     model = VotingClassifier(
-        estimators=[("xgb", xgb), ("lgbm", lgbm)],
+        estimators=[("xgb", xgb), ("lgbm", lgbm), ("et", et)],
         voting="soft",
     )
     return model

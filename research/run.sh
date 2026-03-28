@@ -216,6 +216,11 @@ EOF
         echo '```diff' >> "$COMBAT_LOG"
         echo "$DIFF" >> "$COMBAT_LOG"
         echo '```' >> "$COMBAT_LOG"
+        TRACEBACK=$(echo "$GATE_OUTPUT" | tail -5)
+        echo "Traceback:" >> "$COMBAT_LOG"
+        echo '```' >> "$COMBAT_LOG"
+        echo "$TRACEBACK" >> "$COMBAT_LOG"
+        echo '```' >> "$COMBAT_LOG"
 
         # Revert
         git checkout -- research/experiment.py research/features_lab.py
