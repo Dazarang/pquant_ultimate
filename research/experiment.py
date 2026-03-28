@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 import numpy as np  # noqa: F401 -- available for researcher
-from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
 
 # Ensure project root is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -49,18 +49,19 @@ def build_model(y_train):
     neg = (y_train == 0).sum()
     pos = (y_train == 1).sum()
 
-    model = XGBClassifier(
-        tree_method="hist",
+    model = LGBMClassifier(
         n_estimators=300,
         max_depth=5,
+        num_leaves=31,
         learning_rate=0.05,
         subsample=0.8,
+        subsample_freq=1,
         colsample_bytree=0.8,
         scale_pos_weight=neg / pos,
-        min_child_weight=50,
-        eval_metric="logloss",
+        min_child_samples=50,
         random_state=42,
         n_jobs=-1,
+        verbose=-1,
     )
     return model
 
