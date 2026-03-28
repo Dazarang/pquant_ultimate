@@ -59,6 +59,9 @@ Autoresearch system (Karpathy-style autonomous ML research):
 ## Journal Entries
 
 ### 2026-03-28
+Changed pivot labeling to use window_variations=[-1, 1] with price_tolerance=0.01 (1%). Labels days adjacent to exact bottoms if close is within 1%. Increases positive labels ~58% (1:30 to 1:19 imbalance). Forward return quality barely changes (7.46% to 6.81% mean 10d). Dataset rebuilt.
+
+### 2026-03-28
 Built autoresearch system (research/). Karpathy-style autonomous loop: agent edits experiment.py + features_lab.py, gate.sh verifies immutability + runs + extracts composite score, run.sh orchestrates keep/revert/log. Baseline score: -0.25 (logistic regression). Starting experiment score: 2.21 (GradientBoosting, 5 stocks, base features). Added xgboost, lightgbm deps.
 
 ### 2026-03-28

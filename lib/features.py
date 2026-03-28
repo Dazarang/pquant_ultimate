@@ -291,8 +291,11 @@ def _add_rolling_features(stock_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _add_pivot_labels(stock_df: pd.DataFrame, lb: int = 8, rb: int = 13) -> pd.DataFrame:
-    """Add pivot labels for a single stock."""
-    pivot_high, pivot_low = find_pivots(stock_df, lb=lb, rb=rb, return_boolean=True)
+    """Add pivot labels for a single stock. Uses [-1, +1] window with 1% tolerance."""
+    pivot_high, pivot_low = find_pivots(
+        stock_df, lb=lb, rb=rb, return_boolean=True,
+        window_variations=[-1, 1], price_tolerance=0.01,
+    )
     new_cols = {
         "PivotHigh": pivot_high.astype(int).values,
         "PivotLow": pivot_low.astype(int).values,
