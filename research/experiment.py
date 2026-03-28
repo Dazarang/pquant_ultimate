@@ -51,7 +51,7 @@ def build_model(y_train):
 
     model = LGBMClassifier(
         n_estimators=300,
-        max_depth=5,
+        max_depth=7,
         num_leaves=31,
         learning_rate=0.05,
         subsample=0.8,
