@@ -82,16 +82,56 @@ Call `list_features("base")` to get the list, or `list_features(["base", "advanc
 ## Research Strategy
 
 ### Start simple, add complexity only if it helps
-1. Start with base features, simple model (sklearn GradientBoosting or XGBoost)
-2. Tune hyperparameters (depth, learning rate, n_estimators, class weights)
-3. Try different feature sets (add lag, rolling, advanced)
-4. Try feature selection (drop low-importance features)
-5. Try custom features in features_lab.py
-6. Try different models (LightGBM, XGBoost with different objectives)
+1. Start with base features, tune hyperparameters first
+2. Try different feature sets (add lag, rolling, advanced, or hand-pick)
+3. Try feature selection (drop low-importance features)
+4. Try custom features in features_lab.py
+5. Try different models (see model menu below)
+6. Try ensemble/stacking of models
 7. Try threshold tuning
 
+### Model menu (all installed and ready to import)
+
+**Gradient boosting:**
+```python
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier      # Use verbose=0
+```
+
+**Sklearn:**
+```python
+from sklearn.ensemble import (
+    GradientBoostingClassifier,
+    RandomForestClassifier,
+    ExtraTreesClassifier,
+    StackingClassifier,
+    VotingClassifier,
+)
+from sklearn.neural_network import MLPClassifier
+from sklearn.linear_model import LogisticRegression
+```
+
+**Ensembling:**
+```python
+from sklearn.ensemble import StackingClassifier
+model = StackingClassifier(
+    estimators=[
+        ("lgbm", LGBMClassifier(...)),
+        ("xgb", XGBClassifier(...)),
+        ("cat", CatBoostClassifier(...)),
+    ],
+    final_estimator=LogisticRegression(),
+    cv=5,
+)
+```
+
+**Not compatible with this loop:**
+- LSTM/RNN: data is cross-sectional, lag features capture time dependency.
+- RL: requires different pipeline (env, reward, episodes).
+
 ### Class imbalance is critical
-- ~3% positive rate. Default threshold 0.5 may produce zero signals.
+- ~5% positive rate (1:20 ratio). Default threshold 0.5 may produce too few signals.
 - Use `scale_pos_weight` (XGBoost/LightGBM) or `class_weight` (sklearn).
 - Tune threshold on validation set (try 0.1-0.4 range).
 - More signals with lower precision can beat fewer signals with higher precision if forward returns are positive.

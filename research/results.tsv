@@ -1,2 +1,22 @@
 iter	score	status	description
 0	0.8256	keep	baseline: XGBoost 5 stocks base features threshold=0.5 (window labels)
+1	0.3611	discard	THRESHOLD = 0.3 
+2	-0.0982	discard	FEATURE_GROUPS = ["base", "advanced"] 
+3	0.5047	discard	        n_estimators=500,         max_depth=4,         learning_rate=0.03,      
+4	1.7443	keep	from lightgbm import LGBMClassifier     model = LGBMClassifier(         num_leav
+5	2.4111	keep	    g = df.groupby("stock_id")      # Consecutive down days: count of consecutiv
+6	0.9706	discard	    # Price deceleration: short-term return improving vs medium-term     # Posit
+7	1.5536	discard	FEATURE_GROUPS = ["base", "percentile"] 
+8	-3.3891	discard	STOCKS = None 
+9	2.1174	discard	        num_leaves=15, 
+10	2.2246	discard	FEATURE_GROUPS = ["base", "roc"] 
+11	2.2891	discard	THRESHOLD = 0.55 
+12	0.1595	discard	        boosting_type="dart", 
+13	2.3073	discard	        reg_alpha=0.1,         reg_lambda=2.0, 
+14	1.3285	discard	        n_estimators=500,         learning_rate=0.03, 
+15	2.6852	keep	        max_depth=7, 
+16	4.1975	keep	        num_leaves=63, 
+17	3.3651	discard	        min_child_samples=30, 
+18	4.1975	discard	        num_leaves=95, 
+19	4.1915	discard	        n_estimators=400, 
+20	3.4652	discard	        colsample_bytree=0.6, 
