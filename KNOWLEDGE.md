@@ -112,6 +112,36 @@ brew install libomp
 ```
 Without it, XGBoost's compiled C++ library (`libxgboost.dylib`) cannot load -- it needs `libomp.dylib` to parallelize across CPU cores. This is a macOS-specific requirement; Linux ships with libgomp.
 
+## Pipeline Phases
+
+| Phase | What | When |
+|-------|------|------|
+| 1. Autoresearch | Ratchet loop explores model/feature/threshold space (open-ended) | Now |
+| 2. Validation | Test set eval, `benchmark_random_entry()`, regime breakdown, signal clustering | After ratchet converges |
+| 3. Optuna | Fine-tune hyperparams + threshold on winning architecture (defined search space) | After validation confirms skill |
+| 4. Production | Extract model outside research/, daily pipeline, signal generation, position sizing | After Optuna |
+
+Autoresearch finds the architecture, Optuna squeezes it. Sequential, not parallel.
+
+## Optuna + Scoring System
+
+Two nested optimization loops, model-agnostic (any `.fit()` + `.predict_proba()` model):
+
+- **Inner (model.fit):** Each model minimizes its own loss to learn P(bottom). XGBoost: logloss. RandomForest: Gini. Neural nets: BCE/focal loss. The model knows nothing about composite score.
+- **Outer (Optuna):** Maximizes composite_score -- evaluates buy/no-buy decisions after thresholding. Threshold is just another Optuna parameter.
+
+The tiers map directly to Optuna:
+
+| Tier | Optuna role |
+|------|-------------|
+| Tier 1 (AP > 0.05) | Pruning -- kill trial early, cheap |
+| Tier 2 (positive excess) | Pruning -- kill trial early |
+| Tier 3 (composite score) | Objective -- the value Optuna maximizes |
+
+`tiered_eval` already stops early on tier failure -- return `-inf` for failed trials. Multi-objective (excess return vs knife rate separately) is an alternative for Pareto exploration.
+
+For neural nets, Optuna can also tune the loss function itself (e.g., focal loss gamma for class imbalance).
+
 ## Anti-Gaming
 
 The autoresearch gate prevents the agent from "cheating" by:
