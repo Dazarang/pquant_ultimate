@@ -1,2 +1,13 @@
 iter	score	status	description
 0	-4.5912	keep	baseline: XGBClassifier, all stocks, all features, threshold=0.5
+1	-4.6063	discard	THRESHOLD = 0.30 
+2	-4.6063	discard	from lightgbm import LGBMClassifier     model = LGBMClassifier(         n_estima
+3	-4.6466	discard	        max_depth=4,         min_child_weight=10,         reg_alpha=0.5,        
+4	0	crash	import numpy as np     g = df.groupby("stock_id")      # Return acceleration: 5d
+5	-4.5922	discard	    g = df.groupby("stock_id")      # Intraday recovery: fraction of daily range
+6	-4.6084	discard	        n_estimators=500,         learning_rate=0.03, 
+7	-4.6296	discard	FEATURE_GROUPS = ["base", "advanced"] 
+8	-4.5750	keep	THRESHOLD = 0.55 
+9	-4.5508	keep	THRESHOLD = 0.60 
+10	-4.4557	keep	THRESHOLD = 0.65 
+11	-4.3006	keep	THRESHOLD = 0.70 
