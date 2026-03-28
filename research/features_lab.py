@@ -49,6 +49,22 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     )
     new_features.append("buying_pressure_5d")
 
+    # Overnight gap: (open - prev_close) / ATR
+    # Captures pre-market/after-hours institutional order flow
+    # At bottoms: gaps stop widening (exhaustion) or start filling (accumulation)
+    prev_close = g["close"].shift(1)
+    df["overnight_gap_atr"] = (df["open"] - prev_close) / df["atr_14"].replace(
+        0, float("nan")
+    )
+    new_features.append("overnight_gap_atr")
+
+    # 5-day mean of overnight gaps: persistent overnight selling trend
+    # Shift from negative toward zero = overnight selling exhausting
+    df["overnight_gap_trend_5d"] = df["overnight_gap_atr"].groupby(
+        df["stock_id"]
+    ).transform(lambda x: x.rolling(5, min_periods=1).mean())
+    new_features.append("overnight_gap_trend_5d")
+
     # --- END researcher section ---
 
     return df, new_features
