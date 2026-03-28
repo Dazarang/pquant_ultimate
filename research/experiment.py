@@ -80,8 +80,8 @@ def build_model(y_train):
 
     et = ExtraTreesClassifier(
         n_estimators=300,
-        max_depth=20,
-        min_samples_leaf=20,
+        max_depth=12,
+        min_samples_leaf=40,
         class_weight="balanced",
         random_state=44,
         n_jobs=-1,
