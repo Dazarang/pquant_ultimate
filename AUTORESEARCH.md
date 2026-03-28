@@ -62,15 +62,16 @@ for each iteration:
 ## The Metric: Composite Score
 
 ```
-score = 0.4 * mean_10d_return * 100    (are signals profitable?)
-      + 0.3 * win_rate                 (consistency)
-      - 0.2 * |worst_decile| * 100     (penalize blowups)
-      - 0.1 * knife_rate * 100         (penalize falling knives)
+score = 0.30 * excess_return * 100         (alpha over equal-weight market)
+      + 0.25 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
+      - 0.20 * |worst_decile| * 100        (tail risk penalty)
+      - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
+      - 0.15 * |mean_mae| * 100            (path risk: avg max adverse excursion)
 ```
 
 Hard gates before composite score:
 - Tier 1: avg_precision > 0.05 (model better than random)
-- Tier 2: mean 10d forward return > 0% (signals make money)
+- Tier 2: at least one horizon (5d/10d/20d) must show positive excess return vs market
 
 ## Two Loss Functions
 

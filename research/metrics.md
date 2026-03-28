@@ -5,10 +5,11 @@
 The single number the autoresearch loop optimizes. Higher = better.
 
 ```
-score = 0.4 * mean_10d_return * 100
-      + 0.3 * win_rate
-      - 0.2 * |worst_decile| * 100
-      - 0.1 * knife_rate * 100
+score = 0.30 * excess_return * 100         (alpha over equal-weight market)
+      + 0.25 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
+      - 0.20 * |worst_decile| * 100        (tail risk penalty)
+      - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
+      - 0.15 * |mean_mae| * 100            (path risk: avg max adverse excursion)
 ```
 
 ## Tier 1: Classification (Sanity Check)
@@ -25,25 +26,32 @@ Must pass avg_precision > 0.05 or the iteration is rejected.
 
 ## Tier 2: Forward Returns (The Real Test)
 
-Must have mean 10d return > 0% or the iteration is rejected.
+At least one horizon (5d/10d/20d) must show positive excess return vs market, or the iteration is rejected.
 
 Entry: next-day open after signal. Exit: open N days later.
 
 | Metric | Description |
 |--------|-------------|
 | **Mean Nd return** | Average return N trading days after buying. Measured at 5d, 10d, 20d |
+| **Excess Nd** | Signal return minus equal-weight market return over same window |
 | **Win rate Nd** | % of signals where the stock went up after N days |
 | **Profit factor Nd** | Total wins / total losses. >1 profitable, >2 good |
+| **MAE Nd** | Mean max adverse excursion: avg worst drawdown during holding period |
+| **Worst MAE Nd** | Single worst drawdown across all signals |
 | **N signals** | Number of buy signals with valid forward data |
+| **Effective N** | Unique signal dates (proxy for independent bets; clustered signals inflate raw N) |
 
 ## Tier 3: Composite Score Components
 
 | Component | Weight | What it rewards/penalizes |
 |-----------|--------|--------------------------|
-| **Mean 10d return** | +40% | Profitable signals. Higher average return = better |
-| **Win rate** | +30% | Consistency. More winners = better |
-| **Worst decile** | -20% | Penalizes blowups. Average return of bottom 10% of trades |
+| **Excess return** | +30% | Alpha over equal-weight market benchmark |
+| **Win rate edge** | +25% | Consistency above 50% baseline (centered on coin flip) |
+| **Worst decile** | -20% | Penalizes blowups. 10th percentile of trade returns |
 | **Knife rate** | -10% | Penalizes falling knives. % of signals where 10d return < -5% |
+| **Mean MAE** | -15% | Path risk. Average max adverse excursion during holding period |
+
+After Tier 3, a **regime breakdown** (bull/bear based on trailing 20d market return) reports signal quality per market environment. Informational only, no gating.
 
 ## Backtest Metrics (backtest_quick)
 

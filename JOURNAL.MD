@@ -59,6 +59,9 @@ Autoresearch system (Karpathy-style autonomous ML research):
 ## Journal Entries
 
 ### 2026-03-28
+Overhauled 3-tier eval (lib/eval.py): fixed composite score dimensional bug (win_rate now centered on 0.5 and properly scaled), added MAE path-risk penalty, uses excess return vs equal-weight market benchmark instead of raw return, multi-horizon Tier 2 gate (any horizon positive excess, not just mean_10d > 0), signal clustering metric (effective N), regime breakdown (bull/bear). Breaking change: historical scores incomparable.
+
+### 2026-03-28
 Changed pivot labeling to use window_variations=[-1, 1] with price_tolerance=0.01 (1%). Labels days adjacent to exact bottoms if close is within 1%. Increases positive labels ~58% (1:30 to 1:19 imbalance). Forward return quality barely changes (7.46% to 6.81% mean 10d). Dataset rebuilt.
 
 ### 2026-03-28

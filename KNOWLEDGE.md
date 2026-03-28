@@ -25,19 +25,20 @@ The branch can never get worse. Each winning iteration builds on the previous wi
 ## Composite Score Breakdown
 
 ```
-score = 0.4 * mean_10d_return * 100    (are signals profitable?)
-      + 0.3 * win_rate                 (how consistent?)
-      - 0.2 * |worst_decile| * 100     (how bad are worst trades?)
-      - 0.1 * knife_rate * 100         (how often buy into >5% drops?)
+score = 0.30 * excess_return * 100         (alpha over equal-weight market)
+      + 0.25 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
+      - 0.20 * |worst_decile| * 100        (tail risk penalty)
+      - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
+      - 0.15 * |mean_mae| * 100            (path risk: avg max adverse excursion)
 ```
 
 | Score | Meaning |
 |-------|---------|
-| < 0 | Losing money or too many falling knives |
+| < 0 | Negative alpha, path risk, or too many falling knives |
 | 0-1 | Marginal edge |
-| 1-2 | Decent |
-| 2-3 | Good |
-| 3+ | Excellent (validate to rule out overfitting) |
+| 1-3 | Decent |
+| 3-5 | Good |
+| 5+ | Excellent (validate to rule out overfitting) |
 
 Scores above 3-4 on a small stock universe (5 stocks) should be validated on more stocks and with `benchmark_random_entry()` to confirm genuine skill.
 
@@ -46,8 +47,10 @@ Scores above 3-4 on a small stock universe (5 stocks) should be validated on mor
 | Tier | What | Hard gate? |
 |------|------|------------|
 | Tier 1: Classification | Precision, recall, F1, ROC-AUC, avg_precision | AP must be > 0.05 |
-| Tier 2: Forward Returns | Mean return, win rate, profit factor at 5/10/20 days | Mean 10d return must be > 0% |
-| Tier 3: Composite Score | Single number combining return, consistency, risk | This is the ratchet metric |
+| Tier 2: Forward Returns | Mean/excess return, win rate, PF, MAE at 5/10/20 days | Any horizon must show positive excess return vs market |
+| Tier 3: Composite Score | Risk-adjusted score: excess return, win rate edge, tail/path risk | This is the ratchet metric |
+
+After Tier 3, a regime breakdown (bull/bear) reports signal quality per market environment (informational, no gating).
 
 Fail Tier 1 or 2 and the iteration is rejected regardless of composite score.
 

@@ -71,7 +71,6 @@ def _backtest_single_trade(highs, lows, closes, entry_price, target_pct, stop_pc
             return i, target_price, 1
         if lows[i] <= stop_price:
             return i, stop_price, -1
-    # max hold: exit at close of last bar in range
     last_idx = end_idx - 1
     if last_idx < start_idx:
         last_idx = start_idx
@@ -152,6 +151,49 @@ def _print_backtest_summary(trades: pd.DataFrame) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Shared: per-signal analytics (used by Tier 2 & 3)
+# ---------------------------------------------------------------------------
+
+
+def _signal_analytics(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | None:
+    """Compute forward returns, MAE, and market benchmark per buy signal.
+
+    Returns None if no valid signals exist for the given horizon.
+    """
+    buy_mask = pd.Series(y_pred == 1, index=df.index)
+
+    entry = df.groupby("stock_id")["open"].shift(-1)
+    exit_ = df.groupby("stock_id")["open"].shift(-(horizon + 1))
+    fwd = exit_ / entry - 1
+
+    # MAE: min low during holding period (entry day through day before exit)
+    min_low = df.groupby("stock_id")["low"].transform(
+        lambda x: x.rolling(horizon).min().shift(-horizon)
+    )
+    mae = min_low / entry - 1
+
+    # Market benchmark: equal-weight avg forward return per date
+    market_by_date = fwd.groupby(df["date"]).mean()
+    market = df["date"].map(market_by_date)
+
+    valid_idx = fwd.loc[buy_mask].dropna().index
+    if len(valid_idx) == 0:
+        return None
+
+    valid_mask = mae.loc[valid_idx].notna() & market.loc[valid_idx].notna()
+    valid_idx = valid_idx[valid_mask]
+    if len(valid_idx) == 0:
+        return None
+
+    return {
+        "returns": fwd.loc[valid_idx],
+        "mae": mae.loc[valid_idx],
+        "market": market.loc[valid_idx],
+        "dates": df.loc[valid_idx, "date"],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Tier 2: Forward Returns
 # ---------------------------------------------------------------------------
 
@@ -159,35 +201,39 @@ def _print_backtest_summary(trades: pd.DataFrame) -> None:
 def forward_returns(df: pd.DataFrame, y_pred: np.ndarray, horizons: list[int] | None = None) -> dict:
     """Measure actual returns at fixed horizons for every positive prediction.
 
-    Entry at next-day open, exit at open N days later. Matches the decision-time
-    rule: model predicts after close on day T, trade executes at open T+1.
+    Entry at next-day open, exit at open N days later. Includes MAE (max adverse
+    excursion), excess return vs equal-weight market, and effective N (unique
+    signal dates as proxy for independent bets).
     """
     if horizons is None:
         horizons = [5, 10, 20]
 
-    df = df.copy()
-    df["_pred"] = y_pred
-    buy_mask = df["_pred"] == 1
-
     results = {}
     for h in horizons:
-        entry = df.groupby("stock_id")["open"].shift(-1)
-        exit_ = df.groupby("stock_id")["open"].shift(-(h + 1))
-        fwd = (exit_ / entry - 1).loc[buy_mask].dropna()
-
-        if len(fwd) == 0:
+        analytics = _signal_analytics(df, y_pred, h)
+        if analytics is None:
             continue
+
+        fwd = analytics["returns"]
+        mae = analytics["mae"]
+        market = analytics["market"]
+        dates = analytics["dates"]
+        excess = fwd - market
 
         wins = fwd[fwd > 0]
         losses = fwd[fwd < 0]
+        pf = wins.sum() / abs(losses.sum()) if len(losses) and losses.sum() != 0 else float("inf")
 
         results[f"mean_{h}d"] = fwd.mean()
+        results[f"excess_{h}d"] = excess.mean()
         results[f"win_rate_{h}d"] = (fwd > 0).mean()
         results[f"avg_win_{h}d"] = wins.mean() if len(wins) else 0.0
         results[f"avg_loss_{h}d"] = losses.mean() if len(losses) else 0.0
-        pf = wins.sum() / abs(losses.sum()) if len(losses) and losses.sum() != 0 else float("inf")
         results[f"profit_factor_{h}d"] = pf
+        results[f"mae_{h}d"] = mae.mean()
+        results[f"worst_mae_{h}d"] = mae.min()
         results[f"n_signals_{h}d"] = len(fwd)
+        results[f"effective_n_{h}d"] = dates.nunique()
 
     _print_forward_returns(results, horizons)
     return results
@@ -196,15 +242,17 @@ def forward_returns(df: pd.DataFrame, y_pred: np.ndarray, horizons: list[int] | 
 def _print_forward_returns(results: dict, horizons: list[int]) -> None:
     print("\nForward Returns:")
     for h in horizons:
-        key = f"mean_{h}d"
-        if key not in results:
+        if f"mean_{h}d" not in results:
             continue
         n = int(results[f"n_signals_{h}d"])
+        eff_n = int(results[f"effective_n_{h}d"])
         print(
             f"  {h:>2}d: mean={results[f'mean_{h}d']:+.2%}  "
+            f"excess={results[f'excess_{h}d']:+.2%}  "
             f"win={results[f'win_rate_{h}d']:.1%}  "
             f"PF={results[f'profit_factor_{h}d']:.2f}  "
-            f"n={n}"
+            f"MAE={results[f'mae_{h}d']:+.2%}  "
+            f"n={n} (eff={eff_n})"
         )
 
 
@@ -214,40 +262,95 @@ def _print_forward_returns(results: dict, horizons: list[int]) -> None:
 
 
 def composite_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) -> float:
-    """Risk-adjusted composite score. Rewards good entries, penalizes falling knives.
+    """Risk-adjusted composite score with proper scaling and path risk.
 
-    Uses 10d forward return by default. Higher is better.
+    Uses excess return (vs equal-weight market), win-rate edge (centered on 50%),
+    tail-risk penalty, falling-knife penalty, and MAE penalty. Higher is better.
     """
-    df = df.copy()
-    df["_pred"] = y_pred
-
-    entry = df.groupby("stock_id")["open"].shift(-1)
-    exit_ = df.groupby("stock_id")["open"].shift(-(horizon + 1))
-    fwd = (exit_ / entry - 1)
-
-    signal_returns = fwd.loc[df["_pred"] == 1].dropna()
-    if len(signal_returns) == 0:
+    analytics = _signal_analytics(df, y_pred, horizon)
+    if analytics is None:
         return float("-inf")
 
-    mean_return = signal_returns.mean()
-    win_rate = (signal_returns > 0).mean()
-    worst_decile = signal_returns.quantile(0.1)
-    knife_rate = (signal_returns < -0.05).mean()
+    fwd = analytics["returns"]
+    market = analytics["market"]
+    mae = analytics["mae"]
+    dates = analytics["dates"]
+
+    excess_return = (fwd - market).mean()
+    mean_return = fwd.mean()
+    market_mean = market.mean()
+    win_rate = (fwd > 0).mean()
+    worst_decile = fwd.quantile(0.1)
+    knife_rate = (fwd < -0.05).mean()
+    mean_mae = mae.mean()
+    effective_n = dates.nunique()
 
     score = (
-        0.4 * mean_return * 100
-        + 0.3 * win_rate
-        - 0.2 * abs(min(0, worst_decile)) * 100
-        - 0.1 * knife_rate * 100
+        0.30 * excess_return * 100
+        + 0.25 * (win_rate - 0.5) * 100
+        - 0.20 * abs(min(0.0, worst_decile)) * 100
+        - 0.10 * knife_rate * 100
+        - 0.15 * abs(mean_mae) * 100
     )
 
     print(f"\nComposite Score ({horizon}d): {score:.2f}")
-    print(f"  Mean return: {mean_return:+.2%}")
-    print(f"  Win rate:    {win_rate:.1%}")
-    print(f"  Worst 10%:   {worst_decile:+.2%}")
-    print(f"  Knife rate:  {knife_rate:.1%} (>{5}% loss)")
+    print(f"  Excess return: {excess_return:+.2%} (raw: {mean_return:+.2%}, mkt: {market_mean:+.2%})")
+    print(f"  Win rate:      {win_rate:.1%} (edge: {win_rate - 0.5:+.1%})")
+    print(f"  Worst 10%:     {worst_decile:+.2%}")
+    print(f"  Knife rate:    {knife_rate:.1%} (>{5}% loss)")
+    print(f"  Mean MAE:      {mean_mae:+.2%}")
+    print(f"  Signals:       {len(fwd)} (effective: {effective_n})")
 
     return score
+
+
+# ---------------------------------------------------------------------------
+# Regime breakdown (informational)
+# ---------------------------------------------------------------------------
+
+
+def regime_breakdown(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) -> dict:
+    """Signal quality per market regime. Uses trailing 20d equal-weight return."""
+    analytics = _signal_analytics(df, y_pred, horizon)
+    if analytics is None:
+        print("  No valid signals")
+        return {}
+
+    fwd = analytics["returns"]
+    mae = analytics["mae"]
+    dates = analytics["dates"]
+
+    trailing = df.groupby("stock_id")["close"].transform(lambda x: x.pct_change(20))
+    trailing_by_date = trailing.groupby(df["date"]).mean()
+    signal_trailing = dates.map(trailing_by_date)
+
+    regime = pd.Series("unknown", index=fwd.index)
+    regime[signal_trailing > 0] = "bull"
+    regime[signal_trailing <= 0] = "bear"
+
+    result = {}
+    for r in ["bull", "bear"]:
+        mask = regime == r
+        if not mask.any():
+            continue
+        r_fwd = fwd[mask]
+        r_mae = mae[mask]
+        result[r] = {
+            "mean_return": r_fwd.mean(),
+            "win_rate": (r_fwd > 0).mean(),
+            "knife_rate": (r_fwd < -0.05).mean(),
+            "mean_mae": r_mae.mean(),
+            "n_signals": len(r_fwd),
+        }
+        print(
+            f"  {r:>4}: mean={r_fwd.mean():+.2%}  "
+            f"win={(r_fwd > 0).mean():.1%}  "
+            f"MAE={r_mae.mean():+.2%}  "
+            f"knife={(r_fwd < -0.05).mean():.1%}  "
+            f"n={len(r_fwd)}"
+        )
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -265,10 +368,10 @@ def tiered_eval(
     """Run all 3 tiers. Returns combined results dict.
 
     Tier 1: Classification metrics (sanity check).
-    Tier 2: Forward returns (does buying on signals make money?).
-    Tier 3: Composite score (risk-adjusted).
+    Tier 2: Forward returns -- gates on positive excess return at any horizon.
+    Tier 3: Composite score (risk-adjusted with path risk).
 
-    Stops early if Tier 1 AP < min_ap.
+    Stops early if Tier 1 AP < min_ap or no horizon shows positive excess return.
     """
     results = {"passed": False}
 
@@ -293,9 +396,11 @@ def tiered_eval(
     t2 = forward_returns(df, y_pred)
     results["tier2"] = t2
 
-    mean_10d = t2.get("mean_10d", 0.0)
-    if mean_10d <= 0:
-        print(f"\n  FAIL: mean 10d return {mean_10d:+.2%} <= 0. Stopping.")
+    horizons = [5, 10, 20]
+    any_positive_excess = any(t2.get(f"excess_{h}d", -1) > 0 for h in horizons)
+    if not any_positive_excess:
+        best = max(t2.get(f"excess_{h}d", float("-inf")) for h in horizons)
+        print(f"\n  FAIL: no horizon shows positive excess return (best: {best:+.2%}). Stopping.")
         return results
 
     # Tier 3
@@ -304,6 +409,13 @@ def tiered_eval(
     print("=" * 60)
     t3 = composite_score(df, y_pred)
     results["tier3"] = t3
+
+    # Regime breakdown (informational, no gating)
+    print("\n" + "=" * 60)
+    print("Regime Breakdown")
+    print("=" * 60)
+    rb = regime_breakdown(df, y_pred)
+    results["regime"] = rb
 
     results["passed"] = True
     return results
