@@ -10,7 +10,7 @@ from numba import njit
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _find_pivot_high_numba(data: np.ndarray, lb: int, rb: int) -> np.ndarray:
     """
     Numba-optimized pivot high detection.
@@ -48,7 +48,7 @@ def _find_pivot_high_numba(data: np.ndarray, lb: int, rb: int) -> np.ndarray:
     return result
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _find_pivot_low_numba(data: np.ndarray, lb: int, rb: int) -> np.ndarray:
     """
     Numba-optimized pivot low detection.
@@ -203,7 +203,7 @@ def find_pivots(
     return pivot_high, pivot_low
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _detect_hammer_numba(
     open_: np.ndarray,
     high: np.ndarray,
@@ -287,7 +287,7 @@ class Hammer(BaseIndicator):
         return pd.Series(result, index=df.index, name="Hammer")
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _find_local_extrema_rolling(data: np.ndarray, window: int, find_max: bool) -> np.ndarray:
     """
     Find local extrema using rolling window (backward-looking only).
@@ -369,6 +369,60 @@ def find_local_extrema(
     return df
 
 
+@njit(cache=True, fastmath=True)
+def _detect_rsi_divergence_numba(
+    price_data: np.ndarray,
+    rsi_data: np.ndarray,
+    local_lows: np.ndarray,
+    local_highs: np.ndarray,
+    max_lookback: int,
+    min_distance: int,
+) -> tuple:
+    n = len(price_data)
+    bullish_div = np.zeros(n, dtype=np.int32)
+    bearish_div = np.zeros(n, dtype=np.int32)
+    div_strength = np.zeros(n, dtype=np.float64)
+
+    for i in range(n):
+        if local_lows[i]:
+            search_start = max(0, i - max_lookback)
+            prev_low_idx = -1
+            for j in range(i - min_distance, search_start - 1, -1):
+                if local_lows[j]:
+                    prev_low_idx = j
+                    break
+            if prev_low_idx >= 0:
+                curr_price = price_data[i]
+                prev_price = price_data[prev_low_idx]
+                curr_rsi = rsi_data[i]
+                prev_rsi = rsi_data[prev_low_idx]
+                if curr_price < prev_price and curr_rsi > prev_rsi:
+                    bullish_div[i] = 1
+                    price_drop = (prev_price - curr_price) / prev_price
+                    rsi_rise = (curr_rsi - prev_rsi) / 100.0
+                    div_strength[i] = (price_drop + rsi_rise) / 2.0
+
+        if local_highs[i]:
+            search_start = max(0, i - max_lookback)
+            prev_high_idx = -1
+            for j in range(i - min_distance, search_start - 1, -1):
+                if local_highs[j]:
+                    prev_high_idx = j
+                    break
+            if prev_high_idx >= 0:
+                curr_price = price_data[i]
+                prev_price = price_data[prev_high_idx]
+                curr_rsi = rsi_data[i]
+                prev_rsi = rsi_data[prev_high_idx]
+                if curr_price > prev_price and curr_rsi < prev_rsi:
+                    bearish_div[i] = 1
+                    price_rise = (curr_price - prev_price) / prev_price
+                    rsi_drop = (prev_rsi - curr_rsi) / 100.0
+                    div_strength[i] = (price_rise + rsi_drop) / 2.0
+
+    return bullish_div, bearish_div, div_strength
+
+
 def detect_rsi_divergence(
     df: pd.DataFrame,
     rsi_col: str = "RSI",
@@ -412,62 +466,9 @@ def detect_rsi_divergence(
     local_lows = _find_local_extrema_rolling(price_data, lookback_window, find_max=False)
     local_highs = _find_local_extrema_rolling(price_data, lookback_window, find_max=True)
 
-    # Initialize divergence columns
-    n = len(df)
-    bullish_div = np.zeros(n, dtype=np.int32)
-    bearish_div = np.zeros(n, dtype=np.int32)
-    div_strength = np.zeros(n, dtype=np.float64)
-
-    for i in range(n):
-        # Check for bullish divergence at local lows
-        if local_lows[i]:
-            # Find previous low within max_lookback and min_distance
-            search_start = max(0, i - max_lookback)
-            prev_low_idx = -1
-
-            for j in range(i - min_distance, search_start - 1, -1):
-                if local_lows[j]:
-                    prev_low_idx = j
-                    break
-
-            if prev_low_idx >= 0:
-                curr_price = price_data[i]
-                prev_price = price_data[prev_low_idx]
-                curr_rsi = rsi_data[i]
-                prev_rsi = rsi_data[prev_low_idx]
-
-                # Bullish divergence: lower price, higher RSI
-                if curr_price < prev_price and curr_rsi > prev_rsi:
-                    bullish_div[i] = 1
-                    # Strength: normalized by price/RSI differences
-                    price_drop = (prev_price - curr_price) / prev_price
-                    rsi_rise = (curr_rsi - prev_rsi) / 100.0
-                    div_strength[i] = (price_drop + rsi_rise) / 2.0
-
-        # Check for bearish divergence at local highs
-        if local_highs[i]:
-            # Find previous high within max_lookback and min_distance
-            search_start = max(0, i - max_lookback)
-            prev_high_idx = -1
-
-            for j in range(i - min_distance, search_start - 1, -1):
-                if local_highs[j]:
-                    prev_high_idx = j
-                    break
-
-            if prev_high_idx >= 0:
-                curr_price = price_data[i]
-                prev_price = price_data[prev_high_idx]
-                curr_rsi = rsi_data[i]
-                prev_rsi = rsi_data[prev_high_idx]
-
-                # Bearish divergence: higher price, lower RSI
-                if curr_price > prev_price and curr_rsi < prev_rsi:
-                    bearish_div[i] = 1
-                    # Strength: normalized by price/RSI differences
-                    price_rise = (curr_price - prev_price) / prev_price
-                    rsi_drop = (prev_rsi - curr_rsi) / 100.0
-                    div_strength[i] = (price_rise + rsi_drop) / 2.0
+    bullish_div, bearish_div, div_strength = _detect_rsi_divergence_numba(
+        price_data, rsi_data, local_lows, local_highs, max_lookback, min_distance
+    )
 
     df["Bullish_Divergence"] = bullish_div
     df["Bearish_Divergence"] = bearish_div

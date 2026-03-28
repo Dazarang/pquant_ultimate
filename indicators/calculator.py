@@ -3,6 +3,8 @@ IndicatorCalculator - orchestrator for computing all indicators.
 Efficient batch calculation with caching and parallel processing.
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -14,6 +16,8 @@ from indicators.pattern import Hammer, find_pivots
 from indicators.trend import EMA, SMA, VWAP
 from indicators.volatility import ADR, APZ, ATR, SAR, BBands
 from indicators.volume import ADOSC, OBV
+
+_MAX_WORKERS = min(8, os.cpu_count() or 4)
 
 
 @dataclass
@@ -120,108 +124,132 @@ class IndicatorCalculator:
 
     def _add_trend_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add trend indicators to DataFrame."""
-        # SMA
-        for period in self.config.sma_periods:
-            df[f"SMA_{period}"] = SMA().calculate(df, period)
+        ohlcv = df[["open", "high", "low", "close", "volume"]].copy()
+        futures = {}
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            for period in self.config.sma_periods:
+                futures[pool.submit(SMA().calculate, ohlcv, period)] = f"SMA_{period}"
+            for period in self.config.ema_periods:
+                futures[pool.submit(EMA().calculate, ohlcv, period)] = f"EMA_{period}"
+            if self.config.calculate_vwap:
+                futures[pool.submit(VWAP().calculate, ohlcv)] = "VWAP"
 
-        # EMA
-        for period in self.config.ema_periods:
-            df[f"EMA_{period}"] = EMA().calculate(df, period)
-
-        # VWAP
-        if self.config.calculate_vwap:
-            df["VWAP"] = VWAP().calculate(df)
-
+        for future in as_completed(futures):
+            df[futures[future]] = future.result()
         return df
 
     def _add_momentum_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add momentum indicators to DataFrame."""
-        # RSI
-        for period in self.config.rsi_periods:
-            df[f"RSI_{period}"] = RSI().calculate(df, period)
+        ohlcv = df[["open", "high", "low", "close", "volume"]].copy()
+        futures = {}
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            for period in self.config.rsi_periods:
+                futures[pool.submit(RSI().calculate, ohlcv, period)] = ("single", f"RSI_{period}")
+            for fast, slow, signal in self.config.macd_configs:
+                futures[pool.submit(MACD().calculate, ohlcv, fast, slow, signal)] = (
+                    "macd",
+                    (f"MACD_{fast}_{slow}", f"MACD_signal_{fast}_{slow}", f"MACD_hist_{fast}_{slow}"),
+                )
+            for period in self.config.adx_periods:
+                futures[pool.submit(ADX().calculate, ohlcv, period)] = ("single", f"ADX_{period}")
+            for period in self.config.roc_periods:
+                futures[pool.submit(ROC().calculate, ohlcv, period)] = ("single", f"ROC_{period}")
+            for period in self.config.mom_periods:
+                futures[pool.submit(MOM().calculate, ohlcv, period)] = ("single", f"MOM_{period}")
+            for fastk, slowk, slowd in self.config.stoch_configs:
+                futures[pool.submit(Stochastic().calculate, ohlcv, fastk, slowk, slowd)] = (
+                    "pair",
+                    (f"STOCH_K_{fastk}", f"STOCH_D_{fastk}"),
+                )
 
-        # MACD
-        for fast, slow, signal in self.config.macd_configs:
-            macd, macd_signal, macd_hist = MACD().calculate(df, fast, slow, signal)
-            df[f"MACD_{fast}_{slow}"] = macd
-            df[f"MACD_signal_{fast}_{slow}"] = macd_signal
-            df[f"MACD_hist_{fast}_{slow}"] = macd_hist
-
-        # ADX
-        for period in self.config.adx_periods:
-            df[f"ADX_{period}"] = ADX().calculate(df, period)
-
-        # ROC
-        for period in self.config.roc_periods:
-            df[f"ROC_{period}"] = ROC().calculate(df, period)
-
-        # MOM
-        for period in self.config.mom_periods:
-            df[f"MOM_{period}"] = MOM().calculate(df, period)
-
-        # Stochastic
-        for fastk, slowk, slowd in self.config.stoch_configs:
-            stoch_k, stoch_d = Stochastic().calculate(df, fastk, slowk, slowd)
-            df[f"STOCH_K_{fastk}"] = stoch_k
-            df[f"STOCH_D_{fastk}"] = stoch_d
-
+        for future in as_completed(futures):
+            kind, names = futures[future]
+            result = future.result()
+            if kind == "single":
+                df[names] = result
+            elif kind == "pair":
+                df[names[0]], df[names[1]] = result
+            elif kind == "macd":
+                df[names[0]], df[names[1]], df[names[2]] = result
         return df
 
     def _add_volatility_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add volatility indicators to DataFrame."""
-        # Bollinger Bands
-        for period, nbdevup, nbdevdn in self.config.bbands_configs:
-            upper, middle, lower = BBands().calculate(df, period, nbdevup, nbdevdn)
-            df[f"BBands_upper_{period}"] = upper
-            df[f"BBands_middle_{period}"] = middle
-            df[f"BBands_lower_{period}"] = lower
+        ohlcv = df[["open", "high", "low", "close", "volume"]].copy()
+        futures = {}
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            for period, nbdevup, nbdevdn in self.config.bbands_configs:
+                futures[pool.submit(BBands().calculate, ohlcv, period, nbdevup, nbdevdn)] = (
+                    "triple",
+                    (f"BBands_upper_{period}", f"BBands_middle_{period}", f"BBands_lower_{period}"),
+                )
+            for period in self.config.atr_periods:
+                futures[pool.submit(ATR().calculate, ohlcv, period)] = ("single", f"ATR_{period}")
+            for period in self.config.adr_periods:
+                futures[pool.submit(ADR().calculate, ohlcv, period)] = ("single", f"ADR_{period}")
+            for period, band_pct in self.config.apz_configs:
+                futures[pool.submit(APZ().calculate, ohlcv, period, band_pct)] = (
+                    "pair",
+                    (f"APZ_upper_{period}", f"APZ_lower_{period}"),
+                )
+            for accel, maximum in self.config.sar_configs:
+                futures[pool.submit(SAR().calculate, ohlcv, accel, maximum)] = ("single", "SAR")
 
-        # ATR
-        for period in self.config.atr_periods:
-            df[f"ATR_{period}"] = ATR().calculate(df, period)
-
-        # ADR
-        for period in self.config.adr_periods:
-            df[f"ADR_{period}"] = ADR().calculate(df, period)
-
-        # APZ
-        for period, band_pct in self.config.apz_configs:
-            upper, lower = APZ().calculate(df, period, band_pct)
-            df[f"APZ_upper_{period}"] = upper
-            df[f"APZ_lower_{period}"] = lower
-
-        # SAR
-        for accel, maximum in self.config.sar_configs:
-            df["SAR"] = SAR().calculate(df, accel, maximum)
-
+        for future in as_completed(futures):
+            kind, names = futures[future]
+            result = future.result()
+            if kind == "single":
+                df[names] = result
+            elif kind == "pair":
+                df[names[0]], df[names[1]] = result
+            elif kind == "triple":
+                df[names[0]], df[names[1]], df[names[2]] = result
         return df
 
     def _add_volume_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add volume indicators to DataFrame."""
-        # OBV
-        for ema_period in self.config.obv_ema_periods:
-            obv, obv_ema = OBV().calculate(df, ema_period)
-            df["OBV"] = obv
-            df[f"OBV_EMA_{ema_period}"] = obv_ema
+        ohlcv = df[["open", "high", "low", "close", "volume"]].copy()
+        futures = {}
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            for ema_period in self.config.obv_ema_periods:
+                futures[pool.submit(OBV().calculate, ohlcv, ema_period)] = (
+                    "obv",
+                    ("OBV", f"OBV_EMA_{ema_period}"),
+                )
+            for fast, slow in self.config.adosc_configs:
+                futures[pool.submit(ADOSC().calculate, ohlcv, fast, slow)] = ("single", f"ADOSC_{fast}_{slow}")
 
-        # ADOSC
-        for fast, slow in self.config.adosc_configs:
-            df[f"ADOSC_{fast}_{slow}"] = ADOSC().calculate(df, fast, slow)
-
+        for future in as_completed(futures):
+            kind, names = futures[future]
+            result = future.result()
+            if kind == "single":
+                df[names] = result
+            elif kind == "obv":
+                df[names[0]], df[names[1]] = result
         return df
 
     def _add_pattern_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add pattern indicators to DataFrame."""
-        # Pivots
-        for lb, rb in self.config.pivot_configs:
-            pivot_high, pivot_low = find_pivots(df, lb, rb, return_boolean=True)
-            df["PivotHigh"] = pivot_high.astype(int)
-            df["PivotLow"] = pivot_low.astype(int)
+        ohlcv = df[["open", "high", "low", "close", "volume"]].copy()
+        futures = {}
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            for lb, rb in self.config.pivot_configs:
+                futures[pool.submit(find_pivots, ohlcv, lb, rb, return_boolean=True)] = (
+                    "pivot",
+                    ("PivotHigh", "PivotLow"),
+                )
+            if self.config.calculate_hammer:
+                futures[pool.submit(Hammer().calculate, ohlcv)] = ("single", "Hammer")
 
-        # Hammer
-        if self.config.calculate_hammer:
-            df["Hammer"] = Hammer().calculate(df)
-
+        for future in as_completed(futures):
+            kind, names = futures[future]
+            result = future.result()
+            if kind == "single":
+                df[names] = result
+            elif kind == "pivot":
+                pivot_high, pivot_low = result
+                df[names[0]] = pivot_high.astype(int)
+                df[names[1]] = pivot_low.astype(int)
         return df
 
     def _add_cycle_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -229,16 +257,24 @@ class IndicatorCalculator:
         if len(df) < 32:  # Minimum for HT stability
             return df
 
-        # HT_SINE
-        if self.config.calculate_ht_sine:
-            sine, leadsine = HT_SINE().calculate(df)
-            df["HT_SINE"] = sine
-            df["HT_LEADSINE"] = leadsine
+        ohlcv = df[["open", "high", "low", "close", "volume"]].copy()
+        futures = {}
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            if self.config.calculate_ht_sine:
+                futures[pool.submit(HT_SINE().calculate, ohlcv)] = (
+                    "pair",
+                    ("HT_SINE", "HT_LEADSINE"),
+                )
+            if self.config.calculate_ht_trendmode:
+                futures[pool.submit(HT_TRENDMODE().calculate, ohlcv)] = ("single", "HT_TRENDMODE")
 
-        # HT_TRENDMODE
-        if self.config.calculate_ht_trendmode:
-            df["HT_TRENDMODE"] = HT_TRENDMODE().calculate(df)
-
+        for future in as_completed(futures):
+            kind, names = futures[future]
+            result = future.result()
+            if kind == "single":
+                df[names] = result
+            elif kind == "pair":
+                df[names[0]], df[names[1]] = result
         return df
 
     def _add_advanced_features(self, df: pd.DataFrame) -> pd.DataFrame:

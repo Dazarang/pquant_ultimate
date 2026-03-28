@@ -50,6 +50,7 @@ def build_model(y_train):
     pos = (y_train == 1).sum()
 
     model = XGBClassifier(
+        tree_method="hist",
         n_estimators=300,
         max_depth=5,
         learning_rate=0.05,

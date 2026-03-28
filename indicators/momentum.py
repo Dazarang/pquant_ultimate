@@ -10,7 +10,7 @@ from numba import njit
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _calculate_rsi_numba(data: np.ndarray, period: int) -> np.ndarray:
     """
     Numba-optimized RSI calculation using Wilder's smoothing.
@@ -132,7 +132,7 @@ class MACD(BaseIndicator):
         return macd_v, signal_line, histogram
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _calculate_adx_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int) -> np.ndarray:
     """
     Numba-optimized ADX calculation.
@@ -299,7 +299,7 @@ class MOM(BaseIndicator):
         return df["close"] - df["close"].shift(period)
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _calculate_stoch_numba(
     high: np.ndarray,
     low: np.ndarray,

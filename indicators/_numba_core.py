@@ -5,10 +5,10 @@ Used internally by higher-level indicator functions.
 """
 
 import numpy as np
-from numba import jit
+from numba import njit
 
 
-@jit(nopython=True, cache=True)
+@njit(cache=True, fastmath=True)
 def count_support_tests_numba(
     prices: np.ndarray,
     local_low_mask: np.ndarray,
@@ -53,7 +53,7 @@ def count_support_tests_numba(
     return result
 
 
-@jit(nopython=True, cache=True)
+@njit(cache=True)
 def count_consecutive_down_numba(returns: np.ndarray) -> np.ndarray:
     """Count consecutive negative return days.
 
@@ -68,7 +68,7 @@ def count_consecutive_down_numba(returns: np.ndarray) -> np.ndarray:
     count = 0
 
     for i in range(n):
-        if not np.isnan(returns[i]) and returns[i] < 0:
+        if returns[i] == returns[i] and returns[i] < 0:
             count += 1
         else:
             count = 0
@@ -77,7 +77,7 @@ def count_consecutive_down_numba(returns: np.ndarray) -> np.ndarray:
     return result
 
 
-@jit(nopython=True, cache=True)
+@njit(cache=True, fastmath=True)
 def days_since_last_low_numba(local_low_mask: np.ndarray, day_offsets: np.ndarray) -> np.ndarray:
     """Calculate calendar days since last local low.
 
@@ -102,7 +102,7 @@ def days_since_last_low_numba(local_low_mask: np.ndarray, day_offsets: np.ndarra
     return result
 
 
-@jit(nopython=True, cache=True)
+@njit(cache=True, fastmath=True)
 def detect_divergence_pairs_numba(
     prices: np.ndarray,
     indicator1: np.ndarray,
@@ -163,7 +163,7 @@ def detect_divergence_pairs_numba(
     return result
 
 
-@jit(nopython=True, cache=True)
+@njit(cache=True, fastmath=True)
 def detect_hidden_divergence_numba(
     prices: np.ndarray,
     rsi: np.ndarray,

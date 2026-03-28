@@ -46,7 +46,13 @@ But there are **hard gates** before composite score:
 
 - ~3M rows, 1,336 stocks, 2015-2026
 - 231 features across 7 groups (see `list_features()`)
-- Label: PivotLow (binary, ~3% positive rate, ~1:32 imbalance)
+- Label: PivotLow (binary, ~5% positive rate, ~1:20 imbalance, window [-1,+1] @ 1% tolerance)
+- Mix of US, S&P 500, and Swedish stocks
+
+**Available stocks**: 1,336 in the dataset. Full ticker lists in `data/tickers/`:
+- `tickers_validated_20251031.json` -- US (7,478), S&P 500 (503), Sweden (718)
+- Only ~1,336 made it into the dataset after filtering and validation
+- To see all stocks in the dataset: `uv run python -c "import pandas as pd; print(sorted(pd.read_parquet('data/datasets/20260115/dataset.parquet', columns=['stock_id'])['stock_id'].unique()))"`
 - Temporal split with 13-session embargo at boundaries
 
 **For fast iteration, use a small stock subset (5-20 stocks).** You can try larger sets once you have a strong model.
@@ -64,6 +70,14 @@ interaction  (3): rsi*volume, drawdown*panic, rsi*volatility
 ```
 
 Call `list_features("base")` to get the list, or `list_features(["base", "advanced"])` for combined.
+
+## Hardware: Apple Silicon M5 Pro
+- 15 CPU cores, 16 GPU cores (Metal), 48 GB unified RAM
+- XGBoost: `tree_method="hist"` with `n_jobs=-1` (no GPU backend on Apple Silicon; uses all CPU cores)
+- `n_jobs=-1` uses all CPU cores for sklearn/xgboost parallelism
+- If exploring neural approaches: use MLX (`import mlx.core as mx`) for native Apple Silicon or PyTorch MPS (`device = torch.device("mps")`)
+- LightGBM is available in dependencies and may outperform XGBoost on wide feature sets
+- 48 GB RAM supports large feature universes -- don't hesitate to use all feature groups
 
 ## Research Strategy
 

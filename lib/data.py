@@ -6,6 +6,7 @@ Scaler is always fit on train only.
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 from sklearn.preprocessing import StandardScaler
 
 from lib.features import FEATURES
@@ -50,17 +51,27 @@ def load_dataset(
                 ["AAPL", "MSFT"] = subset.
         features: Feature columns to keep. None = all. Subset = only those columns.
     """
-    df = pd.read_parquet(path)
+    # Normalize stocks filter early for parquet pushdown
+    if stocks is not None:
+        if isinstance(stocks, str):
+            stocks = [stocks]
+
+    # Parquet pushdown: only read needed columns and rows
+    read_cols = None
+    if features is not None:
+        read_cols = list(dict.fromkeys(META_COLS + features + [LABEL_COL]))
+        valid_cols = set(pq.read_schema(path).names)
+        read_cols = [c for c in read_cols if c in valid_cols]
+    row_filters = [("stock_id", "in", stocks)] if stocks is not None else None
+
+    df = pd.read_parquet(path, columns=read_cols, filters=row_filters)
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values(["date", "stock_id"]).reset_index(drop=True)
 
     if stocks is not None:
-        if isinstance(stocks, str):
-            stocks = [stocks]
         missing = set(stocks) - set(df["stock_id"].unique())
         if missing:
             print(f"  WARNING: stocks not found in dataset: {missing}")
-        df = df[df["stock_id"].isin(stocks)].reset_index(drop=True)
 
     if "PivotHigh" in df.columns:
         df = df.drop(columns=["PivotHigh"])

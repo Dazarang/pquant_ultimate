@@ -34,7 +34,7 @@ class SMA(BaseIndicator):
         return df["close"].rolling(window=period, min_periods=1).mean()
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _calculate_ema_numba(data: np.ndarray, period: int) -> np.ndarray:
     """
     Numba-optimized EMA calculation using industry-standard algorithm.

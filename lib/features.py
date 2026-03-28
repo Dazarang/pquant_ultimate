@@ -4,6 +4,10 @@ Extracted from indicators/notebooks/training-dataset-structure.ipynb.
 All features are backward-looking (no lookahead bias).
 """
 
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+import numba
 import numpy as np
 import pandas as pd
 
@@ -92,6 +96,25 @@ FEATURES: dict[str, list[str]] = {
     "interaction": _INTERACTION_FEATURES,
 }
 
+
+@numba.njit(cache=True)
+def _rolling_percentile_rank(values, window, min_periods):
+    n = len(values)
+    result = np.empty(n)
+    result[:] = np.nan
+    for i in range(min_periods - 1, n):
+        start = max(0, i - window + 1)
+        count = 0
+        total = 0
+        val = values[i]
+        for j in range(start, i + 1):
+            if values[j] == values[j]:
+                total += 1
+                if values[j] <= val:
+                    count += 1
+        if total >= min_periods:
+            result[i] = count / total
+    return result
 
 
 def _calculate_base_indicators(stock_df: pd.DataFrame) -> pd.DataFrame:
@@ -262,17 +285,9 @@ def _add_rolling_features(stock_df: pd.DataFrame) -> pd.DataFrame:
     if "macd_hist" in stock_df.columns:
         new_cols["macd_change_5d"] = stock_df["macd_hist"].diff(5).values
 
-    # Percentile rank features
-    new_cols["close_percentile_252"] = (
-        stock_df["close"]
-        .rolling(252, min_periods=50)
-        .apply(lambda x: pd.Series(x).rank(pct=True).iloc[-1] if len(x) > 0 else np.nan)
-    ).values
-    new_cols["rsi_percentile_60"] = (
-        stock_df["rsi_14"]
-        .rolling(60, min_periods=20)
-        .apply(lambda x: pd.Series(x).rank(pct=True).iloc[-1] if len(x) > 0 else np.nan)
-    ).values
+    # Percentile rank features (numba-accelerated)
+    new_cols["close_percentile_252"] = _rolling_percentile_rank(stock_df["close"].values, 252, 50)
+    new_cols["rsi_percentile_60"] = _rolling_percentile_rank(stock_df["rsi_14"].values, 60, 20)
 
     # Interaction features
     if "rsi_14" in stock_df.columns and "volume_z" in stock_df.columns:
@@ -301,6 +316,14 @@ def _add_pivot_labels(stock_df: pd.DataFrame, lb: int = 8, rb: int = 13) -> pd.D
         "PivotLow": pivot_low.astype(int).values,
     }
     return pd.concat([stock_df, pd.DataFrame(new_cols, index=stock_df.index)], axis=1)
+
+
+def _process_step3(stock_df: pd.DataFrame) -> pd.DataFrame:
+    """Step 3 per-stock: lagged + rolling + pivot labels."""
+    stock_df = _add_lagged_features(stock_df)
+    stock_df = _add_rolling_features(stock_df)
+    stock_df = _add_pivot_labels(stock_df)
+    return stock_df
 
 
 def build_features(df: pd.DataFrame, verbose: bool = True, min_rows: int = 252) -> pd.DataFrame:
@@ -333,15 +356,19 @@ def build_features(df: pd.DataFrame, verbose: bool = True, min_rows: int = 252) 
     if verbose:
         print(f"  Processing {len(stocks)} stocks...")
 
-    # Step 1: Base indicators (per stock)
+    max_workers = max(1, (os.cpu_count() or 1) - 1)
+
+    # Step 1: Base indicators (per stock, parallel)
     if verbose:
         print("  [1/3] Base indicators...")
+    groups = {sid: sdf.copy() for sid, sdf in df.groupby("stock_id")}
     result_dfs = []
-    iterator = tqdm(stocks, desc="    Base", disable=not verbose, ncols=80)
-    for stock_id in iterator:
-        stock_df = df[df["stock_id"] == stock_id].copy()
-        stock_df = _calculate_base_indicators(stock_df)
-        result_dfs.append(stock_df)
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_calculate_base_indicators, sdf): sid for sid, sdf in groups.items()}
+        with tqdm(total=len(futures), desc="    Base", disable=not verbose, ncols=80) as pbar:
+            for future in as_completed(futures):
+                result_dfs.append(future.result())
+                pbar.update(1)
 
     result = pd.concat(result_dfs, ignore_index=True)
     result = result.sort_values(["date", "stock_id"]).reset_index(drop=True)
@@ -351,17 +378,17 @@ def build_features(df: pd.DataFrame, verbose: bool = True, min_rows: int = 252) 
         print("  [2/3] Advanced features...")
     result = create_all_advanced_features(result, verbose=verbose)
 
-    # Step 3: Lagged, rolling, pivot labels (per stock)
+    # Step 3: Lagged, rolling, pivot labels (per stock, parallel)
     if verbose:
         print("  [3/3] Lagged, rolling, pivot labels...")
+    groups = {sid: sdf.copy() for sid, sdf in result.groupby("stock_id")}
     final_dfs = []
-    iterator = tqdm(stocks, desc="    Final", disable=not verbose, ncols=80)
-    for stock_id in iterator:
-        stock_df = result[result["stock_id"] == stock_id].copy()
-        stock_df = _add_lagged_features(stock_df)
-        stock_df = _add_rolling_features(stock_df)
-        stock_df = _add_pivot_labels(stock_df)
-        final_dfs.append(stock_df)
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_process_step3, sdf): sid for sid, sdf in groups.items()}
+        with tqdm(total=len(futures), desc="    Final", disable=not verbose, ncols=80) as pbar:
+            for future in as_completed(futures):
+                final_dfs.append(future.result())
+                pbar.update(1)
 
     result = pd.concat(final_dfs, ignore_index=True)
     result = result.sort_values(["date", "stock_id"]).reset_index(drop=True)

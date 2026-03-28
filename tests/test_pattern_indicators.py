@@ -51,9 +51,9 @@ class TestFindPivots:
         assert ph_val.dtype == float
         assert pl_val.dtype == float
 
-        # Values at pivot points should match original data
+        # Values at pivot points should match source data (close by default)
         for idx in ph_bool[ph_bool].index:
-            assert ph_val.loc[idx] == df.loc[idx, "high"]
+            assert ph_val.loc[idx] == df.loc[idx, "close"]
 
 
 class TestHammer:

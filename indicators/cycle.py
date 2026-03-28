@@ -10,7 +10,7 @@ from numba import njit
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _hilbert_transform_numba(data: np.ndarray) -> tuple:
     """
     Numba-optimized Hilbert Transform for cycle detection.
@@ -69,7 +69,7 @@ def _hilbert_transform_numba(data: np.ndarray) -> tuple:
     return smooth_inphase, smooth_quadrature, phase
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _calculate_sine_wave_numba(phase: np.ndarray) -> tuple:
     """
     Calculate sine and lead sine from phase.
@@ -91,7 +91,7 @@ def _calculate_sine_wave_numba(phase: np.ndarray) -> tuple:
     return sine, leadsine
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _detect_trend_mode_numba(inphase: np.ndarray, quadrature: np.ndarray, threshold: float = 0.5) -> np.ndarray:
     """
     Detect trend vs cycle mode using Hilbert Transform components.

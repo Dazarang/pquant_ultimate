@@ -1,5 +1,6 @@
 """Model evaluation: 3-tier framework (classification, forward returns, composite)."""
 
+import numba
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
@@ -56,6 +57,30 @@ def plot_confusion(y_true: np.ndarray, y_pred: np.ndarray, title: str = "Confusi
     return fig
 
 
+@numba.njit(cache=True, fastmath=True)
+def _backtest_single_trade(highs, lows, closes, entry_price, target_pct, stop_pct, max_hold, start_idx):
+    """Find exit for a single trade. Returns (exit_idx, exit_price, exit_type).
+
+    exit_type: 1=target, -1=stop, 0=max_hold.
+    """
+    target_price = entry_price * (1 + target_pct)
+    stop_price = entry_price * (1 - stop_pct)
+    end_idx = min(start_idx + max_hold, len(highs))
+    for i in range(start_idx, end_idx):
+        if highs[i] >= target_price:
+            return i, target_price, 1
+        if lows[i] <= stop_price:
+            return i, stop_price, -1
+    # max hold: exit at close of last bar in range
+    last_idx = end_idx - 1
+    if last_idx < start_idx:
+        last_idx = start_idx
+    return last_idx, closes[last_idx], 0
+
+
+_EXIT_REASONS = {1: "target", -1: "stop", 0: "max_hold"}
+
+
 def backtest_quick(
     df: pd.DataFrame,
     pred_col: str = "prediction",
@@ -76,45 +101,34 @@ def backtest_quick(
     for stock_id, stock_df in df.groupby("stock_id"):
         stock_df = stock_df.sort_values("date").reset_index(drop=True)
         signals = stock_df.index[stock_df[pred_col] == 1].tolist()
+        if not signals:
+            continue
+
+        highs = stock_df["high"].values.astype(np.float64)
+        lows = stock_df["low"].values.astype(np.float64)
+        closes = stock_df["close"].values.astype(np.float64)
+        opens = stock_df["open"].values.astype(np.float64)
+        dates = stock_df["date"].values
+        n = len(stock_df)
 
         for idx in signals:
-            # Entry at next day's open
             entry_idx = idx + 1
-            if entry_idx >= len(stock_df):
+            if entry_idx >= n:
                 continue
 
-            entry_price = stock_df.loc[entry_idx, "open"]
-            entry_date = stock_df.loc[entry_idx, "date"]
-            target_price = entry_price * (1 + target_pct)
-            stop_price = entry_price * (1 - stop_pct)
-
-            exit_reason = "max_hold"
-            exit_date = entry_date
-            exit_price = entry_price
-
-            for hold_idx in range(entry_idx, min(entry_idx + max_hold_days, len(stock_df))):
-                row = stock_df.loc[hold_idx]
-                if row["high"] >= target_price:
-                    exit_reason = "target"
-                    exit_price = target_price
-                    exit_date = row["date"]
-                    break
-                if row["low"] <= stop_price:
-                    exit_reason = "stop"
-                    exit_price = stop_price
-                    exit_date = row["date"]
-                    break
-                exit_price = row["close"]
-                exit_date = row["date"]
+            entry_price = opens[entry_idx]
+            exit_idx, exit_price, exit_type = _backtest_single_trade(
+                highs, lows, closes, entry_price, target_pct, stop_pct, max_hold_days, entry_idx,
+            )
 
             trades.append({
                 "stock_id": stock_id,
-                "entry_date": entry_date,
-                "exit_date": exit_date,
+                "entry_date": dates[entry_idx],
+                "exit_date": dates[exit_idx],
                 "entry_price": entry_price,
                 "exit_price": exit_price,
                 "return_pct": (exit_price - entry_price) / entry_price,
-                "exit_reason": exit_reason,
+                "exit_reason": _EXIT_REASONS[exit_type],
             })
 
     if not trades:
@@ -325,17 +339,22 @@ def benchmark_random_entry(
     if len(signals) == 0:
         return {"error": "no signals"}
 
+    # Pre-build per-stock arrays once
+    stock_data = {}
+    for stock_id, grp in df.groupby("stock_id"):
+        grp = grp.sort_values("date").reset_index(drop=True)
+        stock_data[stock_id] = (grp["open"].values, {d: i for i, d in enumerate(grp["date"])})
+
     # Compute forward returns for each signal
     signal_returns = []
     signal_stocks = []
     for stock_id, group in signals.groupby("stock_id"):
-        stock_df = df[df["stock_id"] == stock_id].sort_values("date").reset_index(drop=True)
-        opens = stock_df["open"].values
-        dates_idx = {d: i for i, d in enumerate(stock_df["date"])}
+        opens, dates_idx = stock_data[stock_id]
+        sig_dates = group["date"].values
 
-        for _, row in group.iterrows():
-            idx = dates_idx.get(row["date"])
-            if idx is None or idx + 1 >= len(opens) or idx + horizon + 1 >= len(opens):
+        for d in sig_dates:
+            idx = dates_idx.get(d)
+            if idx is None or idx + horizon + 1 >= len(opens):
                 continue
             entry = opens[idx + 1]
             exit_ = opens[idx + horizon + 1]
@@ -348,16 +367,19 @@ def benchmark_random_entry(
     signal_returns = np.array(signal_returns)
     model_mean = signal_returns.mean()
 
+    # Pre-compute per-stock opens and max valid indices for simulation
+    stock_opens = {sid: stock_data[sid][0] for sid in set(signal_stocks)}
+    stock_max_idx = {sid: len(opens) - horizon - 2 for sid, opens in stock_opens.items()}
+
     # Random simulations: for each signal, pick a random date in the same stock
     random_means = []
     for _ in range(n_simulations):
         sim_returns = []
         for stock_id in signal_stocks:
-            stock_df = df[df["stock_id"] == stock_id].sort_values("date").reset_index(drop=True)
-            opens = stock_df["open"].values
-            max_idx = len(opens) - horizon - 2
+            max_idx = stock_max_idx[stock_id]
             if max_idx <= 0:
                 continue
+            opens = stock_opens[stock_id]
             rand_idx = rng.integers(0, max_idx)
             entry = opens[rand_idx + 1]
             exit_ = opens[rand_idx + horizon + 1]

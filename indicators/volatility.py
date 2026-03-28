@@ -56,7 +56,7 @@ class BBands(BaseIndicator):
         return upper, middle, lower
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _calculate_atr_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int) -> np.ndarray:
     """
     Numba-optimized ATR calculation.
@@ -209,7 +209,7 @@ class APZ(BaseIndicator):
         return upper_band, lower_band
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _calculate_sar_numba(
     high: np.ndarray,
     low: np.ndarray,

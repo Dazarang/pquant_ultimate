@@ -94,7 +94,7 @@ class TestIntegration:
         result2 = calculator.calculate_all(df, use_cache=True)
 
         # Should be identical
-        pd.testing.assert_frame_equal(result1, result2)
+        pd.testing.assert_frame_equal(result1, result2, check_like=True)
 
         # Clear cache
         calculator.clear_cache()
@@ -103,7 +103,7 @@ class TestIntegration:
         result3 = calculator.calculate_all(df, use_cache=False)
 
         # Should still be identical
-        pd.testing.assert_frame_equal(result1, result3)
+        pd.testing.assert_frame_equal(result1, result3, check_like=True)
 
     def test_real_world_workflow(self, real_market_data):
         """Test real-world workflow with actual market data."""

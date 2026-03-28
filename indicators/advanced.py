@@ -104,7 +104,9 @@ def _detect_local_extrema_safe(
         )
 
 
-def detect_multi_indicator_divergence(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFrame:
+def detect_multi_indicator_divergence(
+    df: pd.DataFrame, lookback_window: int = 8, copy: bool = True
+) -> pd.DataFrame:
     """
     Detect bullish divergence across multiple indicators.
     NO LOOKAHEAD BIAS - uses backward-looking local extrema.
@@ -117,11 +119,13 @@ def detect_multi_indicator_divergence(df: pd.DataFrame, lookback_window: int = 8
     Args:
         df: DataFrame with price data
         lookback_window: Window for local extrema detection (default 8, similar to pivot lb)
+        copy: Whether to copy df before modifying (default True)
 
     Returns:
         DataFrame with new column: multi_divergence_score (0-3)
     """
-    df = df.copy()
+    if copy:
+        df = df.copy()
 
     # Ensure indicators exist
     if "rsi" not in df.columns:
@@ -168,7 +172,7 @@ def detect_multi_indicator_divergence(df: pd.DataFrame, lookback_window: int = 8
     return df
 
 
-def detect_volume_exhaustion(df: pd.DataFrame) -> pd.DataFrame:
+def detect_volume_exhaustion(df: pd.DataFrame, copy: bool = True) -> pd.DataFrame:
     """
     Detect volume exhaustion patterns.
 
@@ -183,18 +187,15 @@ def detect_volume_exhaustion(df: pd.DataFrame) -> pd.DataFrame:
         - volume_exhaustion (binary): price down >2% AND volume down >10%
         - exhaustion_strength (continuous): magnitude of exhaustion
     """
-    df = df.copy()
+    if copy:
+        df = df.copy()
 
     if _has_stock_id(df):
-        grouped = df.groupby("stock_id")
+        df["price_change_5d"] = df.groupby("stock_id")["close"].pct_change(5)
+        df["volume_change_5d"] = df.groupby("stock_id")["volume"].pct_change(5)
     else:
-        grouped = df.groupby(lambda x: 0)  # Single group
-
-    # Calculate 5-day price change
-    df["price_change_5d"] = grouped["close"].transform(lambda x: x.pct_change(5))
-
-    # Calculate 5-day volume change
-    df["volume_change_5d"] = grouped["volume"].transform(lambda x: x.pct_change(5))
+        df["price_change_5d"] = df["close"].pct_change(5)
+        df["volume_change_5d"] = df["volume"].pct_change(5)
 
     # Handle inf from pct_change when volume was 0 (holidays)
     df["volume_change_5d"] = df["volume_change_5d"].replace([np.inf, -np.inf], 0)
@@ -215,7 +216,7 @@ def detect_volume_exhaustion(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def detect_panic_selling(df: pd.DataFrame) -> pd.DataFrame:
+def detect_panic_selling(df: pd.DataFrame, copy: bool = True) -> pd.DataFrame:
     """
     Detect panic selling / capitulation events.
 
@@ -227,22 +228,20 @@ def detect_panic_selling(df: pd.DataFrame) -> pd.DataFrame:
         - panic_selling (binary): volume >2x average AND drop >2 std devs
         - panic_severity (0-10): how extreme is the event
     """
-    df = df.copy()
+    if copy:
+        df = df.copy()
 
     if _has_stock_id(df):
-        grouped = df.groupby("stock_id")
+        g = df.groupby("stock_id")
+        df["volume_ma20"] = g["volume"].rolling(20).mean().droplevel(0).sort_index()
+        df["volume_spike_ratio"] = df["volume"] / df["volume_ma20"].replace(0, 1)
+        df["ret_1d"] = g["close"].pct_change(fill_method=None)
+        df["volatility_20d"] = g["ret_1d"].rolling(20).std().droplevel(0).sort_index()
     else:
-        grouped = df.groupby(lambda x: 0)
-
-    # Volume spike (per stock)
-    df["volume_ma20"] = grouped["volume"].transform(lambda x: x.rolling(20).mean())
-    df["volume_spike_ratio"] = df["volume"] / df["volume_ma20"].replace(0, 1)
-
-    # Daily return
-    df["ret_1d"] = grouped["close"].transform(lambda x: x.pct_change(fill_method=None))
-
-    # Historical volatility (per stock)
-    df["volatility_20d"] = grouped["ret_1d"].transform(lambda x: x.rolling(20).std())
+        df["volume_ma20"] = df["volume"].rolling(20).mean()
+        df["volume_spike_ratio"] = df["volume"] / df["volume_ma20"].replace(0, 1)
+        df["ret_1d"] = df["close"].pct_change(fill_method=None)
+        df["volatility_20d"] = df["ret_1d"].rolling(20).std()
 
     # Panic conditions
     df["panic_selling"] = ((df["volume_spike_ratio"] > 2.0) & (df["ret_1d"] < -2 * df["volatility_20d"])).astype(int)
@@ -255,7 +254,9 @@ def detect_panic_selling(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def detect_support_tests(df: pd.DataFrame, tolerance: float = 0.02, lookback_window: int = 8) -> pd.DataFrame:
+def detect_support_tests(
+    df: pd.DataFrame, tolerance: float = 0.02, lookback_window: int = 8, copy: bool = True
+) -> pd.DataFrame:
     """
     Count how many times price has tested similar support levels.
     NO LOOKAHEAD BIAS - uses backward-looking local extrema.
@@ -266,11 +267,13 @@ def detect_support_tests(df: pd.DataFrame, tolerance: float = 0.02, lookback_win
         df: DataFrame with price data
         tolerance: Price similarity tolerance (default 2%)
         lookback_window: Window for local extrema detection (default 8)
+        copy: Whether to copy df before modifying (default True)
 
     Returns:
         DataFrame with new column: support_test_count
     """
-    df = df.copy()
+    if copy:
+        df = df.copy()
 
     # Detect local lows using backward-looking method
     if "LocalLow" not in df.columns:
@@ -297,7 +300,7 @@ def detect_support_tests(df: pd.DataFrame, tolerance: float = 0.02, lookback_win
     return df
 
 
-def detect_exhaustion_sequence(df: pd.DataFrame) -> pd.DataFrame:
+def detect_exhaustion_sequence(df: pd.DataFrame, copy: bool = True) -> pd.DataFrame:
     """
     Detect exhaustion in consecutive down days.
 
@@ -313,27 +316,25 @@ def detect_exhaustion_sequence(df: pd.DataFrame) -> pd.DataFrame:
         - selling_acceleration: change in daily return (negative=accelerating)
         - exhaustion_signal: many down days BUT decelerating
     """
-    df = df.copy()
+    if copy:
+        df = df.copy()
 
     if _has_stock_id(df):
-        grouped = df.groupby("stock_id")
-    else:
-        grouped = df.groupby(lambda x: 0)
+        g = df.groupby("stock_id")
+        df["ret_1d"] = g["close"].pct_change(fill_method=None)
 
-    df["ret_1d"] = grouped["close"].transform(lambda x: x.pct_change(fill_method=None))
-
-    # Count consecutive down days using numba (per stock)
-    if _has_stock_id(df):
+        # Count consecutive down days using numba (per stock)
         df["consecutive_down_days"] = 0
         for stock_id in df["stock_id"].unique():
             stock_mask = df["stock_id"] == stock_id
             returns = df.loc[stock_mask, "ret_1d"].values
             df.loc[stock_mask, "consecutive_down_days"] = count_consecutive_down_numba(returns)
-    else:
-        df["consecutive_down_days"] = count_consecutive_down_numba(df["ret_1d"].values)
 
-    # Selling acceleration/deceleration
-    df["ret_1d_prev"] = grouped["ret_1d"].shift(1)
+        df["ret_1d_prev"] = g["ret_1d"].shift(1)
+    else:
+        df["ret_1d"] = df["close"].pct_change(fill_method=None)
+        df["consecutive_down_days"] = count_consecutive_down_numba(df["ret_1d"].values)
+        df["ret_1d_prev"] = df["ret_1d"].shift(1)
     df["selling_acceleration"] = df["ret_1d"] - df["ret_1d_prev"]
 
     # Exhaustion: many down days BUT today's drop smaller than yesterday's
@@ -347,7 +348,9 @@ def detect_exhaustion_sequence(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def detect_hidden_divergence(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFrame:
+def detect_hidden_divergence(
+    df: pd.DataFrame, lookback_window: int = 8, copy: bool = True
+) -> pd.DataFrame:
     """
     Detect hidden bullish divergence.
     NO LOOKAHEAD BIAS - uses backward-looking local extrema.
@@ -362,11 +365,13 @@ def detect_hidden_divergence(df: pd.DataFrame, lookback_window: int = 8) -> pd.D
     Args:
         df: DataFrame with price data
         lookback_window: Window for local extrema detection (default 8)
+        copy: Whether to copy df before modifying (default True)
 
     Returns:
         DataFrame with new column: hidden_bullish_divergence
     """
-    df = df.copy()
+    if copy:
+        df = df.copy()
 
     if "rsi" not in df.columns:
         df["rsi"] = calculate_rsi(df, period=14)
@@ -398,7 +403,7 @@ def detect_hidden_divergence(df: pd.DataFrame, lookback_window: int = 8) -> pd.D
     return df
 
 
-def calculate_mean_reversion_signal(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_mean_reversion_signal(df: pd.DataFrame, copy: bool = True) -> pd.DataFrame:
     """
     Calculate mean reversion signals using statistical methods.
 
@@ -411,16 +416,16 @@ def calculate_mean_reversion_signal(df: pd.DataFrame) -> pd.DataFrame:
         - statistical_bottom: price >2 std devs below mean
         - at_zscore_extreme: at or near the lowest zscore in recent history
     """
-    df = df.copy()
+    if copy:
+        df = df.copy()
 
     if _has_stock_id(df):
-        grouped = df.groupby("stock_id")
+        g = df.groupby("stock_id")
+        df["price_ma252"] = g["close"].rolling(252, min_periods=100).mean().droplevel(0).sort_index()
+        df["price_std252"] = g["close"].rolling(252, min_periods=100).std().droplevel(0).sort_index()
     else:
-        grouped = df.groupby(lambda x: 0)
-
-    # Long-term (1 year) mean and std
-    df["price_ma252"] = grouped["close"].transform(lambda x: x.rolling(252, min_periods=100).mean())
-    df["price_std252"] = grouped["close"].transform(lambda x: x.rolling(252, min_periods=100).std())
+        df["price_ma252"] = df["close"].rolling(252, min_periods=100).mean()
+        df["price_std252"] = df["close"].rolling(252, min_periods=100).std()
 
     # Z-score: (current - mean) / std
     df["price_zscore"] = (df["close"] - df["price_ma252"]) / df["price_std252"].replace(0, 1)
@@ -429,7 +434,16 @@ def calculate_mean_reversion_signal(df: pd.DataFrame) -> pd.DataFrame:
     df["statistical_bottom"] = (df["price_zscore"] < -2.0).astype(int)
 
     # Is this the most extreme we've been recently?
-    df["min_zscore_252d"] = grouped["price_zscore"].transform(lambda x: x.rolling(252, min_periods=100).min())
+    if _has_stock_id(df):
+        df["min_zscore_252d"] = (
+            df.groupby("stock_id")["price_zscore"]
+            .rolling(252, min_periods=100)
+            .min()
+            .droplevel(0)
+            .sort_index()
+        )
+    else:
+        df["min_zscore_252d"] = df["price_zscore"].rolling(252, min_periods=100).min()
 
     # At or near the extreme
     df["at_zscore_extreme"] = (df["price_zscore"] <= df["min_zscore_252d"] + 0.2).astype(int)
@@ -437,7 +451,7 @@ def calculate_mean_reversion_signal(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def detect_bb_squeeze_breakdown(df: pd.DataFrame) -> pd.DataFrame:
+def detect_bb_squeeze_breakdown(df: pd.DataFrame, copy: bool = True) -> pd.DataFrame:
     """
     Detect Bollinger Band squeeze followed by breakdown.
 
@@ -450,12 +464,8 @@ def detect_bb_squeeze_breakdown(df: pd.DataFrame) -> pd.DataFrame:
         - below_lower_band: price below lower band
         - squeeze_breakdown: both conditions met
     """
-    df = df.copy()
-
-    if _has_stock_id(df):
-        grouped = df.groupby("stock_id")
-    else:
-        grouped = df.groupby(lambda x: 0)
+    if copy:
+        df = df.copy()
 
     # Calculate Bollinger Bands
     upper, middle, lower = calculate_bbands(df, period=20)
@@ -467,7 +477,16 @@ def detect_bb_squeeze_breakdown(df: pd.DataFrame) -> pd.DataFrame:
     df["bb_width"] = (upper - lower) / middle
 
     # Is width at 20-day low? (squeeze)
-    df["bb_width_min20"] = grouped["bb_width"].transform(lambda x: x.rolling(20, min_periods=10).min())
+    if _has_stock_id(df):
+        df["bb_width_min20"] = (
+            df.groupby("stock_id")["bb_width"]
+            .rolling(20, min_periods=10)
+            .min()
+            .droplevel(0)
+            .sort_index()
+        )
+    else:
+        df["bb_width_min20"] = df["bb_width"].rolling(20, min_periods=10).min()
 
     # Squeeze = current width within 5% of minimum
     df["bb_squeeze"] = (df["bb_width"] <= df["bb_width_min20"] * 1.05).astype(int)
@@ -481,7 +500,7 @@ def detect_bb_squeeze_breakdown(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFrame:
+def add_time_features(df: pd.DataFrame, lookback_window: int = 8, copy: bool = True) -> pd.DataFrame:
     """
     Add time-based features for temporal patterns.
     NO LOOKAHEAD BIAS - uses backward-looking local extrema.
@@ -494,6 +513,7 @@ def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFram
     Args:
         df: DataFrame with price data
         lookback_window: Window for local extrema detection (default 8)
+        copy: Whether to copy df before modifying (default True)
 
     Returns:
         DataFrame with new columns:
@@ -502,7 +522,8 @@ def add_time_features(df: pd.DataFrame, lookback_window: int = 8) -> pd.DataFram
         - days_since_last_low
         - is_month_end, is_quarter_end
     """
-    df = df.copy()
+    if copy:
+        df = df.copy()
 
     # Get date column (from 'date' column or index)
     date_series = _get_date_column(df)
@@ -587,15 +608,15 @@ def create_all_advanced_features(
     df = df.copy()
 
     steps = [
-        ("divergence", lambda d: detect_multi_indicator_divergence(d)),
-        ("vol_exhaust", lambda d: detect_volume_exhaustion(d)),
-        ("panic", lambda d: detect_panic_selling(d)),
-        ("support", lambda d: detect_support_tests(d, tolerance=support_tolerance)),
-        ("exhaust_seq", lambda d: detect_exhaustion_sequence(d)),
-        ("hidden_div", lambda d: detect_hidden_divergence(d)),
-        ("mean_rev", lambda d: calculate_mean_reversion_signal(d)),
-        ("bb_squeeze", lambda d: detect_bb_squeeze_breakdown(d)),
-        ("time", lambda d: add_time_features(d)),
+        ("divergence", lambda d: detect_multi_indicator_divergence(d, copy=False)),
+        ("vol_exhaust", lambda d: detect_volume_exhaustion(d, copy=False)),
+        ("panic", lambda d: detect_panic_selling(d, copy=False)),
+        ("support", lambda d: detect_support_tests(d, tolerance=support_tolerance, copy=False)),
+        ("exhaust_seq", lambda d: detect_exhaustion_sequence(d, copy=False)),
+        ("hidden_div", lambda d: detect_hidden_divergence(d, copy=False)),
+        ("mean_rev", lambda d: calculate_mean_reversion_signal(d, copy=False)),
+        ("bb_squeeze", lambda d: detect_bb_squeeze_breakdown(d, copy=False)),
+        ("time", lambda d: add_time_features(d, copy=False)),
     ]
 
     iterator = tqdm(steps, desc="    Advanced", disable=not verbose, ncols=80)

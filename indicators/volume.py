@@ -10,7 +10,7 @@ from numba import njit
 from indicators.base import BaseIndicator, ensure_numpy_array
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _calculate_obv_numba(close: np.ndarray, volume: np.ndarray) -> np.ndarray:
     """
     Numba-optimized OBV calculation.
@@ -71,7 +71,7 @@ class OBV(BaseIndicator):
         return obv_series, obv_ema
 
 
-@njit
+@njit(cache=True, fastmath=True)
 def _calculate_ad_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray) -> np.ndarray:
     """
     Numba-optimized Accumulation/Distribution calculation.

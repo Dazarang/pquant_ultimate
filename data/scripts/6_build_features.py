@@ -17,8 +17,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -140,23 +138,13 @@ def clean_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def clean_dataset(df: pd.DataFrame, feature_cols: list[str]) -> pd.DataFrame:
-    """Remove rows with NaN in feature columns per stock."""
-    print("\nCleaning NaN per stock...")
+    """Remove rows with NaN in feature columns."""
+    print("\nCleaning NaN from features...")
 
-    clean_dfs = []
-    total_dropped = 0
-    stocks = df["stock_id"].unique()
-
-    for stock_id in tqdm(stocks, desc="  Cleaning", ncols=80):
-        stock_df = df[df["stock_id"] == stock_id].copy()
-        before = len(stock_df)
-        stock_df = stock_df.dropna(subset=feature_cols)
-        dropped = before - len(stock_df)
-        total_dropped += dropped
-        clean_dfs.append(stock_df)
-
-    result = pd.concat(clean_dfs, ignore_index=True)
+    before = len(df)
+    result = df.dropna(subset=feature_cols).reset_index(drop=True)
     result = result.sort_values(["date", "stock_id"]).reset_index(drop=True)
+    total_dropped = before - len(result)
 
     print(f"  Dropped {total_dropped:,} rows total")
     return result
@@ -183,6 +171,27 @@ def validate_final(df: pd.DataFrame, feature_cols: list[str]) -> bool:
 
     print("  PASSED")
     return True
+
+
+def optimize_dtypes(df: pd.DataFrame, meta_cols: list[str] | None = None) -> pd.DataFrame:
+    """Downcast numeric types to reduce memory. float64->float32, binary->int8."""
+    if meta_cols is None:
+        meta_cols = ["date", "stock_id"]
+
+    feature_cols = [c for c in df.columns if c not in meta_cols]
+    before_mb = df.memory_usage(deep=True).sum() / 1024**2
+
+    for col in feature_cols:
+        if df[col].dtype == np.float64:
+            unique = df[col].dropna().unique()
+            if len(unique) <= 2 and set(unique).issubset({0.0, 1.0}):
+                df[col] = df[col].fillna(0).astype(np.int8)
+            else:
+                df[col] = df[col].astype(np.float32)
+
+    after_mb = df.memory_usage(deep=True).sum() / 1024**2
+    print(f"  Dtype optimization: {before_mb:.0f} MB -> {after_mb:.0f} MB ({(1 - after_mb / before_mb) * 100:.0f}% reduction)")
+    return df
 
 
 def save_dataset(df: pd.DataFrame, dataset_dir: Path, incremental: bool = False) -> None:
@@ -394,6 +403,8 @@ def build_incremental(dataset_dir: Path) -> bool:
     if len(combined) < before_dedup:
         print(f"  Removed {before_dedup - len(combined)} duplicates")
 
+    combined = optimize_dtypes(combined)
+
     save_dataset(combined, dataset_dir, incremental=True)
 
     total_time = time.time() - total_start
@@ -453,6 +464,8 @@ def build_full(dataset_dir: Path, test_stocks: int | None = None) -> None:
 
     if not validate_final(df, feature_cols):
         return
+
+    df = optimize_dtypes(df)
 
     if test_stocks:
         print("\n[TEST MODE] Not saving dataset.parquet")
