@@ -27,6 +27,8 @@ See `data/README.md` for usage.
 ### Lib (`lib/`)
 Shared utilities:
 - `features.py` - build_features() for ML dataset creation
+- `data.py` - load_dataset(), temporal_split(), scale()
+- `eval.py` - evaluate(), print_report(), plot_confusion(), backtest_quick()
 
 ### Pipeline (`pipeline/`) - DEPRECATED
 To be deleted in Phase 7. See `PLAN.md`.
@@ -43,6 +45,9 @@ See `indicators/README_INDICATORS.md` for usage.
 ---
 
 ## Journal Entries
+
+### 2026-03-27
+Phase 2 complete. Added lib/data.py (load_dataset, temporal_split, scale) and lib/eval.py (evaluate, print_report, plot_confusion, backtest_quick). PivotLow only -- PivotHigh dropped on load. Added scikit-learn dependency.
 
 ### 2026-01-15
 Added validate_incremental.py to sanity check incremental updates. Validates: overlapping data consistency, new data exists, column match, no data loss.
