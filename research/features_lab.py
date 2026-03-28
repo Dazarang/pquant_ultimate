@@ -22,9 +22,26 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
     # --- RESEARCHER: add features below ---
 
-    # Example (uncomment to use):
-    # df["rsi_macd_ratio"] = df["rsi_14"] / (df["macd"].abs() + 1e-8)
-    # new_features.append("rsi_macd_ratio")
+    g = df.groupby("stock_id")
+
+    # Consecutive down days: count of consecutive negative close-to-close returns (per stock)
+    def _consec_down(ret):
+        down = (ret < 0).astype(int)
+        streaks = down.groupby((down != down.shift()).cumsum()).cumsum()
+        return streaks * down
+
+    df["consecutive_down_days"] = g["ret_1d"].transform(_consec_down)
+    new_features.append("consecutive_down_days")
+
+    # Intraday recovery: close near daily high = buying pressure
+    df["intraday_recovery"] = (df["close"] - df["low"]) / (df["high"] - df["low"] + 1e-8)
+    new_features.append("intraday_recovery")
+
+    # Volume climax: volume relative to 20-day rolling max (per stock)
+    df["volume_climax"] = df["volume"] / g["volume"].transform(
+        lambda x: x.rolling(20, min_periods=5).max()
+    )
+    new_features.append("volume_climax")
 
     # --- END researcher section ---
 
