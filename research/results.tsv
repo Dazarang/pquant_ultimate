@@ -1,2 +1,2 @@
 iter	score	status	description
-0	-3.4604	keep	neutral baseline: LGBMClassifier all stocks all features threshold=0.5
+0	-4.5912	keep	baseline: XGBClassifier, all stocks, all features, threshold=0.5
