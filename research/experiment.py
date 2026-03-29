@@ -71,6 +71,7 @@ def build_model(y_train):
         n_estimators=400,
         max_depth=6,
         learning_rate=0.05,
+        reg_alpha=0.5,
         subsample=0.8,
         colsample_bytree=0.8,
         scale_pos_weight=neg / pos,
