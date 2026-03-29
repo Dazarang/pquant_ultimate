@@ -84,7 +84,7 @@ def build_model(y_train):
         n_estimators=800,
         max_depth=12,
         min_samples_leaf=40,
-        ccp_alpha=0.0001,
+        ccp_alpha=0.0003,
         class_weight="balanced",
         random_state=44,
         n_jobs=-1,
