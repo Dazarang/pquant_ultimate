@@ -242,3 +242,69 @@ Score: -0.3149 |         bootstrap=True,
 ### Iteration 31 -- REVERTED (-3.3051)
 
 Score: -3.2012 |     # Drawdown time structure: age and velocity of current drawdown episode     
+### Iteration 1 -- REVERTED (-1.0271)
+Score: -0.9232 | from research.model_wrappers import CatBoostWrapper  # noqa: E402      cb = CatB
+
+### Iteration 2 -- REVERTED (-4.3193)
+Score: -4.2154 |         max_depth=8, 
+
+### Iteration 3 -- GATE FAILED
+Reason: GATE VIOLATION: Experiment crashed (exit code 142).
+Change: from sklearn.ensemble import RandomForestClassifier, VotingClassifier  # noqa: E
+
+### Iteration 4 -- GATE FAILED
+Reason: 
+Change:         boosting_type="dart", 
+
+### Iteration 5 -- REVERTED (-0.8785)
+Score: -0.7746 |         learning_rate=0.03,         learning_rate=0.03, 
+
+### Iteration 6 -- IMPROVED (+0.3278)
+Score: 0.4317 |         reg_alpha=0.5, 
+Commit: 33844ec
+
+### Iteration 7 -- IMPROVED (+0.2063)
+Score: 0.6380 |         reg_alpha=0.5, 
+Commit: 31ef695
+
+### Iteration 8 -- REVERTED (-2.1732)
+Score: -1.5352 |         max_features=0.5, 
+
+### Iteration 9 -- REVERTED (-1.2028)
+Score: -0.5648 |         max_depth=18,         min_samples_leaf=50, 
+
+### Iteration 10 -- REVERTED (-1.8330)
+Score: -1.1950 |         reg_alpha=1.0,         reg_alpha=1.0, 
+
+### Iteration 11 -- REVERTED (-0.9762)
+Score: -0.3382 |     # Momentum deceleration: 5d return change (this week vs last week)     # Pos
+
+### Iteration 12 -- REVERTED (-2.4597)
+Score: -1.8217 | THRESHOLD = 0.86 
+
+### Iteration 13 -- REVERTED (-0.4931)
+Score: 0.1449 |         num_leaves=20, 
+
+### Iteration 14 -- REVERTED (-0.9795)
+Score: -0.3415 |         max_depth=5, 
+
+### Iteration 15 -- IMPROVED (+0.7303)
+Score: 1.3683 |     # Market regime: rolling 20d average of cross-sectional mean return     # No
+Commit: 65f07ce
+
+### Iteration 16 -- IMPROVED (+0.0194)
+Score: 1.3877 |     # Market breadth: fraction of stocks with positive returns (20d smoothed)   
+Commit: 999f346
+
+### Iteration 17 -- REVERTED (-1.4174)
+Score: -0.0297 |     # Market dispersion: cross-sectional std of daily returns (20d smoothed)    
+
+### Iteration 18 -- REVERTED (-1.6200)
+Score: -0.2323 |     # Relative strength vs market: per-stock excess return over market average  
+
+### Iteration 19 -- IMPROVED (+1.2214)
+Score: 2.6091 |         weights=[1, 1, 3], 
+Commit: c468e42
+
+### Iteration 20 -- REVERTED (-2.4793)
+Score: 0.1298 |         weights=[1, 1, 4], 
