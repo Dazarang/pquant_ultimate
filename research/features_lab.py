@@ -125,6 +125,15 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     ).cumsum()
     new_features.append("streak_depth")
 
+    # Market regime: rolling 20d average of cross-sectional mean return
+    # No per-stock feature captures market-wide direction; this fills that gap
+    # Bull dips recover fast (higher excess_return); bear "bottoms" are knives
+    daily_mkt_ret = df.groupby("date")["ret_1d"].transform("mean")
+    df["market_trend_20d"] = daily_mkt_ret.groupby(df["stock_id"]).transform(
+        lambda x: x.rolling(20, min_periods=5).mean()
+    )
+    new_features.append("market_trend_20d")
+
     # --- END researcher section ---
 
     return df, new_features
