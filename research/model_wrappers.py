@@ -4,15 +4,15 @@ All wrappers expose sklearn-compatible .fit(X, y) and .predict_proba(X) methods.
 Import and use in experiment.py's build_model().
 
 This file is IMMUTABLE -- do not edit during research.
+
+NOTE: torch is lazy-loaded — importing CatBoostWrapper does NOT trigger a torch
+import, avoiding the OpenMP thread-pool conflict between torch and XGB/LGBM.
 """
 
 import numpy as np
-import torch
 from catboost import CatBoostClassifier
 from scipy.special import expit
 from sklearn.base import BaseEstimator, ClassifierMixin
-from torch import nn
-from torch.utils.data import DataLoader, TensorDataset
 
 
 # ---------------------------------------------------------------------------
@@ -70,13 +70,15 @@ class CatBoostWrapper(ClassifierMixin, BaseEstimator):
 
 
 # ---------------------------------------------------------------------------
-# Shared base (PyTorch)
+# PyTorch wrappers (lazy-loaded to avoid OpenMP conflicts)
 # ---------------------------------------------------------------------------
 
 
 class _BaseTorchClassifier:
 
     def __init__(self, module, epochs, lr, batch_size, pos_weight):
+        import torch
+
         self.module = module
         self.epochs = epochs
         self.lr = lr
@@ -85,6 +87,10 @@ class _BaseTorchClassifier:
         self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
     def _train(self, X_t, y_t):
+        import torch
+        from torch import nn
+        from torch.utils.data import DataLoader, TensorDataset
+
         self.module.to(self.device)
         self.module.train()
         loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
@@ -100,6 +106,8 @@ class _BaseTorchClassifier:
 
     def _batched_logits(self, X):
         """Run batched inference on numpy array, return flat logits."""
+        import torch
+
         self.module.eval()
         all_logits = []
         with torch.no_grad():
@@ -110,28 +118,6 @@ class _BaseTorchClassifier:
 
     def predict(self, X):
         return (self.predict_proba(X)[:, 1] > 0.5).astype(int)
-
-
-# ---------------------------------------------------------------------------
-# PyTorch MLP wrapper
-# ---------------------------------------------------------------------------
-
-
-class TorchMLP(nn.Module):
-    """Configurable MLP for tabular classification."""
-
-    def __init__(self, input_dim, hidden_dims=(128, 64), dropout=0.3):
-        super().__init__()
-        layers = []
-        prev = input_dim
-        for h in hidden_dims:
-            layers.extend([nn.Linear(prev, h), nn.ReLU(), nn.Dropout(dropout)])
-            prev = h
-        layers.append(nn.Linear(prev, 1))
-        self.net = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.net(x)
 
 
 class TorchClassifier(_BaseTorchClassifier):
@@ -152,6 +138,8 @@ class TorchClassifier(_BaseTorchClassifier):
         super().__init__(module, epochs, lr, batch_size, pos_weight)
 
     def fit(self, X, y):
+        import torch
+
         X_t = torch.tensor(X, dtype=torch.float32)
         y_t = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
         self._train(X_t, y_t)
@@ -161,24 +149,6 @@ class TorchClassifier(_BaseTorchClassifier):
         logits = self._batched_logits(X)
         proba_1 = expit(logits)
         return np.column_stack([1 - proba_1, proba_1])
-
-
-# ---------------------------------------------------------------------------
-# PyTorch LSTM wrapper
-# ---------------------------------------------------------------------------
-
-
-class LSTMNet(nn.Module):
-    """LSTM for sequential tabular data."""
-
-    def __init__(self, input_dim, hidden_dim=64, num_layers=2, dropout=0.3):
-        super().__init__()
-        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True, dropout=dropout)
-        self.head = nn.Linear(hidden_dim, 1)
-
-    def forward(self, x):
-        out, _ = self.lstm(x)
-        return self.head(out[:, -1, :])
 
 
 class SequenceClassifier(_BaseTorchClassifier):
@@ -234,6 +204,8 @@ class SequenceClassifier(_BaseTorchClassifier):
         return sequences, valid
 
     def fit(self, X, y, groups=None):
+        import torch
+
         X_seq, y_seq, _ = self._build_sequences(X, y, groups)
         X_t = torch.tensor(X_seq, dtype=torch.float32)
         y_t = torch.tensor(y_seq, dtype=torch.float32).unsqueeze(1)
@@ -249,3 +221,51 @@ class SequenceClassifier(_BaseTorchClassifier):
 
     def predict(self, X, groups=None):
         return (self.predict_proba(X, groups)[:, 1] > 0.5).astype(int)
+
+
+# ---------------------------------------------------------------------------
+# Lazy-loaded nn.Module subclasses (torch imported only when accessed)
+# ---------------------------------------------------------------------------
+
+
+def _build_torch_modules():
+    """Define TorchMLP and LSTMNet — called once on first access."""
+    from torch import nn
+
+    class TorchMLP(nn.Module):
+        """Configurable MLP for tabular classification."""
+
+        def __init__(self, input_dim, hidden_dims=(128, 64), dropout=0.3):
+            super().__init__()
+            layers = []
+            prev = input_dim
+            for h in hidden_dims:
+                layers.extend([nn.Linear(prev, h), nn.ReLU(), nn.Dropout(dropout)])
+                prev = h
+            layers.append(nn.Linear(prev, 1))
+            self.net = nn.Sequential(*layers)
+
+        def forward(self, x):
+            return self.net(x)
+
+    class LSTMNet(nn.Module):
+        """LSTM for sequential tabular data."""
+
+        def __init__(self, input_dim, hidden_dim=64, num_layers=2, dropout=0.3):
+            super().__init__()
+            self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True, dropout=dropout)
+            self.head = nn.Linear(hidden_dim, 1)
+
+        def forward(self, x):
+            out, _ = self.lstm(x)
+            return self.head(out[:, -1, :])
+
+    globals()["TorchMLP"] = TorchMLP
+    globals()["LSTMNet"] = LSTMNet
+
+
+def __getattr__(name):
+    if name in ("TorchMLP", "LSTMNet"):
+        _build_torch_modules()
+        return globals()[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

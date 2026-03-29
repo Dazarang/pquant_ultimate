@@ -10,13 +10,13 @@ Prints "COMPOSITE_SCORE=X.XX" as the last line for gate.sh to extract.
 import sys
 from pathlib import Path
 
-import numpy as np  # noqa: F401 -- available for researcher
-from lightgbm import LGBMClassifier
-from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier
-from xgboost import XGBClassifier
-
-# Ensure project root is on path
+# Ensure project root is on path (must precede all local imports)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import numpy as np  # noqa: F401,E402 -- available for researcher
+from lightgbm import LGBMClassifier  # noqa: E402
+from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier  # noqa: E402
+from xgboost import XGBClassifier  # noqa: E402
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
 from lib.eval import tiered_eval  # noqa: E402
