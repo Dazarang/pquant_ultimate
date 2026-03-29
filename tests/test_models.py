@@ -94,6 +94,71 @@ class TestCatBoost:
         _check_model(model, X_train, y_train, X_val, y_val)
 
 
+class TestCatBoostWrapper:
+    def test_pipeline(self, pipeline_data):
+        from research.model_wrappers import CatBoostWrapper
+
+        X_train, y_train, X_val, y_val, *_ = pipeline_data
+        neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
+        model = CatBoostWrapper(
+            iterations=50, depth=3, learning_rate=0.1,
+            scale_pos_weight=neg / pos,
+            verbose=0, random_seed=42,
+        )
+        _check_model(model, X_train, y_train, X_val, y_val)
+
+    def test_sklearn_clone(self, pipeline_data):
+        """Verify clone() works -- the exact failure from iter 1."""
+        from sklearn.base import clone
+
+        from research.model_wrappers import CatBoostWrapper
+
+        *_, y_val, _, _, _ = pipeline_data
+        neg, pos = (y_val == 0).sum(), (y_val == 1).sum()
+        original = CatBoostWrapper(
+            iterations=50, depth=3, scale_pos_weight=neg / pos, verbose=0,
+        )
+        cloned = clone(original)
+        assert cloned.get_params() == original.get_params()
+
+    def test_in_voting_classifier(self, pipeline_data):
+        """CatBoostWrapper inside VotingClassifier -- the crash scenario."""
+        from sklearn.ensemble import VotingClassifier
+        from xgboost import XGBClassifier
+
+        from research.model_wrappers import CatBoostWrapper
+
+        X_train, y_train, X_val, y_val, *_ = pipeline_data
+        neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
+        model = VotingClassifier(
+            estimators=[
+                ("xgb", XGBClassifier(n_estimators=30, max_depth=3, eval_metric="logloss", random_state=42, n_jobs=-1)),
+                ("cb", CatBoostWrapper(iterations=30, depth=3, scale_pos_weight=neg / pos, verbose=0, random_seed=43)),
+            ],
+            voting="soft",
+        )
+        _check_model(model, X_train, y_train, X_val, y_val)
+
+    def test_in_stacking_classifier(self, pipeline_data):
+        from sklearn.ensemble import StackingClassifier
+        from sklearn.linear_model import LogisticRegression
+        from xgboost import XGBClassifier
+
+        from research.model_wrappers import CatBoostWrapper
+
+        X_train, y_train, X_val, y_val, *_ = pipeline_data
+        neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
+        model = StackingClassifier(
+            estimators=[
+                ("xgb", XGBClassifier(n_estimators=30, max_depth=3, eval_metric="logloss", random_state=42, n_jobs=-1)),
+                ("cb", CatBoostWrapper(iterations=30, depth=3, scale_pos_weight=neg / pos, verbose=0, random_seed=43)),
+            ],
+            final_estimator=LogisticRegression(max_iter=500),
+            cv=3,
+        )
+        _check_model(model, X_train, y_train, X_val, y_val)
+
+
 # ---------------------------------------------------------------------------
 # Sklearn
 # ---------------------------------------------------------------------------

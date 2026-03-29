@@ -76,10 +76,11 @@ interaction  (3)  rsi*volume, drawdown*panic, rsi*volatility
 
 | Category | Available |
 |---|---|
-| Gradient boosting | `XGBClassifier`, `LGBMClassifier`, `CatBoostClassifier` |
+| Gradient boosting | `XGBClassifier`, `LGBMClassifier`, `CatBoostWrapper` (via `research/model_wrappers.py` -- use instead of raw `CatBoostClassifier` for sklearn ensemble compatibility) |
 | Sklearn | `RandomForestClassifier`, `ExtraTreesClassifier`, `GradientBoostingClassifier`, `AdaBoostClassifier`, `BaggingClassifier`, `MLPClassifier`, `LogisticRegression`, `SGDClassifier`, `SVC`, `KNeighborsClassifier` |
 | Ensembling | `StackingClassifier`, `VotingClassifier` |
 | Neural (PyTorch) | `TorchClassifier`, `TorchMLP`, `SequenceClassifier`, `LSTMNet` via `research/model_wrappers.py` |
+| Wrappers | `CatBoostWrapper`, `TorchClassifier`, `SequenceClassifier` -- all in `research/model_wrappers.py`, all sklearn clone()-safe |
 | Neural (MLX) | `mlx.core`, `mlx.nn` -- build custom, wrap with fit/predict_proba interface |
 
 ### Class imbalance

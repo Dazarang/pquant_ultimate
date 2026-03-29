@@ -8,13 +8,69 @@ This file is IMMUTABLE -- do not edit during research.
 
 import numpy as np
 import torch
+from catboost import CatBoostClassifier
 from scipy.special import expit
+from sklearn.base import BaseEstimator, ClassifierMixin
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 
 # ---------------------------------------------------------------------------
-# Shared base
+# CatBoost (sklearn clone()-compatible)
+# ---------------------------------------------------------------------------
+
+
+class CatBoostWrapper(ClassifierMixin, BaseEstimator):
+    """Sklearn-compatible wrapper for CatBoostClassifier.
+
+    CatBoost's constructor mutates certain params (e.g. scale_pos_weight),
+    which breaks sklearn.base.clone() used by VotingClassifier/StackingClassifier.
+    This wrapper stores params cleanly and delegates to a fresh CatBoostClassifier
+    at fit() time.
+
+    Usage in experiment.py:
+        from research.model_wrappers import CatBoostWrapper
+
+        def build_model(y_train):
+            neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
+            cb = CatBoostWrapper(
+                iterations=400, depth=6, learning_rate=0.05,
+                scale_pos_weight=neg / pos, verbose=0, random_seed=43,
+            )
+            ...  # use in VotingClassifier, StackingClassifier, or standalone
+    """
+
+    def __init__(self, **kwargs):
+        # Store every kwarg as an instance attribute so sklearn's
+        # get_params()/set_params()/clone() work correctly.
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        self._cb_kwargs = kwargs
+
+    def get_params(self, deep=True):
+        return {k: getattr(self, k) for k in self._cb_kwargs}
+
+    def set_params(self, **params):
+        for key, value in params.items():
+            setattr(self, key, value)
+            self._cb_kwargs[key] = value
+        return self
+
+    def fit(self, X, y):
+        self._model = CatBoostClassifier(**self._cb_kwargs)
+        self._model.fit(X, y)
+        self.classes_ = self._model.classes_
+        return self
+
+    def predict(self, X):
+        return self._model.predict(X).astype(int).ravel()
+
+    def predict_proba(self, X):
+        return self._model.predict_proba(X)
+
+
+# ---------------------------------------------------------------------------
+# Shared base (PyTorch)
 # ---------------------------------------------------------------------------
 
 
