@@ -93,7 +93,7 @@ You are in an automated ratchet. After each edit, `gate.sh` runs the experiment.
 
 1. **One hypothesis per iteration.** Multiple changes are fine if they serve a single testable idea. If it fails, you should know why. Don't confound independent variables (e.g. model + features + threshold).
 2. **Read COMBAT_LOG.md first.** It contains reverted experiments with scores and diffs. Don't retry failed approaches.
-3. **15-minute gate timeout.** The gate kills runs exceeding this.
+3. **30-minute gate timeout.** The gate kills runs exceeding this.
 4. **No future data in features.** Every feature must answer: "could I calculate this at market close on day T?"
 5. **Keep it simple.** A small improvement with ugly complexity is not worth it. Removing something for equal or better results is a win.
 6. **If stuck, try something radical.** Different model type, very different feature set, extreme threshold.

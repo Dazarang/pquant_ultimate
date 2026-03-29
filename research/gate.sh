@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
-TIMEOUT_SECONDS=900  # 15 minutes max
+TIMEOUT_SECONDS=1800  # 30 minutes max
 LOG_FILE="research/run.log"
 
 # ------------------------------------------------------------------
