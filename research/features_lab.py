@@ -134,6 +134,16 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     )
     new_features.append("market_trend_20d")
 
+    # Market breadth: fraction of stocks with positive returns (20d smoothed)
+    # Complements market_trend_20d: breadth = participation width, trend = magnitude
+    # Breadth leads trend: narrows before average returns turn negative
+    # Wide breadth + dip = healthy pullback; narrow breadth + dip = systemic knife
+    daily_up_frac = df.groupby("date")["ret_1d"].transform(lambda x: (x > 0).mean())
+    df["market_breadth_20d"] = daily_up_frac.groupby(df["stock_id"]).transform(
+        lambda x: x.rolling(20, min_periods=5).mean()
+    )
+    new_features.append("market_breadth_20d")
+
     # --- END researcher section ---
 
     return df, new_features
