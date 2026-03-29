@@ -92,7 +92,7 @@ def build_model(y_train):
     model = VotingClassifier(
         estimators=[("xgb", xgb), ("lgbm", lgbm), ("et", et)],
         voting="soft",
-        weights=[1, 1, 2],
+        weights=[1, 1, 3],
     )
     return model
 
