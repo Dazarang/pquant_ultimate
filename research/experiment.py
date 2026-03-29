@@ -57,6 +57,7 @@ def build_model(y_train):
         learning_rate=0.05,
         min_child_weight=3,
         gamma=0.05,
+        reg_alpha=0.5,
         subsample=0.8,
         colsample_bytree=0.8,
         scale_pos_weight=neg / pos,
