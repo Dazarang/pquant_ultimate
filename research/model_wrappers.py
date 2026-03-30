@@ -320,6 +320,8 @@ class FocalTorchClassifier(_BaseTorchClassifier):
         import torch
         from torch.utils.data import DataLoader, TensorDataset
 
+        if len(X) == 0:
+            return self
         self.module.to(self.device)
         X_t = torch.tensor(X, dtype=torch.float32)
         y_t = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
