@@ -15,11 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: F401,E402 -- available for researcher
 from lightgbm import LGBMClassifier  # noqa: E402
-from sklearn.ensemble import ExtraTreesClassifier, StackingClassifier  # noqa: E402
+from sklearn.ensemble import StackingClassifier  # noqa: E402
 from sklearn.linear_model import LogisticRegression  # noqa: E402
 from xgboost import XGBClassifier  # noqa: E402
 
-from research.model_wrappers import CatBoostWrapper  # noqa: E402
+from research.model_wrappers import CatBoostWrapper, RankingXGBClassifier  # noqa: E402
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
 from lib.eval import tiered_eval  # noqa: E402
@@ -97,19 +97,24 @@ def build_model(y_train):
         verbose=0,
     )
 
-    # Bagging-based diversity: random splits + bootstrap = uncorrelated errors
-    extra = ExtraTreesClassifier(
+    # Ranking-optimized: directly optimizes rank quality (what the eval metric measures)
+    # Replaces ExtraTrees — adds objective diversity (3 classification + 1 ranking)
+    rank = RankingXGBClassifier(
+        objective="rank:ndcg",
+        group_size=200,
         n_estimators=500,
-        max_depth=20,
-        min_samples_leaf=50,
-        max_features="sqrt",
-        class_weight={0: 1, 1: spw},
-        random_state=45,
-        n_jobs=-1,
+        max_depth=5,
+        learning_rate=0.025,
+        subsample=0.75,
+        colsample_bytree=0.65,
+        reg_alpha=0.5,
+        reg_lambda=1.0,
+        seed=45,
+        verbosity=0,
     )
 
     model = StackingClassifier(
-        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra)],
+        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("rank", rank)],
         final_estimator=LogisticRegression(C=1.0, max_iter=1000),
         cv=2,
         n_jobs=1,
