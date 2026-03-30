@@ -452,9 +452,9 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
                 actions = dist.sample()
 
                 if rb is not None:
-                    # Custom rewards: action=buy gets the signed reward,
-                    # action=skip gets 0. Preserves reward sign so negative
-                    # returns penalize buying and reward skipping.
+                    # Custom rewards: action=buy gets rb, action=skip gets -rb.
+                    # Opportunity cost: positive rb reinforces buy/penalizes skip,
+                    # negative rb penalizes buy/reinforces skip.
                     batch_rewards = torch.where(actions == 1, rb, -rb)
                 else:
                     # Default: asymmetric binary reward from labels
