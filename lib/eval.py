@@ -160,7 +160,12 @@ def _signal_analytics(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dic
 
     Returns None if no valid signals exist for the given horizon.
     """
-    buy_mask = pd.Series(y_pred == 1, index=df.index)
+    signal_weights = np.asarray(y_pred, dtype=float)
+    if len(signal_weights) != len(df):
+        raise ValueError("signal weights must align 1:1 with df rows")
+
+    weight_series = pd.Series(signal_weights, index=df.index)
+    buy_mask = weight_series > 0
 
     entry = df.groupby("stock_id")["open"].shift(-1)
     exit_ = df.groupby("stock_id")["open"].shift(-(horizon + 1))
@@ -190,6 +195,7 @@ def _signal_analytics(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dic
         "mae": mae.loc[valid_idx],
         "market": market.loc[valid_idx],
         "dates": df.loc[valid_idx, "date"],
+        "weights": weight_series.loc[valid_idx],
     }
 
 
@@ -218,6 +224,7 @@ def forward_returns(df: pd.DataFrame, y_pred: np.ndarray, horizons: list[int] | 
         mae = analytics["mae"]
         market = analytics["market"]
         dates = analytics["dates"]
+        weights = analytics["weights"]
         excess = fwd - market
 
         wins = fwd[fwd > 0]
@@ -233,7 +240,7 @@ def forward_returns(df: pd.DataFrame, y_pred: np.ndarray, horizons: list[int] | 
         results[f"mae_{h}d"] = mae.mean()
         results[f"worst_mae_{h}d"] = mae.min()
         results[f"n_signals_{h}d"] = len(fwd)
-        results[f"effective_n_{h}d"] = dates.nunique()
+        results[f"effective_n_{h}d"] = _effective_signal_days(dates, weights)
 
     _print_forward_returns(results, horizons)
     return results
@@ -275,6 +282,7 @@ def composite_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) -> 
     market = analytics["market"]
     mae = analytics["mae"]
     dates = analytics["dates"]
+    weights = analytics["weights"]
 
     excess_return = (fwd - market).mean()
     mean_return = fwd.mean()
@@ -283,7 +291,7 @@ def composite_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) -> 
     worst_decile = fwd.quantile(0.1)
     knife_rate = (fwd < -0.05).mean()
     mean_mae = mae.mean()
-    effective_n = dates.nunique()
+    effective_n = _effective_signal_days(dates, weights)
 
     score = (
         0.30 * excess_return * 100
@@ -299,7 +307,7 @@ def composite_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) -> 
     print(f"  Worst 10%:     {worst_decile:+.2%}")
     print(f"  Knife rate:    {knife_rate:.1%} (>{5}% loss)")
     print(f"  Mean MAE:      {mean_mae:+.2%}")
-    print(f"  Signals:       {len(fwd)} (effective: {effective_n})")
+    print(f"  Signals:       {len(fwd)} (effective: {_format_count(effective_n)})")
 
     return score
 
@@ -360,13 +368,99 @@ def regime_breakdown(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) ->
 BUDGET_FRACS = (0.0005, 0.001, 0.0025, 0.005, 0.01, 0.02)
 
 
+def _budget_signal_count(n_rows: int, frac: float) -> int:
+    """Return the target number of rows for a budget fraction."""
+    if n_rows <= 0:
+        return 0
+    return max(1, int(n_rows * frac))
+
+
+def _select_top_frac_weights(y_pred_proba: np.ndarray, frac: float) -> np.ndarray:
+    """Return exact-budget weights, splitting cutoff ties evenly."""
+    y_pred_proba = np.asarray(y_pred_proba, dtype=float)
+    n_rows = len(y_pred_proba)
+    if n_rows == 0:
+        return np.zeros(0, dtype=float)
+
+    k = _budget_signal_count(n_rows, frac)
+    if k >= n_rows:
+        return np.ones(n_rows, dtype=float)
+
+    cutoff = np.partition(y_pred_proba, n_rows - k)[n_rows - k]
+    above = y_pred_proba > cutoff
+    tied = y_pred_proba == cutoff
+
+    weights = above.astype(float)
+    remaining = k - int(above.sum())
+    if remaining <= 0:
+        return weights
+
+    tie_count = int(tied.sum())
+    if tie_count == 0:
+        return weights
+
+    weights[tied] = remaining / tie_count
+    return weights
+
+
 def select_top_frac(y_pred_proba: np.ndarray, frac: float) -> np.ndarray:
-    """Select top fraction of predictions as signals. Returns binary array."""
-    k = max(1, int(len(y_pred_proba) * frac))
-    indices = np.argsort(-y_pred_proba)[:k]
-    y_pred = np.zeros(len(y_pred_proba), dtype=int)
-    y_pred[indices] = 1
-    return y_pred
+    """Select top fraction of predictions as binary signals.
+
+    If probabilities tie at the cutoff, all tied rows are included rather than
+    picking an arbitrary subset. The composite scorer uses fractional weights
+    internally to preserve the exact budget mass.
+    """
+    weights = _select_top_frac_weights(y_pred_proba, frac)
+    return (weights > 0).astype(int)
+
+
+def _weighted_mean(values: pd.Series | np.ndarray, weights: pd.Series | np.ndarray) -> float:
+    """Compute a weighted mean for aligned values and weights."""
+    return float(np.average(np.asarray(values, dtype=float), weights=np.asarray(weights, dtype=float)))
+
+
+def _weighted_quantile(values: pd.Series | np.ndarray, weights: pd.Series | np.ndarray, q: float) -> float:
+    """Compute a weighted quantile for aligned values and weights."""
+    values_arr = np.asarray(values, dtype=float)
+    weights_arr = np.asarray(weights, dtype=float)
+
+    order = np.argsort(values_arr)
+    sorted_values = values_arr[order]
+    sorted_weights = weights_arr[order]
+    cdf = np.cumsum(sorted_weights) / sorted_weights.sum()
+    idx = min(np.searchsorted(cdf, q, side="left"), len(sorted_values) - 1)
+    return float(sorted_values[idx])
+
+
+def _effective_signal_days(dates: pd.Series, weights: pd.Series | np.ndarray) -> float:
+    """Approximate independent bet-days, allowing fractional cutoff ties."""
+    weight_series = pd.Series(np.asarray(weights, dtype=float), index=dates.index)
+    per_date = weight_series.groupby(dates).sum()
+    return float(np.minimum(per_date.to_numpy(), 1.0).sum())
+
+
+def _format_budget_label(frac: float) -> str:
+    """Format a budget fraction as a percentage label."""
+    return f"{frac * 100:.2f}%"
+
+
+def _format_count(value: float) -> str:
+    """Format counts cleanly while preserving fractional values."""
+    rounded = round(value)
+    if abs(value - rounded) < 1e-9:
+        return str(int(rounded))
+    return f"{value:.2f}"
+
+
+def forward_open_return(stock_df: pd.DataFrame, signal_date, horizon: int) -> float | None:
+    """Return next-open to horizon-open return, or None if the full window is missing."""
+    future_opens = stock_df.loc[stock_df["date"] > signal_date, "open"].head(horizon + 1)
+    if len(future_opens) < horizon + 1:
+        return None
+
+    entry = future_opens.iloc[0]
+    exit_ = future_opens.iloc[horizon]
+    return float((exit_ - entry) / entry)
 
 
 def _cell_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | None:
@@ -379,13 +473,14 @@ def _cell_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | No
     market = analytics["market"]
     mae = analytics["mae"]
     dates = analytics["dates"]
+    weights = analytics["weights"]
 
-    effective_n = dates.nunique()
-    excess = (fwd - market).mean()
-    win_rate = (fwd > 0).mean()
-    worst_decile = fwd.quantile(0.1)
-    knife_rate = (fwd < -0.05).mean()
-    mean_mae = mae.mean()
+    effective_n = _effective_signal_days(dates, weights)
+    excess = _weighted_mean(fwd - market, weights)
+    win_rate = _weighted_mean(fwd > 0, weights)
+    worst_decile = _weighted_quantile(fwd, weights, 0.1)
+    knife_rate = _weighted_mean(fwd < -0.05, weights)
+    mean_mae = _weighted_mean(mae, weights)
 
     raw = (
         0.50 * excess * 100
@@ -399,7 +494,10 @@ def _cell_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | No
 
     return {
         "raw": raw, "weighted": w * raw, "w": w,
-        "n_signals": len(fwd), "effective_n": effective_n,
+        "n_signals": float(weights.sum()),
+        "n_rows": int((weights > 0).sum()),
+        "tied_rows": int(((weights > 0) & (weights < 1)).sum()),
+        "effective_n": effective_n,
         "excess": excess, "win_rate": win_rate,
         "worst_decile": worst_decile, "knife_rate": knife_rate,
         "mean_mae": mean_mae,
@@ -422,17 +520,24 @@ def multi_budget_composite(
     details = {}
 
     for q in budgets:
-        y_pred = select_top_frac(y_pred_proba, q)
-        label = f"{q * 100:.2f}%"
-        details[label] = {"n_signals": int(y_pred.sum()), "cells": {}}
+        signal_weights = _select_top_frac_weights(y_pred_proba, q)
+        budget = float(q)
+        details[budget] = {
+            "budget": budget,
+            "label": _format_budget_label(q),
+            "signal_mass": float(signal_weights.sum()),
+            "n_rows": int((signal_weights > 0).sum()),
+            "tied_rows": int(((signal_weights > 0) & (signal_weights < 1)).sum()),
+            "cells": {},
+        }
 
         for h in horizons:
-            cell = _cell_score(df, y_pred, h)
+            cell = _cell_score(df, signal_weights, h)
             if cell is None:
                 all_weighted.append(0.0)  # missing cell = neutral, prevents gaming
                 continue
             all_weighted.append(cell["weighted"])
-            details[label]["cells"][h] = cell
+            details[budget]["cells"][h] = cell
 
     score = np.mean(all_weighted) if all_weighted else float("-inf")
     return score, details
@@ -441,18 +546,21 @@ def multi_budget_composite(
 def _print_multi_budget(details: dict, horizons: tuple[int, ...], score: float) -> None:
     """Print multi-budget evaluation as a compact table."""
     h_str = "  ".join(f"{h}d W*U" for h in horizons)
-    print(f"\n  {'Budget':>8} {'Sig':>6} | {h_str}")
-    print("  " + "-" * (18 + 9 * len(horizons)))
+    print(f"\n  {'Budget':>8} {'Mass':>6} {'Rows':>6} | {h_str}")
+    print("  " + "-" * (25 + 9 * len(horizons)))
 
-    for label, info in details.items():
+    for info in details.values():
         cells = info["cells"]
         vals = []
         for h in horizons:
             cell = cells.get(h)
             vals.append(f"{cell['weighted']:>+7.2f}" if cell else f"{'n/a':>7}")
-        print(f"  {label:>8} {info['n_signals']:>6} | {'  '.join(vals)}")
+        print(
+            f"  {info['label']:>8} {_format_count(info['signal_mass']):>6} "
+            f"{info['n_rows']:>6} | {'  '.join(vals)}"
+        )
 
-    ref = details.get("0.25%", {}).get("cells", {}).get(10)
+    ref = details.get(0.0025, {}).get("cells", {}).get(10)
     if ref:
         print(f"\n  Detail (0.25%, 10d):")
         print(
@@ -460,11 +568,14 @@ def _print_multi_budget(details: dict, horizons: tuple[int, ...], score: float) 
             f"Win: {ref['win_rate']:.1%}  "
             f"Knife: {ref['knife_rate']:.1%}  "
             f"MAE: {ref['mean_mae']:+.2%}  "
-            f"Eff.N: {ref['effective_n']}  "
+            f"Eff.N: {_format_count(ref['effective_n'])}  "
             f"W: {ref['w']:.2f}"
         )
 
-    n_cells = sum(len(info["cells"]) for info in details.values())
+    if any(info["tied_rows"] > 0 for info in details.values()):
+        print("\n  Note: cutoff ties are scored with fractional weights; Rows can exceed Mass.")
+
+    n_cells = len(details) * len(horizons)
     print(f"\n  Composite Score: {score:.4f} (mean of {n_cells} cells)")
 
 

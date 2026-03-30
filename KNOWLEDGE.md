@@ -110,6 +110,67 @@ All features are backward-looking (no future data). Features are defined in `lib
 
 Autoresearch finds the architecture, Optuna squeezes it. Sequential, not parallel.
 
+## How the Threshold-Free System Works (End to End)
+
+Research and deployment are deliberately separated. Research finds the best **ranker** (model that puts profitable bottoms at the top of its probability list). Deployment finds the best **decision rule** for that ranker (how many signals to trade, position sizing, stops).
+
+### Concrete example
+
+**During research** -- the agent improves the model. Suppose after 50 iterations it finds an ensemble that scores +2.5 on the multi-budget composite. The model outputs probabilities like:
+
+```
+Row 1:  proba=0.91  (true bottom, +8% 10d return)
+Row 2:  proba=0.87  (true bottom, +5% 10d return)
+Row 3:  proba=0.85  (NOT a bottom, -3% 10d return)
+Row 4:  proba=0.72  (true bottom, +2% 10d return)
+...
+Row 300K: proba=0.01  (NOT a bottom)
+```
+
+The multi-budget eval scores this model at 6 budget levels:
+- Top 0.05% (150 signals): mostly true bottoms, high excess return
+- Top 0.25% (750 signals): still good, some noise
+- Top 2% (6000 signals): diluted, weaker edge
+
+The model's composite score (+2.5) tells us: "this model ranks profitable bottoms well across a range of signal volumes." There is no threshold -- we just measured how good the ranking is.
+
+**After research -- choosing how to trade it:**
+
+The model is frozen. Now on the validation set, you answer: "at what probability cutoff do I get the best risk-adjusted trades?"
+
+```python
+# Option A: fixed budget -- "buy top 3 signals per day"
+y_pred = select_top_frac(y_proba, 0.0025)
+
+# Option B: probability threshold -- find the cutoff that maximizes Sharpe
+for threshold in np.arange(0.3, 0.9, 0.01):
+    y_pred = (y_proba > threshold).astype(int)
+    sharpe = compute_sharpe(val, y_pred)  # backtest this threshold
+
+# Option C: Optuna sweeps threshold + stop_loss + position_size jointly
+```
+
+If Option B finds that threshold=0.65 maximizes Sharpe on the validation set, you freeze that and test on the held-out test set (2024+). If it holds, that becomes your production threshold.
+
+**The key principle:** the research agent never sees a threshold, so it can't game it. It only optimizes "is my ranking good?" The deployment threshold is derived afterward from the winning model's probability distribution.
+
+### What makes a "good" model
+
+| Composite Score | Meaning | Next step |
+|-----------------|---------|-----------|
+| < -2 | No useful ranking skill | Keep researching |
+| -2 to 0 | Some ranking ability but path risk dominates | Research or feature engineering |
+| 0 to +2 | Decent ranker, worth validating | Run test_and_plot.py, check test set |
+| +2 to +4 | Good ranker, profitable at multiple budgets | Validate, then tune deployment with Optuna |
+| +4 to +8 | Excellent (close to oracle=8.4) | Validate carefully for overfitting |
+
+### After research: concrete steps
+
+1. **Validate**: `uv run python research/test_and_plot.py` -- evaluate on test set (2024+), run benchmark_random_entry (p < 0.05?), visually inspect signal plots
+2. **Tune deployment**: sweep threshold / budget / stop-loss on validation set to find the best trading rule for this specific model. Use Optuna or grid search.
+3. **Freeze and test**: apply the frozen deployment config to the test set. This is the final out-of-sample check.
+4. **Productionize**: hardcode model config + deployment threshold into `training/train.py` + `prediction/predict.py`
+
 ## Optuna + Scoring System
 
 Two nested optimization loops, model-agnostic (any `.fit()` + `.predict_proba()` model):

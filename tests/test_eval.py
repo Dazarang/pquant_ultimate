@@ -6,11 +6,13 @@ import pytest
 
 from lib.data import LABEL_COL, load_dataset, scale, temporal_split
 from lib.eval import (
+    _select_top_frac_weights,
     _cell_score,
     backtest_quick,
     benchmark_random_entry,
     composite_score,
     evaluate,
+    forward_open_return,
     forward_returns,
     multi_budget_composite,
     plot_confusion,
@@ -312,6 +314,33 @@ class TestBenchmarkRandomEntry:
 
 
 # ---------------------------------------------------------------------------
+# Shared forward-return helper
+# ---------------------------------------------------------------------------
+
+
+class TestForwardOpenReturn:
+    def test_requires_full_forward_window(self):
+        stock = pd.DataFrame({
+            "date": pd.bdate_range("2024-01-01", periods=11),
+            "open": np.arange(100, 111),
+        })
+        signal_date = stock.iloc[-2]["date"]
+
+        assert forward_open_return(stock, signal_date, horizon=10) is None
+
+    def test_matches_next_open_to_horizon_open(self):
+        stock = pd.DataFrame({
+            "date": pd.bdate_range("2024-01-01", periods=12),
+            "open": np.arange(100, 112),
+        })
+        signal_date = stock.iloc[0]["date"]
+
+        ret = forward_open_return(stock, signal_date, horizon=10)
+
+        assert ret == pytest.approx((111 - 101) / 101)
+
+
+# ---------------------------------------------------------------------------
 # select_top_frac edge cases
 # ---------------------------------------------------------------------------
 
@@ -330,7 +359,7 @@ class TestSelectTopFrac:
     def test_identical_probabilities(self):
         proba = np.full(50, 0.5)
         y = select_top_frac(proba, 0.1)
-        assert y.sum() == max(1, int(50 * 0.1))
+        assert y.sum() == len(proba)
 
     def test_correct_count(self):
         proba = np.random.rand(1000)
@@ -343,6 +372,28 @@ class TestSelectTopFrac:
         y = select_top_frac(proba, 0.4)  # top 2
         assert y[1] == 1  # 0.9
         assert y[3] == 1  # 0.8
+
+    def test_cutoff_ties_include_all_tied_rows(self):
+        proba = np.array([0.9, 0.8, 0.8, 0.1])
+        y = select_top_frac(proba, 0.5)
+        assert y.tolist() == [1, 1, 1, 0]
+
+    def test_weighted_selection_is_order_invariant_across_ties(self):
+        proba = np.array([0.9, 0.8, 0.8, 0.1])
+        weights = _select_top_frac_weights(proba, 0.5)
+
+        perm = np.array([0, 2, 1, 3])
+        permuted = _select_top_frac_weights(proba[perm], 0.5)
+        mapped_back = np.zeros_like(permuted)
+        mapped_back[perm] = permuted
+
+        assert mapped_back.tolist() == pytest.approx(weights.tolist())
+
+    def test_weighted_selection_preserves_exact_budget_mass(self):
+        proba = np.full(50, 0.5)
+        weights = _select_top_frac_weights(proba, 0.1)
+        assert weights.sum() == pytest.approx(5.0)
+        assert np.unique(weights).tolist() == pytest.approx([0.1])
 
 
 # ---------------------------------------------------------------------------
@@ -463,6 +514,26 @@ class TestMultiBudgetComposite:
         s1, _ = multi_budget_composite(val, y_proba)
         s2, _ = multi_budget_composite(val, y_proba)
         assert s1 == s2
+
+    def test_budget_details_keep_nearby_custom_budgets_separate(self):
+        n_rows = 30000
+        df = pd.DataFrame({
+            "date": pd.bdate_range("2020-01-01", periods=n_rows),
+            "stock_id": "X",
+            "open": np.linspace(100, 200, n_rows),
+            "high": np.linspace(101, 201, n_rows),
+            "low": np.linspace(99, 199, n_rows),
+            "close": np.linspace(100, 200, n_rows),
+        })
+        proba = np.linspace(1.0, 0.0, n_rows)
+
+        _, details = multi_budget_composite(df, proba, budgets=(0.00100, 0.00104), horizons=(10,))
+
+        assert list(details) == [0.001, 0.00104]
+        assert details[0.001]["signal_mass"] == pytest.approx(30.0)
+        assert details[0.00104]["signal_mass"] == pytest.approx(31.0)
+        assert details[0.001]["label"] == "0.10%"
+        assert details[0.00104]["label"] == "0.10%"
 
 
 # ---------------------------------------------------------------------------

@@ -1,2 +1,2 @@
 iter	score	status	description
-0	-2.4874	keep	baseline: XGBClassifier, all stocks, all features, multi-budget eval
+0	-2.4916	keep	baseline: XGBClassifier, all stocks, all features, multi-budget eval (with tie-weight fix)

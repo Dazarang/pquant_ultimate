@@ -20,6 +20,7 @@ from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_spl
 from lib.eval import (
     backtest_quick,
     benchmark_random_entry,
+    forward_open_return,
     select_top_frac,
     tiered_eval,
 )
@@ -154,13 +155,9 @@ def plot_signals(test_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
 
         # Annotate forward 10d return per signal
         for _, row in signals.iterrows():
-            future = stock[stock["date"] > row["date"]].head(11)
-            if len(future) < 2:
+            ret = forward_open_return(stock, row["date"], horizon=10)
+            if ret is None:
                 continue
-            entry_price = future.iloc[0]["open"]
-            exit_idx = min(10, len(future) - 1)
-            exit_price = future.iloc[exit_idx]["open"]
-            ret = (exit_price - entry_price) / entry_price
             color = "#2e7d32" if ret > 0 else "#c62828"
             ax.annotate(
                 f"{ret:+.0%}", (row["date"], row["close"]),
@@ -197,15 +194,16 @@ def plot_returns_distribution(test_df, y_proba, budget=VIZ_BUDGET):
     if len(signals) == 0:
         return
 
+    stocks_by_id = {
+        stock_id: stock.sort_values("date").copy()
+        for stock_id, stock in test.groupby("stock_id")
+    }
     fwd_returns = []
     for _, row in signals.iterrows():
-        stock = test[(test["stock_id"] == row["stock_id"]) & (test["date"] > row["date"])].head(11)
-        if len(stock) < 2:
+        ret = forward_open_return(stocks_by_id[row["stock_id"]], row["date"], horizon=10)
+        if ret is None:
             continue
-        entry = stock.iloc[0]["open"]
-        exit_idx = min(10, len(stock) - 1)
-        exit_ = stock.iloc[exit_idx]["open"]
-        fwd_returns.append((exit_ - entry) / entry)
+        fwd_returns.append(ret)
 
     if not fwd_returns:
         return
