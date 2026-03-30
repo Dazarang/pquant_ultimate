@@ -587,8 +587,8 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
                 setattr(parent, parts[-1], new_layer)
             self._policy_head_built = True
         elif last_linear is not None:
-            # Root module IS the Linear(*, 1) -- wrap with extra head
-            self._policy_head = nn.Linear(last_linear.in_features, 2)
+            # Root module IS the Linear(*, 1) -- module outputs (batch, 1)
+            self._policy_head = nn.Linear(last_linear.out_features, 2)
             self._has_extra_head = True
             self._policy_head_built = True
         else:

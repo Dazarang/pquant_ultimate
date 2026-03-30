@@ -549,6 +549,25 @@ class TestPolicyGradient:
         assert proba.shape == (len(X_val), 2)
         assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
 
+    def test_with_bare_root_linear(self, pipeline_data):
+        """Bare nn.Linear(*, 1) as root module -- no named children."""
+        import torch
+        from torch import nn
+
+        from research.model_wrappers import PolicyGradientClassifier
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+
+        module = nn.Linear(n_features, 1)
+        model = PolicyGradientClassifier(
+            module=module, epochs=3, lr=1e-3, batch_size=256, pos_weight=1.0,
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train)
+        proba = model.predict_proba(X_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
 
 class TestFocalTorchClassifier:
     def test_pipeline(self, pipeline_data):
