@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate the winning experiment on the held-out TEST set and visualize buy signals.
+"""Evaluate the current experiment on the held-out TEST set and visualize buy signals.
 
 1. Train model (same config as experiment.py)
 2. Evaluate on val (sanity) + test (2024+, never seen during research)
@@ -41,7 +41,7 @@ VIZ_BUDGET = 0.0025  # top 0.25% of predictions
 
 
 def train_and_evaluate():
-    """Train winning model, evaluate on val + test, run benchmarks."""
+    """Train model, evaluate on val + test, run benchmarks."""
 
     # Load & prepare (same pipeline as experiment.py)
     features = list_features(FEATURE_GROUPS)

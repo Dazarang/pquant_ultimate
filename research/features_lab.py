@@ -13,7 +13,7 @@ import pandas as pd
 
 
 def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """Add experimental features. Returns (df, new_feature_names).
+    """Add custom features. Returns (df, new_feature_names).
 
     The researcher edits this function to add new features.
     Must return the df with new columns AND a list of the new column names.
