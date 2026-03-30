@@ -85,9 +85,25 @@ interaction  (3)  rsi*volume, drawdown*panic, rsi*volatility
 | Gradient boosting | `XGBClassifier`, `LGBMClassifier`, `CatBoostWrapper` (via `research/model_wrappers.py` -- use instead of raw `CatBoostClassifier` for sklearn ensemble compatibility) |
 | Sklearn | `RandomForestClassifier`, `ExtraTreesClassifier`, `GradientBoostingClassifier`, `AdaBoostClassifier`, `BaggingClassifier`, `MLPClassifier`, `LogisticRegression`, `SGDClassifier`, `SVC`, `KNeighborsClassifier` |
 | Ensembling | `StackingClassifier`, `VotingClassifier` |
-| Neural (PyTorch) | `TorchClassifier`, `TorchMLP`, `SequenceClassifier`, `LSTMNet` via `research/model_wrappers.py` |
-| Wrappers | `CatBoostWrapper`, `TorchClassifier`, `SequenceClassifier` -- all in `research/model_wrappers.py`, all sklearn clone()-safe |
+| Neural (PyTorch) | `TorchClassifier`, `TorchMLP`, `SequenceClassifier`, `LSTMNet`, `GRUNet`, `TransformerNet` via `research/model_wrappers.py` |
+| RL / Policy gradient | `PolicyGradientClassifier` via `research/model_wrappers.py` -- REINFORCE with custom rewards |
+| Wrappers | `CatBoostWrapper`, `TorchClassifier`, `SequenceClassifier`, `PolicyGradientClassifier` -- all in `research/model_wrappers.py`, all sklearn-compatible |
 | Neural (MLX) | `mlx.core`, `mlx.nn` -- build custom, wrap with fit/predict_proba interface |
+
+### Neural architecture modules (all via `research/model_wrappers.py`)
+
+`nn.Module` classes that plug into `TorchClassifier` (flat) or `SequenceClassifier` (sequential):
+
+| Module | Type | Params |
+|---|---|---|
+| `TorchMLP` | Flat | `input_dim, hidden_dims, dropout` |
+| `LSTMNet` | Sequence | `input_dim, hidden_dim, num_layers, dropout` |
+| `GRUNet` | Sequence | `input_dim, hidden_dim, num_layers, dropout` |
+| `TransformerNet` | Sequence | `input_dim, d_model, nhead, num_layers, dim_feedforward, dropout` |
+
+### PolicyGradientClassifier (REINFORCE)
+
+Trains via REINFORCE instead of cross-entropy. Accepts any `nn.Module`. Params: `module, epochs, lr, batch_size, gamma, entropy_coef, baseline, pos_weight`. Supports optional custom rewards via `fit(X, y, rewards=...)` -- when omitted, uses asymmetric binary reward from labels.
 
 ### Class imbalance
 ~5% positive rate (1:20 ratio). Address with `scale_pos_weight`, `class_weight`, calibration, or other techniques.

@@ -315,3 +315,100 @@ class TestLSTM:
         assert proba.shape == (len(X_val), 2)
         assert np.all(proba >= 0) and np.all(proba <= 1)
         assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+
+class TestGRU:
+    def test_pipeline(self, pipeline_data):
+        import torch
+
+        from research.model_wrappers import GRUNet, SequenceClassifier
+
+        X_train, y_train, X_val, y_val, n_features, groups_train, groups_val = pipeline_data
+        model = SequenceClassifier(
+            module=GRUNet(input_dim=n_features, hidden_dim=16, num_layers=1, dropout=0.0),
+            window=5, epochs=3, lr=1e-3, batch_size=256,
+            pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train, groups=groups_train)
+        proba = model.predict_proba(X_val, groups=groups_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.all(proba >= 0) and np.all(proba <= 1)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+
+class TestTransformer:
+    def test_pipeline(self, pipeline_data):
+        import torch
+
+        from research.model_wrappers import SequenceClassifier, TransformerNet
+
+        X_train, y_train, X_val, y_val, n_features, groups_train, groups_val = pipeline_data
+        model = SequenceClassifier(
+            module=TransformerNet(
+                input_dim=n_features, d_model=32, nhead=4,
+                num_layers=1, dim_feedforward=64, dropout=0.0,
+            ),
+            window=5, epochs=3, lr=1e-3, batch_size=256,
+            pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train, groups=groups_train)
+        proba = model.predict_proba(X_val, groups=groups_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.all(proba >= 0) and np.all(proba <= 1)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+
+class TestPolicyGradient:
+    def test_binary_rewards(self, pipeline_data):
+        import torch
+
+        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+        model = PolicyGradientClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(32, 16), dropout=0.0),
+            epochs=5, lr=1e-3, batch_size=256,
+            pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train)
+        proba = model.predict_proba(X_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.all(proba >= 0) and np.all(proba <= 1)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+        assert np.array_equal(model.classes_, [0, 1])
+
+    def test_custom_rewards(self, pipeline_data):
+        import torch
+
+        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+        rewards = np.random.randn(len(y_train)).astype(np.float32)
+        model = PolicyGradientClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(32, 16), dropout=0.0),
+            epochs=5, lr=1e-3, batch_size=256, pos_weight=1.0,
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train, rewards=rewards)
+        proba = model.predict_proba(X_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+    def test_predict(self, pipeline_data):
+        import torch
+
+        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+        model = PolicyGradientClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(16,), dropout=0.0),
+            epochs=3, lr=1e-3, batch_size=256, pos_weight=1.0,
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train)
+        preds = model.predict(X_val)
+        assert preds.shape == (len(X_val),)
+        assert set(np.unique(preds)).issubset({0, 1})
