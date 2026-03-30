@@ -564,7 +564,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
         import torch.nn as nn
 
         # Already converted on a previous fit() call
-        if self._has_extra_head:
+        if self._policy_head_built:
             return module
 
         last_linear = None
