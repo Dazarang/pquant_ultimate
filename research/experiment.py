@@ -15,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: F401,E402 -- available for researcher
 from lightgbm import LGBMClassifier  # noqa: E402
-from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier  # noqa: E402
+from sklearn.ensemble import ExtraTreesClassifier, StackingClassifier  # noqa: E402
+from sklearn.linear_model import LogisticRegression  # noqa: E402
 from xgboost import XGBClassifier  # noqa: E402
 
 from research.model_wrappers import CatBoostWrapper  # noqa: E402
@@ -107,10 +108,11 @@ def build_model(y_train):
         n_jobs=-1,
     )
 
-    model = VotingClassifier(
+    model = StackingClassifier(
         estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra)],
-        voting="soft",
-        weights=[1, 1, 1, 1],
+        final_estimator=LogisticRegression(C=1.0, max_iter=1000),
+        cv=2,
+        n_jobs=1,
     )
     return model
 
