@@ -194,6 +194,9 @@ class _BaseTorchClassifier:
         from torch import nn
         from torch.utils.data import DataLoader, TensorDataset
 
+        if len(X_t) == 0:
+            return
+
         self.module.to(self.device)
         self.module.train()
         loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)

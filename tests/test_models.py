@@ -357,6 +357,25 @@ class TestTorchMLP:
         _check_model(model, X_train, y_train, X_val, y_val)
 
 
+class TestSequenceEdgeCases:
+    def test_empty_windows(self, pipeline_data):
+        """Window larger than all groups should return all-0.5, not crash."""
+        import torch
+
+        from research.model_wrappers import LSTMNet, SequenceClassifier
+
+        X_train, y_train, X_val, y_val, n_features, groups_train, groups_val = pipeline_data
+        model = SequenceClassifier(
+            module=LSTMNet(input_dim=n_features, hidden_dim=16, num_layers=1, dropout=0.0),
+            window=99999, epochs=1, lr=1e-3, batch_size=256, pos_weight=1.0,
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train, groups=groups_train)
+        proba = model.predict_proba(X_val, groups=groups_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.allclose(proba[:, 1], 0.5), "All rows should be 0.5 with no valid windows"
+
+
 class TestLSTM:
     def test_pipeline(self, pipeline_data):
         import torch
