@@ -491,6 +491,10 @@ class DirectUtilityClassifier(_BaseTorchClassifier):
         import torch
         from torch.utils.data import DataLoader, TensorDataset
 
+        if len(X) == 0:
+            self.classes_ = np.array([0, 1])
+            return self
+
         self.module.to(self.device)
         optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
 
