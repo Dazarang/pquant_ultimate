@@ -12,3 +12,24 @@ iter	score	status	description
 10	-1.5281	keep	FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interacti
 11	-1.5636	discard	FEATURE_GROUPS = ["base", "advanced", "lag", "rolling", "roc", "percentile", "in
 12	-4.7561	discard	        passthrough=True, 
+1	-1.4276	keep	        n_estimators=1000,         learning_rate=0.016,         n_estimators=150
+2	-1.6726	discard	from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier  # noqa: E40
+3	-1.5275	discard	        cv=3, 
+4	-1.4771	discard	        n_estimators=1300,         learning_rate=0.012,         n_estimators=200
+5	-1.4344	discard	from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, Stack
+6	-1.4981	discard	    # Cross-sectional z-score of 10-day return: how oversold is this stock     #
+7	NA	crash	    # DART boosting: tree dropout decorrelates trees, complementary to standard 
+8	-1.6735	discard	    # DART boosting: tree dropout decorrelates trees, complementary to standard 
+9	-1.4949	discard	from sklearn.neural_network import MLPClassifier  # noqa: E402     # Neural dive
+10	-1.4311	discard	    spw = (neg / pos) ** 0.4  # conservative weight (~3.3) for higher precision 
+11	-1.2871	keep	from sklearn.ensemble import StackingClassifier  # noqa: E402 from research.mode
+12	-1.3484	discard	        objective="rank:map", 
+13	-1.2972	discard	        group_size=150,         n_estimators=800,         max_depth=6,         l
+14	-1.3748	discard	        group_size=1000, 
+15	-1.3284	discard	        final_estimator=LogisticRegression(C=0.1, max_iter=1000), 
+16	-1.3130	discard	        final_estimator=LogisticRegression(C=1.0, max_iter=1000, class_weight="b
+17	-1.3612	discard	    g = df.groupby("stock_id")      prev_close = g["close"].shift(1)     df["ove
+18	-1.5894	discard	FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"] 
+19	-1.3034	discard	        max_depth=9,         min_child_weight=50,         gamma=2.0,         reg
+20	-1.4102	discard	from sklearn.feature_selection import SelectFromModel  # noqa: E402 from sklearn
+21	-1.3215	discard	        n_estimators=1000,         max_depth=-1,         num_leaves=31,         

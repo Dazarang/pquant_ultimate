@@ -328,3 +328,571 @@ index 34f739e..20862a5 100644
      )
      return model
 ```
+
+### Iteration 2 -- REVERTED (-0.2450)
+Score: -1.6726 vs best -1.4276
+Change: from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier  # noqa: E40
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index c7d35b2..5293a82 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -15,8 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ 
+ import numpy as np  # noqa: F401,E402 -- available for researcher
+ from lightgbm import LGBMClassifier  # noqa: E402
+-from sklearn.ensemble import ExtraTreesClassifier, StackingClassifier  # noqa: E402
+-from sklearn.linear_model import LogisticRegression  # noqa: E402
++from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier  # noqa: E402
+ from xgboost import XGBClassifier  # noqa: E402
+ 
+ from research.model_wrappers import CatBoostWrapper  # noqa: E402
+@@ -108,10 +107,9 @@ def build_model(y_train):
+         n_jobs=-1,
+     )
+ 
+-    model = StackingClassifier(
++    model = VotingClassifier(
+         estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra)],
+-        final_estimator=LogisticRegression(C=1.0, max_iter=1000),
+-        cv=2,
++        voting="soft",
+         n_jobs=1,
+     )
+     return model
+```
+
+### Iteration 3 -- REVERTED (-0.0999)
+Score: -1.5275 vs best -1.4276
+Change:         cv=3, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index c7d35b2..a276d42 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -111,7 +111,7 @@ def build_model(y_train):
+     model = StackingClassifier(
+         estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra)],
+         final_estimator=LogisticRegression(C=1.0, max_iter=1000),
+-        cv=2,
++        cv=3,
+         n_jobs=1,
+     )
+     return model
+```
+
+### Iteration 4 -- REVERTED (-0.0495)
+Score: -1.4771 vs best -1.4276
+Change:         n_estimators=1300,         learning_rate=0.012,         n_estimators=200
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index c7d35b2..c315bd3 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -54,9 +54,9 @@ def build_model(y_train):
+ 
+     # Deep, heavily regularized — captures complex interactions
+     xgb = XGBClassifier(
+-        n_estimators=1000,
++        n_estimators=1300,
+         max_depth=7,
+-        learning_rate=0.016,
++        learning_rate=0.012,
+         min_child_weight=20,
+         gamma=0.5,
+         reg_alpha=2.0,
+@@ -72,9 +72,9 @@ def build_model(y_train):
+ 
+     # Shallow, smooth, many trees — captures gradual trends
+     lgbm = LGBMClassifier(
+-        n_estimators=1500,
++        n_estimators=2000,
+         max_depth=4,
+-        learning_rate=0.008,
++        learning_rate=0.006,
+         min_child_samples=80,
+         reg_alpha=0.5,
+         reg_lambda=0.5,
+@@ -88,9 +88,9 @@ def build_model(y_train):
+ 
+     # Medium depth, heavy L2 — balanced generalization
+     cat = CatBoostWrapper(
+-        iterations=1000,
++        iterations=1300,
+         depth=5,
+-        learning_rate=0.020,
++        learning_rate=0.015,
+         l2_leaf_reg=10.0,
+         scale_pos_weight=spw,
+         random_seed=44,
+```
+
+### Iteration 5 -- REVERTED (-0.0068)
+Score: -1.4344 vs best -1.4276
+Change: from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, Stack
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index c7d35b2..fc5393b 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ 
+ import numpy as np  # noqa: F401,E402 -- available for researcher
+ from lightgbm import LGBMClassifier  # noqa: E402
+-from sklearn.ensemble import ExtraTreesClassifier, StackingClassifier  # noqa: E402
++from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, StackingClassifier  # noqa: E402
+ from sklearn.linear_model import LogisticRegression  # noqa: E402
+ from xgboost import XGBClassifier  # noqa: E402
+ 
+@@ -108,8 +108,20 @@ def build_model(y_train):
+         n_jobs=-1,
+     )
+ 
++    # Best-split forest: stronger individual trees than ExtraTrees, complementary errors
++    rf = RandomForestClassifier(
++        n_estimators=300,
++        max_depth=12,
++        min_samples_leaf=50,
++        max_features="sqrt",
++        max_samples=0.7,
++        class_weight={0: 1, 1: spw},
++        random_state=46,
++        n_jobs=-1,
++    )
++
+     model = StackingClassifier(
+-        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra)],
++        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra), ("rf", rf)],
+         final_estimator=LogisticRegression(C=1.0, max_iter=1000),
+         cv=2,
+         n_jobs=1,
+```
+
+### Iteration 6 -- REVERTED (-0.0705)
+Score: -1.4981 vs best -1.4276
+Change:     # Cross-sectional z-score of 10-day return: how oversold is this stock     #
+```diff
+diff --git a/research/features_lab.py b/research/features_lab.py
+index 7ebf74c..7ed29a3 100644
+--- a/research/features_lab.py
++++ b/research/features_lab.py
+@@ -22,6 +22,15 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+ 
+     # --- RESEARCHER: add features below ---
+ 
++    # Cross-sectional z-score of 10-day return: how oversold is this stock
++    # relative to all stocks on the same date? Deeply negative = extreme
++    # underperformance vs peers = higher mean-reversion / bottom probability.
++    # Novel: all existing features are per-stock; this adds market-relative context.
++    g_date = df.groupby("date")["ret_10d"]
++    xmean = g_date.transform("mean")
++    xstd = g_date.transform("std").clip(lower=1e-10)
++    df["ret_xsec_zscore_10d"] = (df["ret_10d"] - xmean) / xstd
++    new_features.append("ret_xsec_zscore_10d")
+ 
+     # --- END researcher section ---
+ 
+```
+
+### Iteration 7 -- GATE FAILED
+Reason: GATE VIOLATION: research/model_wrappers.py was modified. Reverting.
+Change:     # DART boosting: tree dropout decorrelates trees, complementary to standard 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index c7d35b2..3238706 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -108,8 +108,27 @@ def build_model(y_train):
+         n_jobs=-1,
+     )
+ 
++    # DART boosting: tree dropout decorrelates trees, complementary to standard GBDTs
++    lgbm_dart = LGBMClassifier(
++        boosting_type="dart",
++        n_estimators=300,
++        max_depth=6,
++        learning_rate=0.025,
++        min_child_samples=60,
++        reg_alpha=1.0,
++        reg_lambda=1.0,
++        subsample=0.7,
++        colsample_bytree=0.6,
++        drop_rate=0.1,
++        skip_drop=0.5,
++        scale_pos_weight=spw,
++        random_state=46,
++        n_jobs=-1,
++        verbose=-1,
++    )
++
+     model = StackingClassifier(
+-        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra)],
++        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra), ("dart", lgbm_dart)],
+         final_estimator=LogisticRegression(C=1.0, max_iter=1000),
+         cv=2,
+         n_jobs=1,
+```
+Traceback:
+```
+GATE VIOLATION: research/model_wrappers.py was modified. Reverting.
+```
+
+### Iteration 8 -- REVERTED (-0.2459)
+Score: -1.6735 vs best -1.4276
+Change:     # DART boosting: tree dropout decorrelates trees, complementary to standard 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index c7d35b2..bccf952 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -108,8 +108,27 @@ def build_model(y_train):
+         n_jobs=-1,
+     )
+ 
++    # DART boosting: tree dropout decorrelates trees, complementary to standard GBDTs
++    dart = LGBMClassifier(
++        boosting_type="dart",
++        n_estimators=300,
++        max_depth=6,
++        learning_rate=0.025,
++        min_child_samples=60,
++        reg_alpha=1.0,
++        reg_lambda=1.0,
++        subsample=0.7,
++        colsample_bytree=0.6,
++        drop_rate=0.1,
++        skip_drop=0.5,
++        scale_pos_weight=spw,
++        random_state=46,
++        n_jobs=-1,
++        verbose=-1,
++    )
++
+     model = StackingClassifier(
+-        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra)],
++        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra), ("dart", dart)],
+         final_estimator=LogisticRegression(C=1.0, max_iter=1000),
+         cv=2,
+         n_jobs=1,
+```
+
+### Iteration 9 -- REVERTED (-0.0673)
+Score: -1.4949 vs best -1.4276
+Change: from sklearn.neural_network import MLPClassifier  # noqa: E402     # Neural dive
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index c7d35b2..1a33f1c 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -17,6 +17,7 @@ import numpy as np  # noqa: F401,E402 -- available for researcher
+ from lightgbm import LGBMClassifier  # noqa: E402
+ from sklearn.ensemble import ExtraTreesClassifier, StackingClassifier  # noqa: E402
+ from sklearn.linear_model import LogisticRegression  # noqa: E402
++from sklearn.neural_network import MLPClassifier  # noqa: E402
+ from xgboost import XGBClassifier  # noqa: E402
+ 
+ from research.model_wrappers import CatBoostWrapper  # noqa: E402
+@@ -108,8 +109,23 @@ def build_model(y_train):
+         n_jobs=-1,
+     )
+ 
++    # Neural diversity: smooth non-linear boundaries, fundamentally different from trees
++    mlp = MLPClassifier(
++        hidden_layer_sizes=(64, 32),
++        activation='relu',
++        solver='adam',
++        alpha=1e-4,
++        batch_size=4096,
++        learning_rate='adaptive',
++        learning_rate_init=1e-3,
++        max_iter=30,
++        early_stopping=True,
++        validation_fraction=0.1,
++        random_state=46,
++    )
++
+     model = StackingClassifier(
+-        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra)],
++        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra), ("mlp", mlp)],
+         final_estimator=LogisticRegression(C=1.0, max_iter=1000),
+         cv=2,
+         n_jobs=1,
+```
+
+### Iteration 10 -- REVERTED (-0.0035)
+Score: -1.4311 vs best -1.4276
+Change:     spw = (neg / pos) ** 0.4  # conservative weight (~3.3) for higher precision 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index c7d35b2..8d3587a 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -50,7 +50,7 @@ def build_model(y_train):
+     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
+     neg = (y_train == 0).sum()
+     pos = (y_train == 1).sum()
+-    spw = np.sqrt(neg / pos)  # moderate weight (~4.4) instead of full ratio (~19)
++    spw = (neg / pos) ** 0.4  # conservative weight (~3.3) for higher precision at top
+ 
+     # Deep, heavily regularized — captures complex interactions
+     xgb = XGBClassifier(
+```
+
+### Iteration 12 -- REVERTED (-0.0613)
+Score: -1.3484 vs best -1.2871
+Change:         objective="rank:map", 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 22e2a30..b65209f 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -95,7 +95,7 @@ def build_model(y_train):
+     )
+ 
+     rank = RankingXGBClassifier(
+-        objective="rank:ndcg",
++        objective="rank:map",
+         group_size=200,
+         n_estimators=500,
+         max_depth=5,
+```
+
+### Iteration 13 -- REVERTED (-0.0101)
+Score: -1.2972 vs best -1.2871
+Change:         group_size=150,         n_estimators=800,         max_depth=6,         l
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 22e2a30..314944c 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -96,14 +96,14 @@ def build_model(y_train):
+ 
+     rank = RankingXGBClassifier(
+         objective="rank:ndcg",
+-        group_size=200,
+-        n_estimators=500,
+-        max_depth=5,
+-        learning_rate=0.025,
+-        subsample=0.75,
+-        colsample_bytree=0.65,
+-        reg_alpha=0.5,
+-        reg_lambda=1.0,
++        group_size=150,
++        n_estimators=800,
++        max_depth=6,
++        learning_rate=0.015,
++        subsample=0.70,
++        colsample_bytree=0.55,
++        reg_alpha=1.5,
++        reg_lambda=2.0,
+         seed=45,
+         verbosity=0,
+     )
+```
+
+### Iteration 14 -- REVERTED (-0.0877)
+Score: -1.3748 vs best -1.2871
+Change:         group_size=1000, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 22e2a30..d5cc894 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -96,7 +96,7 @@ def build_model(y_train):
+ 
+     rank = RankingXGBClassifier(
+         objective="rank:ndcg",
+-        group_size=200,
++        group_size=1000,
+         n_estimators=500,
+         max_depth=5,
+         learning_rate=0.025,
+```
+
+### Iteration 15 -- REVERTED (-0.0413)
+Score: -1.3284 vs best -1.2871
+Change:         final_estimator=LogisticRegression(C=0.1, max_iter=1000), 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 22e2a30..531ba69 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -110,7 +110,7 @@ def build_model(y_train):
+ 
+     model = StackingClassifier(
+         estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("rank", rank)],
+-        final_estimator=LogisticRegression(C=1.0, max_iter=1000),
++        final_estimator=LogisticRegression(C=0.1, max_iter=1000),
+         cv=2,
+         n_jobs=1,
+     )
+```
+
+### Iteration 16 -- REVERTED (-0.0259)
+Score: -1.3130 vs best -1.2871
+Change:         final_estimator=LogisticRegression(C=1.0, max_iter=1000, class_weight="b
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 22e2a30..76eec23 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -110,7 +110,7 @@ def build_model(y_train):
+ 
+     model = StackingClassifier(
+         estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("rank", rank)],
+-        final_estimator=LogisticRegression(C=1.0, max_iter=1000),
++        final_estimator=LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced"),
+         cv=2,
+         n_jobs=1,
+     )
+```
+
+### Iteration 17 -- REVERTED (-0.0741)
+Score: -1.3612 vs best -1.2871
+Change:     g = df.groupby("stock_id")      prev_close = g["close"].shift(1)     df["ove
+```diff
+diff --git a/research/features_lab.py b/research/features_lab.py
+index f912d4b..6a0b010 100644
+--- a/research/features_lab.py
++++ b/research/features_lab.py
+@@ -22,6 +22,14 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+ 
+     # --- RESEARCHER: add features below ---
+ 
++    g = df.groupby("stock_id")
++
++    prev_close = g["close"].shift(1)
++    df["overnight_gap"] = (df["open"] - prev_close) / prev_close.clip(lower=1e-10)
++    new_features.append("overnight_gap")
++
++    df["intraday_return"] = (df["close"] - df["open"]) / df["open"].clip(lower=1e-10)
++    new_features.append("intraday_return")
+ 
+     # --- END researcher section ---
+ 
+```
+
+### Iteration 18 -- REVERTED (-0.3023)
+Score: -1.5894 vs best -1.2871
+Change: FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"] 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 22e2a30..fd421f6 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -35,7 +35,7 @@ DATASET_PATH = "data/datasets/20260115/dataset.parquet"
+ STOCKS = None
+ 
+ # Feature groups: see list_features() for options
+-FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interaction"]
++FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
+ 
+ # Temporal split boundaries
+ TRAIN_END = "2022-12-31"
+```
+
+### Iteration 19 -- REVERTED (-0.0163)
+Score: -1.3034 vs best -1.2871
+Change:         max_depth=9,         min_child_weight=50,         gamma=2.0,         reg
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 22e2a30..67539d7 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -54,12 +54,12 @@ def build_model(y_train):
+ 
+     xgb = XGBClassifier(
+         n_estimators=1000,
+-        max_depth=7,
++        max_depth=9,
+         learning_rate=0.016,
+-        min_child_weight=20,
+-        gamma=0.5,
+-        reg_alpha=2.0,
+-        reg_lambda=2.0,
++        min_child_weight=50,
++        gamma=2.0,
++        reg_alpha=5.0,
++        reg_lambda=5.0,
+         subsample=0.65,
+         colsample_bytree=0.5,
+         scale_pos_weight=spw,
+```
+
+### Iteration 20 -- REVERTED (-0.1231)
+Score: -1.4102 vs best -1.2871
+Change: from sklearn.feature_selection import SelectFromModel  # noqa: E402 from sklearn
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 22e2a30..4429b2a 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -16,7 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ import numpy as np  # noqa: F401,E402 -- available for researcher
+ from lightgbm import LGBMClassifier  # noqa: E402
+ from sklearn.ensemble import StackingClassifier  # noqa: E402
++from sklearn.feature_selection import SelectFromModel  # noqa: E402
+ from sklearn.linear_model import LogisticRegression  # noqa: E402
++from sklearn.pipeline import Pipeline  # noqa: E402
+ from xgboost import XGBClassifier  # noqa: E402
+ 
+ from research.model_wrappers import CatBoostWrapper, RankingXGBClassifier  # noqa: E402
+@@ -108,12 +110,26 @@ def build_model(y_train):
+         verbosity=0,
+     )
+ 
+-    model = StackingClassifier(
++    stack = StackingClassifier(
+         estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("rank", rank)],
+         final_estimator=LogisticRegression(C=1.0, max_iter=1000),
+         cv=2,
+         n_jobs=1,
+     )
++
++    selector = LGBMClassifier(
++        n_estimators=100,
++        max_depth=3,
++        scale_pos_weight=spw,
++        random_state=99,
++        n_jobs=-1,
++        verbose=-1,
++    )
++
++    model = Pipeline([
++        ("select", SelectFromModel(selector)),
++        ("stack", stack),
++    ])
+     return model
+ 
+ 
+```
+
+### Iteration 21 -- REVERTED (-0.0344)
+Score: -1.3215 vs best -1.2871
+Change:         n_estimators=1000,         max_depth=-1,         num_leaves=31,         
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 22e2a30..bc29708 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -70,12 +70,13 @@ def build_model(y_train):
+     )
+ 
+     lgbm = LGBMClassifier(
+-        n_estimators=1500,
+-        max_depth=4,
+-        learning_rate=0.008,
+-        min_child_samples=80,
+-        reg_alpha=0.5,
+-        reg_lambda=0.5,
++        n_estimators=1000,
++        max_depth=-1,
++        num_leaves=31,
++        learning_rate=0.01,
++        min_child_samples=100,
++        reg_alpha=1.0,
++        reg_lambda=1.0,
+         subsample=0.8,
+         colsample_bytree=0.7,
+         scale_pos_weight=spw,
+```
