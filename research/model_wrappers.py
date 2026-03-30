@@ -151,6 +151,81 @@ class TorchClassifier(_BaseTorchClassifier):
         return np.column_stack([1 - proba_1, proba_1])
 
 
+class FocalTorchClassifier(_BaseTorchClassifier):
+    """TorchClassifier with focal loss -- downweights easy negatives.
+
+    Focal loss: -alpha * (1-p)^gamma * log(p). With high class imbalance,
+    the model easily classifies negatives correctly (high p for class 0).
+    Focal loss reduces their gradient contribution, focusing learning on
+    the hard positives that matter for ranking quality.
+
+    Same interface as TorchClassifier -- drop-in replacement.
+
+    Usage in experiment.py:
+        from research.model_wrappers import FocalTorchClassifier, TorchMLP
+
+        def build_model(y_train):
+            return FocalTorchClassifier(
+                module=TorchMLP(input_dim=54, hidden_dims=(128, 64)),
+                epochs=50, lr=1e-3, batch_size=512,
+                alpha=(y_train == 0).sum() / len(y_train),  # class balance
+                focal_gamma=2.0,  # focusing strength
+            )
+    """
+
+    def __init__(self, module, epochs=50, lr=1e-3, batch_size=512,
+                 alpha=0.25, focal_gamma=2.0, pos_weight=1.0):
+        super().__init__(module, epochs, lr, batch_size, pos_weight)
+        self.alpha = alpha
+        self.focal_gamma = focal_gamma
+
+    def _train_focal(self, X_t, y_t):
+        import torch
+        from torch.utils.data import DataLoader, TensorDataset
+
+        self.module.to(self.device)
+        self.module.train()
+        loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
+        optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
+
+        alpha = self.alpha
+        gamma = self.focal_gamma
+
+        for _ in range(self.epochs):
+            for xb, yb in loader:
+                xb, yb = xb.to(self.device), yb.to(self.device)
+                logits = self.module(xb)
+                p = torch.sigmoid(logits)
+
+                # Per-sample alpha: alpha for positives, (1-alpha) for negatives
+                alpha_t = yb * alpha + (1 - yb) * (1 - alpha)
+
+                # Focal modulation: (1-p_t)^gamma where p_t is predicted prob of true class
+                p_t = yb * p + (1 - yb) * (1 - p)
+                focal_weight = (1 - p_t) ** gamma
+
+                # Standard BCE, reweighted
+                bce = -yb * torch.log(p + 1e-8) - (1 - yb) * torch.log(1 - p + 1e-8)
+                loss = (alpha_t * focal_weight * bce).mean()
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+    def fit(self, X, y):
+        import torch
+
+        X_t = torch.tensor(X, dtype=torch.float32)
+        y_t = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
+        self._train_focal(X_t, y_t)
+        return self
+
+    def predict_proba(self, X):
+        logits = self._batched_logits(X)
+        proba_1 = expit(logits)
+        return np.column_stack([1 - proba_1, proba_1])
+
+
 class SequenceClassifier(_BaseTorchClassifier):
     """Sklearn-compatible wrapper for sequence models (LSTM, GRU, Transformer).
 
@@ -223,6 +298,57 @@ class SequenceClassifier(_BaseTorchClassifier):
         return (self.predict_proba(X, groups)[:, 1] > 0.5).astype(int)
 
 
+class FocalSequenceClassifier(SequenceClassifier):
+    """SequenceClassifier with focal loss. Drop-in replacement.
+
+    Usage in experiment.py:
+        from research.model_wrappers import FocalSequenceClassifier, GRUNet
+
+        def build_model(y_train):
+            return FocalSequenceClassifier(
+                module=GRUNet(input_dim=54, hidden_dim=64),
+                window=10, epochs=30, lr=1e-3, batch_size=256,
+                alpha=(y_train == 0).sum() / len(y_train), focal_gamma=2.0,
+            )
+    """
+
+    def __init__(self, module, window=10, epochs=30, lr=1e-3, batch_size=256,
+                 alpha=0.25, focal_gamma=2.0, pos_weight=1.0):
+        super().__init__(module, window, epochs, lr, batch_size, pos_weight)
+        self.alpha = alpha
+        self.focal_gamma = focal_gamma
+
+    def _train(self, X_t, y_t):
+        """Override base _train with focal loss."""
+        import torch
+        from torch.utils.data import DataLoader, TensorDataset
+
+        self.module.to(self.device)
+        self.module.train()
+        loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
+        optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
+
+        alpha = self.alpha
+        gamma = self.focal_gamma
+
+        for _ in range(self.epochs):
+            for xb, yb in loader:
+                xb, yb = xb.to(self.device), yb.to(self.device)
+                logits = self.module(xb)
+                p = torch.sigmoid(logits)
+
+                alpha_t = yb * alpha + (1 - yb) * (1 - alpha)
+                p_t = yb * p + (1 - yb) * (1 - p)
+                focal_weight = (1 - p_t) ** gamma
+
+                bce = -yb * torch.log(p + 1e-8) - (1 - yb) * torch.log(1 - p + 1e-8)
+                loss = (alpha_t * focal_weight * bce).mean()
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+
 # ---------------------------------------------------------------------------
 # Policy Gradient (REINFORCE) classifier
 # ---------------------------------------------------------------------------
@@ -243,7 +369,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
         def build_model(y_train):
             return PolicyGradientClassifier(
                 module=TorchMLP(input_dim=54, hidden_dims=(128, 64)),
-                epochs=50, lr=1e-3, batch_size=512, gamma=0.99,
+                epochs=50, lr=1e-3, batch_size=512,
                 entropy_coef=0.01, baseline=True,
             )
 
@@ -252,9 +378,8 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
     """
 
     def __init__(self, module, epochs=50, lr=1e-3, batch_size=512,
-                 gamma=0.99, entropy_coef=0.01, baseline=True, pos_weight=1.0):
+                 entropy_coef=0.01, baseline=True, pos_weight=1.0):
         super().__init__(module, epochs, lr, batch_size, pos_weight)
-        self.gamma = gamma
         self.entropy_coef = entropy_coef
         self.baseline = baseline
 
@@ -290,9 +415,10 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
         Args:
             X: Feature matrix (n_samples, n_features).
             y: Binary labels (used as actions for reward assignment).
-            rewards: Optional custom reward per sample. If None, uses
-                     +pos_weight for correct minority (y=1), +1 for correct
-                     majority (y=0), -1 for incorrect.
+            rewards: Optional signed reward per sample (e.g. forward returns).
+                     Positive = buying was good, negative = buying was bad.
+                     Action 1 (buy) receives the reward; action 0 (skip) receives 0.
+                     If None, uses +pos_weight for y=1 and -1 for y=0.
         """
         import torch
         from torch.distributions import Categorical
@@ -325,11 +451,12 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
                 actions = dist.sample()
 
                 if rb is not None:
-                    # Custom rewards: reward if action matches label, scaled by reward magnitude
-                    correct = (actions == yb).float()
-                    batch_rewards = correct * rb.abs() - (1 - correct) * rb.abs()
+                    # Custom rewards: action=buy gets the signed reward,
+                    # action=skip gets 0. Preserves reward sign so negative
+                    # returns penalize buying and reward skipping.
+                    batch_rewards = torch.where(actions == 1, rb, -rb)
                 else:
-                    # Default: asymmetric binary reward
+                    # Default: asymmetric binary reward from labels
                     correct = (actions == yb).float()
                     weight = torch.where(yb == 1, self.pos_weight, 1.0)
                     batch_rewards = correct * weight - (1 - correct) * weight
