@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: F401,E402 -- available for researcher
 from lightgbm import LGBMClassifier  # noqa: E402
-from sklearn.ensemble import VotingClassifier  # noqa: E402
+from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier  # noqa: E402
 from xgboost import XGBClassifier  # noqa: E402
 
 from research.model_wrappers import CatBoostWrapper  # noqa: E402
@@ -96,10 +96,21 @@ def build_model(y_train):
         verbose=0,
     )
 
+    # Bagging-based diversity: random splits + bootstrap = uncorrelated errors
+    extra = ExtraTreesClassifier(
+        n_estimators=500,
+        max_depth=20,
+        min_samples_leaf=50,
+        max_features="sqrt",
+        class_weight={0: 1, 1: spw},
+        random_state=45,
+        n_jobs=-1,
+    )
+
     model = VotingClassifier(
-        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat)],
+        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("extra", extra)],
         voting="soft",
-        weights=[1, 1, 1],
+        weights=[1, 1, 1, 1],
     )
     return model
 
