@@ -211,6 +211,9 @@ class _BaseTorchClassifier:
         """Run batched inference on numpy array, return flat logits."""
         import torch
 
+        if len(X) == 0:
+            return np.array([], dtype=np.float32)
+
         self.module.eval()
         all_logits = []
         with torch.no_grad():
