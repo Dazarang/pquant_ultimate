@@ -308,3 +308,38 @@ Commit: c468e42
 
 ### Iteration 20 -- REVERTED (-2.4793)
 Score: 0.1298 |         weights=[1, 1, 4], 
+
+### Iteration 1 -- REVERTED (-1.5084)
+Score: 1.1007 |     # Volume-return correlation: rolling Pearson corr between volume_ratio and r
+
+### Iteration 2 -- REVERTED (-0.8172)
+Score: 1.7919 |         learning_rate=0.08,         learning_rate=0.08, 
+
+### Iteration 3 -- REVERTED (-0.8522)
+Score: 1.7569 |         criterion="entropy", 
+
+### Iteration 4 -- GATE FAILED
+Reason: 
+Change:     # Intraday reversal: 5d avg of (close - open) / (high - low)     # Positive 
+
+### Iteration 5 -- REVERTED (-2.4510)
+Score: 0.1581 |     # Loss magnitude decay: recent vs historical average loss size     # Ratio <
+
+### Iteration 6 -- IMPROVED (+6.1989)
+Score: 8.8080 |         ccp_alpha=0.0001, 
+Commit: 8da4b41
+
+### Iteration 7 -- IMPROVED (+2.2118)
+Score: 11.0198 |         ccp_alpha=0.0003, 
+Commit: fc1cc3d
+
+### Iteration 8 -- GATE FAILED
+Reason: 
+Change:         ccp_alpha=0.0005, 
+
+### Iteration 9 -- GATE FAILED
+Reason: 
+Change:         ccp_alpha=0.0004, 
+
+### Iteration 10 -- REVERTED (+0.0000)
+Score: 11.0198 |         n_estimators=1000, 
