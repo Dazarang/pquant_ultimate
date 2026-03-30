@@ -711,6 +711,9 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
     def predict_proba(self, X):
         import torch
 
+        if len(X) == 0:
+            return np.empty((0, 2), dtype=np.float32)
+
         self.module.eval()
         all_probs = []
         with torch.no_grad():
