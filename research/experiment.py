@@ -14,12 +14,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: F401,E402 -- available for researcher
-from lightgbm import LGBMClassifier  # noqa: E402
 from sklearn.ensemble import StackingClassifier  # noqa: E402
 from sklearn.linear_model import LogisticRegression  # noqa: E402
 from xgboost import XGBClassifier  # noqa: E402
 
-from research.model_wrappers import CatBoostWrapper, RankingXGBClassifier  # noqa: E402
+from research.model_wrappers import RankingXGBClassifier  # noqa: E402
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
 from lib.eval import tiered_eval  # noqa: E402
@@ -69,31 +68,6 @@ def build_model(y_train):
         verbosity=0,
     )
 
-    lgbm = LGBMClassifier(
-        n_estimators=1500,
-        max_depth=4,
-        learning_rate=0.008,
-        min_child_samples=80,
-        reg_alpha=0.5,
-        reg_lambda=0.5,
-        subsample=0.8,
-        colsample_bytree=0.7,
-        scale_pos_weight=spw,
-        random_state=43,
-        n_jobs=-1,
-        verbose=-1,
-    )
-
-    cat = CatBoostWrapper(
-        iterations=1000,
-        depth=5,
-        learning_rate=0.020,
-        l2_leaf_reg=10.0,
-        scale_pos_weight=spw,
-        random_seed=44,
-        verbose=0,
-    )
-
     rank = RankingXGBClassifier(
         objective="rank:ndcg",
         group_size=200,
@@ -109,7 +83,7 @@ def build_model(y_train):
     )
 
     model = StackingClassifier(
-        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat), ("rank", rank)],
+        estimators=[("xgb", xgb), ("rank", rank)],
         final_estimator=LogisticRegression(C=1.0, max_iter=1000),
         cv=2,
         n_jobs=1,
