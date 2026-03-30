@@ -647,6 +647,10 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
         from torch.distributions import Categorical
         from torch.utils.data import DataLoader, TensorDataset
 
+        if len(X) == 0:
+            self.classes_ = np.array([0, 1])
+            return self
+
         self.module = self._build_policy_head(self.module)
         self.module.to(self.device)
         if self._has_extra_head:
