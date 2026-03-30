@@ -137,7 +137,10 @@ class RankingXGBClassifier(ClassifierMixin, BaseEstimator):
         import xgboost as xgb
 
         if groups is not None:
-            qid = groups
+            qid = np.asarray(groups)
+            # XGBoost ranking requires data sorted by group -- sort if needed
+            order = np.argsort(qid, kind="stable")
+            X, y, qid = X[order], y[order], qid[order]
         else:
             gs = self.group_size
             qid = np.repeat(np.arange(len(y) // gs + 1), gs)[:len(y)]
