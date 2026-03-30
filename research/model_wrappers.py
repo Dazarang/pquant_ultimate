@@ -764,7 +764,7 @@ def _build_torch_modules():
                      dim_feedforward=128, dropout=0.1):
             super().__init__()
             self.proj = nn.Linear(input_dim, d_model)
-            self.pos_enc = nn.Parameter(torch.zeros(1, 512, d_model))
+            self.pos_enc = nn.Parameter(torch.zeros(1, 512, d_model, dtype=torch.float32))
             nn.init.trunc_normal_(self.pos_enc, std=0.02)
             encoder_layer = nn.TransformerEncoderLayer(
                 d_model=d_model, nhead=nhead, dim_feedforward=dim_feedforward,
