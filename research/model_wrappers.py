@@ -117,20 +117,33 @@ class RankingXGBClassifier(ClassifierMixin, BaseEstimator):
                 self._xgb_kwargs[key] = value
         return self
 
-    def _make_groups(self, n, groups=None):
-        """Build qid array for XGBoost ranking."""
-        if groups is not None:
-            return groups
-        gs = self.group_size
-        qid = np.repeat(np.arange(n // gs + 1), gs)[:n]
-        return qid
+    @staticmethod
+    def _qid_to_group_sizes(qid):
+        """Convert per-row qid array to group sizes (consecutive runs)."""
+        if len(qid) == 0:
+            return []
+        sizes = []
+        current, count = qid[0], 1
+        for i in range(1, len(qid)):
+            if qid[i] == current:
+                count += 1
+            else:
+                sizes.append(count)
+                current, count = qid[i], 1
+        sizes.append(count)
+        return sizes
 
     def fit(self, X, y, groups=None):
         import xgboost as xgb
 
-        qid = self._make_groups(len(y), groups)
+        if groups is not None:
+            qid = groups
+        else:
+            gs = self.group_size
+            qid = np.repeat(np.arange(len(y) // gs + 1), gs)[:len(y)]
+
         dtrain = xgb.DMatrix(X, label=y)
-        dtrain.set_group([int((qid == g).sum()) for g in np.unique(qid)])
+        dtrain.set_group(self._qid_to_group_sizes(qid))
 
         params = {
             "objective": self.objective,
