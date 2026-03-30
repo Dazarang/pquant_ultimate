@@ -435,6 +435,8 @@ class FocalSequenceClassifier(SequenceClassifier):
         import torch
         from torch.utils.data import DataLoader, TensorDataset
 
+        if len(X_t) == 0:
+            return
         self.module.to(self.device)
         loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
         optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
