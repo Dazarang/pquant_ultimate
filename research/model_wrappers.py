@@ -77,9 +77,7 @@ class CatBoostWrapper(ClassifierMixin, BaseEstimator):
 class RankingXGBClassifier(ClassifierMixin, BaseEstimator):
     """XGBoost with ranking objective (rank:map or rank:ndcg).
 
-    Optimizes ranking quality directly instead of classification accuracy.
-    Better aligned with threshold-free multi-budget evaluation that scores
-    the top-k predictions by probability.
+    XGBoost with a ranking objective (rank:map / rank:ndcg).
 
     Ranking requires query groups (samples competing against each other).
     Pass groups to fit(), or the wrapper creates groups of `group_size`
@@ -291,10 +289,9 @@ def _train_focal_loop(module, loader, optimizer, device, alpha, gamma, epochs):
 class FocalTorchClassifier(_BaseTorchClassifier):
     """TorchClassifier with focal loss -- downweights easy negatives.
 
-    Focal loss: -alpha * (1-p)^gamma * log(p). With high class imbalance,
-    the model easily classifies negatives correctly (high p for class 0).
-    Focal loss reduces their gradient contribution, focusing learning on
-    the hard positives that matter for ranking quality.
+    Focal loss: -alpha * (1-p)^gamma * log(p). Reduces gradient contribution
+    from high-confidence predictions, shifting training focus toward harder
+    examples.
 
     Same interface as TorchClassifier -- drop-in replacement.
 
@@ -457,9 +454,6 @@ class DirectUtilityClassifier(_BaseTorchClassifier):
 
     With r_skip=0: loss = -mean(sigmoid(logit) * reward).
     Positive rewards increase P(buy), negative rewards decrease it.
-    No sampling noise, no variance reduction needed, strictly more
-    sample-efficient than REINFORCE for offline data.
-
     Falls back to weighted BCE when rewards=None.
 
     Usage in experiment.py:
@@ -767,7 +761,7 @@ def _build_torch_modules():
             return self.head(out[:, -1, :])
 
     class GRUNet(nn.Module):
-        """GRU for sequential tabular data. Lighter alternative to LSTMNet."""
+        """GRU for sequential tabular data."""
 
         def __init__(self, input_dim, hidden_dim=64, num_layers=2, dropout=0.3):
             super().__init__()

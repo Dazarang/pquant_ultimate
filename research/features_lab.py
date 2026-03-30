@@ -1,7 +1,7 @@
 """Feature laboratory -- experimental features created by the researcher.
 
-Winning features accumulate here across iterations.
-Battle-tested features get promoted to lib/features.py later.
+Features accumulate here across iterations.
+Stable features may be moved to lib/features.py later.
 
 Rules:
   - All features MUST be backward-looking (no future data).

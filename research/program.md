@@ -22,7 +22,7 @@ You edit **two files only**:
 
 ## What You Cannot Change
 
-- `lib/` -- data loading, splitting, scaling, evaluation. The judge is not in the arena.
+- `lib/` -- data loading, splitting, scaling, evaluation. Do not modify.
 - `research/gate.sh` -- verification gate.
 - `research/baseline.py` -- reference point.
 
@@ -47,7 +47,7 @@ Hard gate:
 - Tier 1: avg_precision must be > 0.05 (sanity check)
 - Fail the gate and the iteration is rejected.
 
-**There is no THRESHOLD lever.** Signal selection is done by the immutable judge. Focus on model quality: architecture, features, hyperparameters, and calibration.
+**There is no THRESHOLD lever.** Signal selection is done by the immutable judge.
 
 ## The Dataset
 
@@ -86,7 +86,7 @@ interaction  (3)  rsi*volume, drawdown*panic, rsi*volatility
 | Sklearn | `RandomForestClassifier`, `ExtraTreesClassifier`, `GradientBoostingClassifier`, `AdaBoostClassifier`, `BaggingClassifier`, `MLPClassifier`, `LogisticRegression`, `SGDClassifier`, `SVC`, `KNeighborsClassifier` |
 | Ensembling | `StackingClassifier`, `VotingClassifier` |
 | Neural (PyTorch) | `TorchClassifier`, `TorchMLP`, `SequenceClassifier`, `LSTMNet`, `GRUNet`, `TransformerNet` via `research/model_wrappers.py` |
-| Focal loss | `FocalTorchClassifier` (flat), `FocalSequenceClassifier` (sequential) -- drop-in replacements that downweight easy negatives |
+| Focal loss | `FocalTorchClassifier` (flat), `FocalSequenceClassifier` (sequential) -- focal-loss variants of the above |
 | Utility / RL | `DirectUtilityClassifier` (expected reward, no sampling), `PolicyGradientClassifier` (REINFORCE) -- via `research/model_wrappers.py` |
 | Wrappers | `CatBoostWrapper`, `RankingXGBClassifier`, `TorchClassifier`, `FocalTorchClassifier`, `SequenceClassifier`, `FocalSequenceClassifier`, `DirectUtilityClassifier`, `PolicyGradientClassifier` -- all in `research/model_wrappers.py`, all sklearn-compatible |
 | Neural (MLX) | `mlx.core`, `mlx.nn` -- build custom, wrap with fit/predict_proba interface |
@@ -112,14 +112,14 @@ Drop-in replacements for `TorchClassifier` / `SequenceClassifier` with focal los
 
 ### DirectUtilityClassifier
 
-Optimizes expected reward directly: `loss = -mean(P(buy|x) * reward)`. No sampling -- uses deterministic gradients. Accepts any `nn.Module`. Params: `module, epochs, lr, batch_size, pos_weight`. Supports custom signed rewards via `fit(X, y, rewards=...)`. Falls back to weighted BCE when rewards not provided.
+Optimizes expected reward directly: `loss = -mean(P(buy|x) * reward)`. Accepts any `nn.Module`. Params: `module, epochs, lr, batch_size, pos_weight`. Supports custom signed rewards via `fit(X, y, rewards=...)`. Falls back to weighted BCE when rewards not provided.
 
 ### PolicyGradientClassifier (REINFORCE)
 
 Trains via REINFORCE with stochastic action sampling. Accepts any `nn.Module`. Params: `module, epochs, lr, batch_size, entropy_coef, baseline, pos_weight`. Supports custom signed rewards via `fit(X, y, rewards=...)`.
 
 ### Class imbalance
-~5% positive rate (1:20 ratio). Address with `scale_pos_weight`, `class_weight`, calibration, or other techniques.
+~5% positive rate (1:20 ratio).
 
 ## The Loop
 
