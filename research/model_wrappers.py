@@ -70,6 +70,92 @@ class CatBoostWrapper(ClassifierMixin, BaseEstimator):
 
 
 # ---------------------------------------------------------------------------
+# XGBoost ranking wrapper
+# ---------------------------------------------------------------------------
+
+
+class RankingXGBClassifier(ClassifierMixin, BaseEstimator):
+    """XGBoost with ranking objective (rank:map or rank:ndcg).
+
+    Optimizes ranking quality directly instead of classification accuracy.
+    Better aligned with threshold-free multi-budget evaluation that scores
+    the top-k predictions by probability.
+
+    Ranking requires query groups (samples competing against each other).
+    Pass groups to fit(), or the wrapper creates groups of `group_size`
+    from consecutive rows (with time-sorted data, this approximates
+    same-period comparisons).
+
+    Outputs pseudo-probabilities via sigmoid(ranking_score) for predict_proba.
+
+    Usage in experiment.py:
+        from research.model_wrappers import RankingXGBClassifier
+
+        def build_model(y_train):
+            return RankingXGBClassifier(
+                n_estimators=500, max_depth=6, learning_rate=0.05,
+                objective="rank:map", group_size=200,
+            )
+    """
+
+    def __init__(self, objective="rank:map", group_size=200, **kwargs):
+        self.objective = objective
+        self.group_size = group_size
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        self._xgb_kwargs = kwargs
+
+    def get_params(self, deep=True):
+        params = {"objective": self.objective, "group_size": self.group_size}
+        params.update({k: getattr(self, k) for k in self._xgb_kwargs})
+        return params
+
+    def set_params(self, **params):
+        for key, value in params.items():
+            setattr(self, key, value)
+            if key not in ("objective", "group_size"):
+                self._xgb_kwargs[key] = value
+        return self
+
+    def _make_groups(self, n, groups=None):
+        """Build qid array for XGBoost ranking."""
+        if groups is not None:
+            return groups
+        gs = self.group_size
+        qid = np.repeat(np.arange(n // gs + 1), gs)[:n]
+        return qid
+
+    def fit(self, X, y, groups=None):
+        import xgboost as xgb
+
+        qid = self._make_groups(len(y), groups)
+        dtrain = xgb.DMatrix(X, label=y)
+        dtrain.set_group([int((qid == g).sum()) for g in np.unique(qid)])
+
+        params = {
+            "objective": self.objective,
+            "eval_metric": "map" if "map" in self.objective else "ndcg",
+            **{k: v for k, v in self._xgb_kwargs.items()
+               if k not in ("n_estimators",)},
+        }
+        n_rounds = self._xgb_kwargs.get("n_estimators", 500)
+        self._model = xgb.train(params, dtrain, num_boost_round=n_rounds)
+        self.classes_ = np.array([0, 1])
+        return self
+
+    def predict_proba(self, X):
+        import xgboost as xgb
+
+        dtest = xgb.DMatrix(X)
+        scores = self._model.predict(dtest)
+        proba_1 = expit(scores)
+        return np.column_stack([1 - proba_1, proba_1])
+
+    def predict(self, X):
+        return (self.predict_proba(X)[:, 1] > 0.5).astype(int)
+
+
+# ---------------------------------------------------------------------------
 # PyTorch wrappers (lazy-loaded to avoid OpenMP conflicts)
 # ---------------------------------------------------------------------------
 
@@ -151,6 +237,34 @@ class TorchClassifier(_BaseTorchClassifier):
         return np.column_stack([1 - proba_1, proba_1])
 
 
+def _focal_loss(logits, targets, alpha, gamma):
+    """Numerically stable focal loss (Lin et al. 2017).
+
+    Uses F.binary_cross_entropy_with_logits internally for stability.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    bce = F.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+    p = torch.sigmoid(logits)
+    p_t = targets * p + (1 - targets) * (1 - p)
+    alpha_t = targets * alpha + (1 - targets) * (1 - alpha)
+    focal_weight = (1 - p_t) ** gamma
+    return (alpha_t * focal_weight * bce).mean()
+
+
+def _train_focal_loop(module, loader, optimizer, device, alpha, gamma, epochs):
+    """Shared focal loss training loop for FocalTorchClassifier and FocalSequenceClassifier."""
+    for _ in range(epochs):
+        module.train()
+        for xb, yb in loader:
+            xb, yb = xb.to(device), yb.to(device)
+            loss = _focal_loss(module(xb), yb, alpha, gamma)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+
 class FocalTorchClassifier(_BaseTorchClassifier):
     """TorchClassifier with focal loss -- downweights easy negatives.
 
@@ -179,45 +293,17 @@ class FocalTorchClassifier(_BaseTorchClassifier):
         self.alpha = alpha
         self.focal_gamma = focal_gamma
 
-    def _train_focal(self, X_t, y_t):
+    def fit(self, X, y):
         import torch
         from torch.utils.data import DataLoader, TensorDataset
 
         self.module.to(self.device)
-        self.module.train()
-        loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
-        optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
-
-        alpha = self.alpha
-        gamma = self.focal_gamma
-
-        for _ in range(self.epochs):
-            for xb, yb in loader:
-                xb, yb = xb.to(self.device), yb.to(self.device)
-                logits = self.module(xb)
-                p = torch.sigmoid(logits)
-
-                # Per-sample alpha: alpha for positives, (1-alpha) for negatives
-                alpha_t = yb * alpha + (1 - yb) * (1 - alpha)
-
-                # Focal modulation: (1-p_t)^gamma where p_t is predicted prob of true class
-                p_t = yb * p + (1 - yb) * (1 - p)
-                focal_weight = (1 - p_t) ** gamma
-
-                # Standard BCE, reweighted
-                bce = -yb * torch.log(p + 1e-8) - (1 - yb) * torch.log(1 - p + 1e-8)
-                loss = (alpha_t * focal_weight * bce).mean()
-
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-    def fit(self, X, y):
-        import torch
-
         X_t = torch.tensor(X, dtype=torch.float32)
         y_t = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
-        self._train_focal(X_t, y_t)
+        loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
+        optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
+        _train_focal_loop(self.module, loader, optimizer, self.device,
+                          self.alpha, self.focal_gamma, self.epochs)
         return self
 
     def predict_proba(self, X):
@@ -324,29 +410,98 @@ class FocalSequenceClassifier(SequenceClassifier):
         from torch.utils.data import DataLoader, TensorDataset
 
         self.module.to(self.device)
-        self.module.train()
         loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
         optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
+        _train_focal_loop(self.module, loader, optimizer, self.device,
+                          self.alpha, self.focal_gamma, self.epochs)
 
-        alpha = self.alpha
-        gamma = self.focal_gamma
 
-        for _ in range(self.epochs):
-            for xb, yb in loader:
-                xb, yb = xb.to(self.device), yb.to(self.device)
-                logits = self.module(xb)
-                p = torch.sigmoid(logits)
+# ---------------------------------------------------------------------------
+# Direct Utility optimization
+# ---------------------------------------------------------------------------
 
-                alpha_t = yb * alpha + (1 - yb) * (1 - alpha)
-                p_t = yb * p + (1 - yb) * (1 - p)
-                focal_weight = (1 - p_t) ** gamma
 
-                bce = -yb * torch.log(p + 1e-8) - (1 - yb) * torch.log(1 - p + 1e-8)
-                loss = (alpha_t * focal_weight * bce).mean()
+class DirectUtilityClassifier(_BaseTorchClassifier):
+    """Optimizes expected reward directly without REINFORCE sampling.
 
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+    Instead of sampling actions and using log-probability gradients, directly
+    maximizes: E[reward] = P(buy|x) * r_buy + P(skip|x) * r_skip.
+
+    With r_skip=0: loss = -mean(sigmoid(logit) * reward).
+    Positive rewards increase P(buy), negative rewards decrease it.
+    No sampling noise, no variance reduction needed, strictly more
+    sample-efficient than REINFORCE for offline data.
+
+    Falls back to weighted BCE when rewards=None.
+
+    Usage in experiment.py:
+        from research.model_wrappers import DirectUtilityClassifier, TorchMLP
+
+        def build_model(y_train):
+            return DirectUtilityClassifier(
+                module=TorchMLP(input_dim=54, hidden_dims=(128, 64)),
+                epochs=50, lr=1e-3, batch_size=512,
+            )
+
+        # With custom rewards:
+        model.fit(X_train, y_train, rewards=forward_returns_5d)
+    """
+
+    def __init__(self, module, epochs=50, lr=1e-3, batch_size=512, pos_weight=1.0):
+        super().__init__(module, epochs, lr, batch_size, pos_weight)
+
+    def fit(self, X, y, rewards=None):
+        """Train by maximizing expected utility.
+
+        Args:
+            X: Feature matrix (n_samples, n_features).
+            y: Binary labels.
+            rewards: Optional signed reward per sample. Positive = buying was
+                     good. When provided, optimizes expected reward directly.
+                     When None, falls back to pos_weight-weighted BCE.
+        """
+        import torch
+        from torch.utils.data import DataLoader, TensorDataset
+
+        self.module.to(self.device)
+        optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
+
+        X_t = torch.tensor(X, dtype=torch.float32)
+        y_t = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
+
+        if rewards is not None:
+            r_t = torch.tensor(rewards, dtype=torch.float32).unsqueeze(1)
+            loader = DataLoader(TensorDataset(X_t, y_t, r_t),
+                                batch_size=self.batch_size, shuffle=True)
+
+            for _ in range(self.epochs):
+                self.module.train()
+                for xb, yb, rb in loader:
+                    xb = xb.to(self.device)
+                    rb = rb.to(self.device)
+                    logits = self.module(xb)
+                    p_buy = torch.sigmoid(logits)
+                    # Expected utility: P(buy)*r_buy + P(skip)*r_skip
+                    # With r_skip = 0: utility = P(buy) * reward
+                    utility = p_buy * rb
+                    loss = -utility.mean()
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+        else:
+            # No rewards -- fall back to weighted BCE
+            self._train(X_t, y_t)
+
+        self.classes_ = np.array([0, 1])
+        return self
+
+    def predict_proba(self, X):
+        logits = self._batched_logits(X)
+        proba_1 = expit(logits)
+        return np.column_stack([1 - proba_1, proba_1])
+
+    def predict(self, X):
+        return (self.predict_proba(X)[:, 1] > 0.5).astype(int)
 
 
 # ---------------------------------------------------------------------------
@@ -382,12 +537,16 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
         super().__init__(module, epochs, lr, batch_size, pos_weight)
         self.entropy_coef = entropy_coef
         self.baseline = baseline
+        self._has_extra_head = False
 
     def _build_policy_head(self, module):
-        """Replace single-output head with 2-class logits for policy gradient."""
+        """Replace single-output head with 2-class logits for policy gradient.
+
+        Finds the last Linear(*, 1) layer and swaps it for Linear(*, 2).
+        If no such layer exists, appends a Linear(last_out, 2) head.
+        """
         import torch.nn as nn
 
-        # Find the last Linear layer and replace with 2-output version
         last_linear = None
         last_name = None
         for name, layer in module.named_modules():
@@ -397,7 +556,6 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
 
         if last_linear is not None:
             new_layer = nn.Linear(last_linear.in_features, 2)
-            # Navigate to parent and replace
             parts = last_name.split(".")
             parent = module
             for p in parts[:-1]:
@@ -406,8 +564,27 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
                 parent[int(parts[-1])] = new_layer
             else:
                 setattr(parent, parts[-1], new_layer)
+        else:
+            # No Linear(*, 1) found -- find any last Linear and append a 2-class head
+            last_any = None
+            for layer in module.modules():
+                if isinstance(layer, nn.Linear):
+                    last_any = layer
+            if last_any is not None:
+                self._policy_head = nn.Linear(last_any.out_features, 2)
+                self._policy_head.to(next(module.parameters()).device)
+                self._has_extra_head = True
+            else:
+                raise ValueError("Module has no Linear layers; cannot build policy head")
 
         return module
+
+    def _policy_forward(self, x):
+        """Forward pass returning 2-class logits."""
+        out = self.module(x)
+        if self._has_extra_head:
+            out = self._policy_head(out)
+        return out
 
     def fit(self, X, y, rewards=None):
         """Train with REINFORCE.
@@ -427,7 +604,10 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
 
         self.module = self._build_policy_head(self.module)
         self.module.to(self.device)
-        optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
+        all_params = list(self.module.parameters())
+        if self._has_extra_head:
+            all_params += list(self._policy_head.parameters())
+        optimizer = torch.optim.Adam(all_params, lr=self.lr)
 
         X_t = torch.tensor(X, dtype=torch.float32)
         y_t = torch.tensor(y, dtype=torch.long)
@@ -447,7 +627,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
                 yb = batch[1].to(self.device)
                 rb = batch[2].to(self.device) if rewards is not None else None
 
-                logits = self.module(xb)
+                logits = self._policy_forward(xb)
                 dist = Categorical(logits=logits)
                 actions = dist.sample()
 
@@ -485,7 +665,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
         with torch.no_grad():
             for i in range(0, len(X), self.batch_size):
                 batch = torch.tensor(X[i:i + self.batch_size], dtype=torch.float32).to(self.device)
-                logits = self.module(batch)
+                logits = self._policy_forward(batch)
                 probs = torch.softmax(logits, dim=-1).cpu().numpy()
                 all_probs.append(probs)
         return np.concatenate(all_probs)

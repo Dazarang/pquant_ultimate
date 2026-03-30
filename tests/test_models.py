@@ -67,6 +67,41 @@ class TestXGBoost:
         _check_model(model, X_train, y_train, X_val, y_val)
 
 
+class TestRankingXGB:
+    def test_pipeline(self, pipeline_data):
+        from research.model_wrappers import RankingXGBClassifier
+
+        X_train, y_train, X_val, y_val, *_ = pipeline_data
+        model = RankingXGBClassifier(
+            objective="rank:map", group_size=100,
+            n_estimators=50, max_depth=3, learning_rate=0.1,
+        )
+        _check_model(model, X_train, y_train, X_val, y_val)
+
+    def test_rank_ndcg(self, pipeline_data):
+        from research.model_wrappers import RankingXGBClassifier
+
+        X_train, y_train, X_val, y_val, *_ = pipeline_data
+        model = RankingXGBClassifier(
+            objective="rank:ndcg", group_size=50,
+            n_estimators=30, max_depth=3, learning_rate=0.1,
+        )
+        _check_model(model, X_train, y_train, X_val, y_val)
+
+    def test_custom_groups(self, pipeline_data):
+        from research.model_wrappers import RankingXGBClassifier
+
+        X_train, y_train, X_val, y_val, *_ = pipeline_data
+        groups = np.repeat(np.arange(len(y_train) // 50 + 1), 50)[:len(y_train)]
+        model = RankingXGBClassifier(
+            objective="rank:map", n_estimators=30, max_depth=3,
+        )
+        model.fit(X_train, y_train, groups=groups)
+        proba = model.predict_proba(X_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+
 class TestLightGBM:
     def test_pipeline(self, pipeline_data):
         from lightgbm import LGBMClassifier
@@ -412,3 +447,151 @@ class TestPolicyGradient:
         preds = model.predict(X_val)
         assert preds.shape == (len(X_val),)
         assert set(np.unique(preds)).issubset({0, 1})
+
+    def test_signed_rewards_differ(self, pipeline_data):
+        """Verify positive and negative rewards produce different policies."""
+        import torch
+
+        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+
+        # All positive rewards -- should encourage buying
+        pos_rewards = np.abs(np.random.randn(len(y_train))).astype(np.float32)
+        m1 = PolicyGradientClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(16,), dropout=0.0),
+            epochs=10, lr=1e-3, batch_size=256, pos_weight=1.0,
+        )
+        m1.device = torch.device("cpu")
+        m1.fit(X_train, y_train, rewards=pos_rewards)
+        p1 = m1.predict_proba(X_val)[:, 1].mean()
+
+        # All negative rewards -- should discourage buying
+        neg_rewards = -np.abs(np.random.randn(len(y_train))).astype(np.float32)
+        m2 = PolicyGradientClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(16,), dropout=0.0),
+            epochs=10, lr=1e-3, batch_size=256, pos_weight=1.0,
+        )
+        m2.device = torch.device("cpu")
+        m2.fit(X_train, y_train, rewards=neg_rewards)
+        p2 = m2.predict_proba(X_val)[:, 1].mean()
+
+        # Positive rewards should produce higher buy probability than negative
+        assert p1 > p2, f"Positive rewards mean p={p1:.3f} should > negative p={p2:.3f}"
+
+
+class TestFocalTorchClassifier:
+    def test_pipeline(self, pipeline_data):
+        import torch
+
+        from research.model_wrappers import FocalTorchClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+        model = FocalTorchClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(32, 16), dropout=0.0),
+            epochs=5, lr=1e-3, batch_size=256,
+            alpha=(y_train == 0).sum() / len(y_train), focal_gamma=2.0,
+        )
+        model.device = torch.device("cpu")
+        _check_model(model, X_train, y_train, X_val, y_val)
+
+    def test_gamma_zero_matches_weighted_bce(self, pipeline_data):
+        """With focal_gamma=0, focal loss reduces to alpha-weighted BCE."""
+        import torch
+
+        from research.model_wrappers import FocalTorchClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+        model = FocalTorchClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(16,), dropout=0.0),
+            epochs=3, lr=1e-3, batch_size=256,
+            alpha=0.5, focal_gamma=0.0,
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train)
+        proba = model.predict_proba(X_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+
+class TestFocalSequenceClassifier:
+    def test_pipeline(self, pipeline_data):
+        import torch
+
+        from research.model_wrappers import FocalSequenceClassifier, GRUNet
+
+        X_train, y_train, X_val, y_val, n_features, groups_train, groups_val = pipeline_data
+        model = FocalSequenceClassifier(
+            module=GRUNet(input_dim=n_features, hidden_dim=16, num_layers=1, dropout=0.0),
+            window=5, epochs=3, lr=1e-3, batch_size=256,
+            alpha=(y_train == 0).sum() / len(y_train), focal_gamma=2.0,
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train, groups=groups_train)
+        proba = model.predict_proba(X_val, groups=groups_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.all(proba >= 0) and np.all(proba <= 1)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+
+class TestDirectUtility:
+    def test_with_rewards(self, pipeline_data):
+        import torch
+
+        from research.model_wrappers import DirectUtilityClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+        rewards = np.random.randn(len(y_train)).astype(np.float32)
+        model = DirectUtilityClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(32, 16), dropout=0.0),
+            epochs=5, lr=1e-3, batch_size=256,
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train, rewards=rewards)
+        proba = model.predict_proba(X_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+        assert np.array_equal(model.classes_, [0, 1])
+
+    def test_fallback_bce(self, pipeline_data):
+        """Without rewards, falls back to weighted BCE."""
+        import torch
+
+        from research.model_wrappers import DirectUtilityClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+        model = DirectUtilityClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(16,), dropout=0.0),
+            epochs=3, lr=1e-3, batch_size=256,
+            pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
+        )
+        model.device = torch.device("cpu")
+        _check_model(model, X_train, y_train, X_val, y_val)
+
+    def test_signed_rewards_differ(self, pipeline_data):
+        """Positive rewards should produce higher P(buy) than negative."""
+        import torch
+
+        from research.model_wrappers import DirectUtilityClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+
+        pos_rewards = np.abs(np.random.randn(len(y_train))).astype(np.float32) + 0.1
+        m1 = DirectUtilityClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(16,), dropout=0.0),
+            epochs=10, lr=1e-3, batch_size=256,
+        )
+        m1.device = torch.device("cpu")
+        m1.fit(X_train, y_train, rewards=pos_rewards)
+        p1 = m1.predict_proba(X_val)[:, 1].mean()
+
+        neg_rewards = -(np.abs(np.random.randn(len(y_train))).astype(np.float32) + 0.1)
+        m2 = DirectUtilityClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(16,), dropout=0.0),
+            epochs=10, lr=1e-3, batch_size=256,
+        )
+        m2.device = torch.device("cpu")
+        m2.fit(X_train, y_train, rewards=neg_rewards)
+        p2 = m2.predict_proba(X_val)[:, 1].mean()
+
+        assert p1 > p2, f"Positive rewards mean p={p1:.3f} should > negative p={p2:.3f}"

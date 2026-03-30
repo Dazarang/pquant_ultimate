@@ -82,12 +82,13 @@ interaction  (3)  rsi*volume, drawdown*panic, rsi*volatility
 
 | Category | Available |
 |---|---|
-| Gradient boosting | `XGBClassifier`, `LGBMClassifier`, `CatBoostWrapper` (via `research/model_wrappers.py` -- use instead of raw `CatBoostClassifier` for sklearn ensemble compatibility) |
+| Gradient boosting | `XGBClassifier`, `LGBMClassifier`, `CatBoostWrapper`, `RankingXGBClassifier` (via `research/model_wrappers.py`) |
 | Sklearn | `RandomForestClassifier`, `ExtraTreesClassifier`, `GradientBoostingClassifier`, `AdaBoostClassifier`, `BaggingClassifier`, `MLPClassifier`, `LogisticRegression`, `SGDClassifier`, `SVC`, `KNeighborsClassifier` |
 | Ensembling | `StackingClassifier`, `VotingClassifier` |
 | Neural (PyTorch) | `TorchClassifier`, `TorchMLP`, `SequenceClassifier`, `LSTMNet`, `GRUNet`, `TransformerNet` via `research/model_wrappers.py` |
-| RL / Policy gradient | `PolicyGradientClassifier` via `research/model_wrappers.py` -- REINFORCE with custom rewards |
-| Wrappers | `CatBoostWrapper`, `TorchClassifier`, `SequenceClassifier`, `PolicyGradientClassifier` -- all in `research/model_wrappers.py`, all sklearn-compatible |
+| Focal loss | `FocalTorchClassifier` (flat), `FocalSequenceClassifier` (sequential) -- drop-in replacements that downweight easy negatives |
+| Utility / RL | `DirectUtilityClassifier` (expected reward, no sampling), `PolicyGradientClassifier` (REINFORCE) -- via `research/model_wrappers.py` |
+| Wrappers | `CatBoostWrapper`, `RankingXGBClassifier`, `TorchClassifier`, `FocalTorchClassifier`, `SequenceClassifier`, `FocalSequenceClassifier`, `DirectUtilityClassifier`, `PolicyGradientClassifier` -- all in `research/model_wrappers.py`, all sklearn-compatible |
 | Neural (MLX) | `mlx.core`, `mlx.nn` -- build custom, wrap with fit/predict_proba interface |
 
 ### Neural architecture modules (all via `research/model_wrappers.py`)
@@ -101,9 +102,21 @@ interaction  (3)  rsi*volume, drawdown*panic, rsi*volatility
 | `GRUNet` | Sequence | `input_dim, hidden_dim, num_layers, dropout` |
 | `TransformerNet` | Sequence | `input_dim, d_model, nhead, num_layers, dim_feedforward, dropout` |
 
+### RankingXGBClassifier
+
+XGBoost with ranking objective (`rank:map` or `rank:ndcg`). Optimizes ranking quality instead of classification accuracy. Params: `objective, group_size, n_estimators, max_depth, learning_rate, ...` (all XGBoost params). Creates query groups from consecutive rows of `group_size`; pass `groups` to `fit()` for custom grouping.
+
+### FocalTorchClassifier / FocalSequenceClassifier
+
+Drop-in replacements for `TorchClassifier` / `SequenceClassifier` with focal loss. Params: same as base wrapper plus `alpha` (class balance weight) and `focal_gamma` (focusing strength).
+
+### DirectUtilityClassifier
+
+Optimizes expected reward directly: `loss = -mean(P(buy|x) * reward)`. Accepts any `nn.Module`. Params: `module, epochs, lr, batch_size, pos_weight`. Supports custom signed rewards via `fit(X, y, rewards=...)`. Falls back to weighted BCE when rewards not provided.
+
 ### PolicyGradientClassifier (REINFORCE)
 
-Trains via REINFORCE instead of cross-entropy. Accepts any `nn.Module`. Params: `module, epochs, lr, batch_size, gamma, entropy_coef, baseline, pos_weight`. Supports optional custom rewards via `fit(X, y, rewards=...)` -- when omitted, uses asymmetric binary reward from labels.
+Trains via REINFORCE with stochastic action sampling. Accepts any `nn.Module`. Params: `module, epochs, lr, batch_size, entropy_coef, baseline, pos_weight`. Supports custom signed rewards via `fit(X, y, rewards=...)`.
 
 ### Class imbalance
 ~5% positive rate (1:20 ratio). Address with `scale_pos_weight`, `class_weight`, calibration, or other techniques.
