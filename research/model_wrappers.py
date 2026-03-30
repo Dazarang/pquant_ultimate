@@ -590,6 +590,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
             # Root module IS the Linear(*, 1) -- wrap with extra head
             self._policy_head = nn.Linear(last_linear.in_features, 2)
             self._has_extra_head = True
+            self._policy_head_built = True
         else:
             # No Linear(*, 1) -- find any last Linear and append a 2-class head
             last_any = None
@@ -599,6 +600,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
             if last_any is not None:
                 self._policy_head = nn.Linear(last_any.out_features, 2)
                 self._has_extra_head = True
+                self._policy_head_built = True
             else:
                 raise ValueError("Module has no Linear layers; cannot build policy head")
 
