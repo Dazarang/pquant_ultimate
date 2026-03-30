@@ -552,6 +552,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
         self.entropy_coef = entropy_coef
         self.baseline = baseline
         self._has_extra_head = False
+        self._policy_head_built = False
 
     def _build_policy_head(self, module):
         """Replace single-output head with 2-class logits for policy gradient.
