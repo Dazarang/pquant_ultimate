@@ -83,7 +83,7 @@ def plot():
 
     n_total = len(df)
     n_kept = len(kept)
-    ax.set_title(f"Autoresearch Progress: {n_total} Experiments, {n_kept} Kept", fontsize=14)
+    ax.set_title(f"Autoresearch Progress: {n_total} Experiments, {n_kept} Kept Improvements", fontsize=14)
     ax.legend(loc="upper left", fontsize=9)
     ax.grid(True, alpha=0.2)
 
