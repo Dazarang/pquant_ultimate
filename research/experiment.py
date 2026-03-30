@@ -54,9 +54,9 @@ def build_model(y_train):
 
     # Deep, heavily regularized — captures complex interactions
     xgb = XGBClassifier(
-        n_estimators=800,
+        n_estimators=1000,
         max_depth=7,
-        learning_rate=0.02,
+        learning_rate=0.016,
         min_child_weight=20,
         gamma=0.5,
         reg_alpha=2.0,
@@ -72,9 +72,9 @@ def build_model(y_train):
 
     # Shallow, smooth, many trees — captures gradual trends
     lgbm = LGBMClassifier(
-        n_estimators=1200,
+        n_estimators=1500,
         max_depth=4,
-        learning_rate=0.01,
+        learning_rate=0.008,
         min_child_samples=80,
         reg_alpha=0.5,
         reg_lambda=0.5,
@@ -88,9 +88,9 @@ def build_model(y_train):
 
     # Medium depth, heavy L2 — balanced generalization
     cat = CatBoostWrapper(
-        iterations=800,
+        iterations=1000,
         depth=5,
-        learning_rate=0.025,
+        learning_rate=0.020,
         l2_leaf_reg=10.0,
         scale_pos_weight=spw,
         random_seed=44,

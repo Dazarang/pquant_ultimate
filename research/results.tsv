@@ -1,2 +1,14 @@
 iter	score	status	description
 0	-2.4916	keep	baseline: XGBClassifier, all stocks, all features, multi-budget eval (with tie-weight fix)
+1	-2.3038	keep	    spw = np.sqrt(neg / pos)  # moderate weight (~4.4) instead of full ratio (~1
+2	-2.3186	discard	    g = df.groupby("stock_id")      # Candlestick microstructure     total_range
+3	-2.0322	keep	    # Deep, heavily regularized — captures complex interactions         n_estima
+4	-2.1082	discard	    g = df.groupby("stock_id")      # Intraday recovery: (close-low)/(high-low),
+5	-2.0358	discard	    ratio = neg / pos     # Differentiated class weights: each model sees the im
+6	-1.6695	keep	from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier  # noqa: E40
+7	NA	crash	from sklearn.base import BaseEstimator, ClassifierMixin  # noqa: E402 class MLPW
+8	-1.5636	keep	from sklearn.ensemble import ExtraTreesClassifier, StackingClassifier  # noqa: E
+9	-1.9019	discard	        final_estimator=LGBMClassifier(             n_estimators=100,           
+10	-1.5281	keep	FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interacti
+11	-1.5636	discard	FEATURE_GROUPS = ["base", "advanced", "lag", "rolling", "roc", "percentile", "in
+12	-4.7561	discard	        passthrough=True, 
