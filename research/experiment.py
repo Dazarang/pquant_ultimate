@@ -50,7 +50,7 @@ def build_model(y_train):
     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
     neg = (y_train == 0).sum()
     pos = (y_train == 1).sum()
-    spw = np.sqrt(neg / pos)  # moderate weight (~4.4) instead of full ratio (~19)
+    spw = np.sqrt(neg / pos)
 
     xgb = XGBClassifier(
         n_estimators=1000,
