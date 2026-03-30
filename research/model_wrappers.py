@@ -417,7 +417,8 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
             y: Binary labels (used as actions for reward assignment).
             rewards: Optional signed reward per sample (e.g. forward returns).
                      Positive = buying was good, negative = buying was bad.
-                     Action 1 (buy) receives the reward; action 0 (skip) receives 0.
+                     Action 1 (buy) receives rb; action 0 (skip) receives -rb
+                     (opportunity cost: skipping a good trade is penalized).
                      If None, uses +pos_weight for y=1 and -1 for y=0.
         """
         import torch
