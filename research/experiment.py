@@ -49,6 +49,7 @@ def build_model(y_train):
     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
     neg = (y_train == 0).sum()
     pos = (y_train == 1).sum()
+    spw = np.sqrt(neg / pos)  # moderate weight (~4.4) instead of full ratio (~19)
 
     xgb = XGBClassifier(
         n_estimators=600,
@@ -60,7 +61,7 @@ def build_model(y_train):
         reg_lambda=1.0,
         subsample=0.75,
         colsample_bytree=0.65,
-        scale_pos_weight=neg / pos,
+        scale_pos_weight=spw,
         tree_method="hist",
         random_state=42,
         n_jobs=-1,
@@ -76,7 +77,7 @@ def build_model(y_train):
         reg_lambda=1.0,
         subsample=0.75,
         colsample_bytree=0.65,
-        scale_pos_weight=neg / pos,
+        scale_pos_weight=spw,
         random_state=43,
         n_jobs=-1,
         verbose=-1,
@@ -87,7 +88,7 @@ def build_model(y_train):
         depth=6,
         learning_rate=0.03,
         l2_leaf_reg=5.0,
-        scale_pos_weight=neg / pos,
+        scale_pos_weight=spw,
         random_seed=44,
         verbose=0,
     )
