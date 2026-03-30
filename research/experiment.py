@@ -38,9 +38,6 @@ FEATURE_GROUPS = None  # None = all
 TRAIN_END = "2022-12-31"
 VAL_END = "2023-12-31"
 
-# Prediction threshold
-THRESHOLD = 0.85
-
 # ===========================================================================
 # MODEL -- researcher edits this section
 # ===========================================================================
@@ -133,13 +130,12 @@ def run():
     model = build_model(y_train)
     model.fit(X_train, y_train)
 
-    # 8. Predict on val (unscaled val for forward returns)
+    # 8. Predict on val
     y_pred_proba = model.predict_proba(X_val)[:, 1]
-    y_pred = (y_pred_proba > THRESHOLD).astype(int)
-    print(f"Predictions: {y_pred.sum()} signals / {len(y_pred)} total")
+    print(f"Predictions: proba range [{y_pred_proba.min():.4f}, {y_pred_proba.max():.4f}]")
 
-    # 9. Tiered evaluation
-    results = tiered_eval(val, y_val, y_pred, y_pred_proba)
+    # 9. Tiered evaluation (multi-budget, threshold-free)
+    results = tiered_eval(val, y_val, y_pred_proba)
 
     # 10. Output final metric for gate.sh
     score = results.get("tier3", float("-inf"))

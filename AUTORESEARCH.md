@@ -6,7 +6,7 @@ Autonomous ML research loop inspired by [Karpathy's autoresearch](https://github
 
 ```
 research/
-├── experiment.py       # MUTABLE -- model, hyperparams, features, stocks, threshold
+├── experiment.py       # MUTABLE -- model, hyperparams, features, stocks
 ├── features_lab.py     # MUTABLE -- custom feature engineering (accumulates on wins)
 ├── baseline.py         # IMMUTABLE -- logistic regression reference point
 ├── program.md          # Agent instructions, constraints, dead ends
@@ -30,9 +30,9 @@ for each iteration:
   2. Agent makes ONE focused edit to experiment.py and/or features_lab.py
   3. gate.sh runs:
      a. Verify lib/ unchanged (anti-gaming -- judge stays out of arena)
-     b. Run experiment.py (15 min timeout)
+     b. Run experiment.py (30 min timeout)
      c. Extract COMPOSITE_SCORE from stdout
-     d. Check all 3 tiers passed
+     d. Check PASSED flag (AP gate)
   4. If score > best → commit, update .best_score, log to results.tsv (keep)
   5. If score <= best → log diff to COMBAT_LOG.md, revert, log to results.tsv (discard)
   6. Update progress.png plot
@@ -47,7 +47,6 @@ for each iteration:
 | Custom features | features_lab.py | New backward-looking features |
 | Split boundaries | experiment.py `TRAIN_END/VAL_END` | `"2023-06-30"` |
 | Model + hyperparams | experiment.py `build_model()` | XGBoost, LightGBM, depth, lr, etc. |
-| Prediction threshold | experiment.py `THRESHOLD` | `0.3` (lower = more signals) |
 
 ## What's Immutable (anti-gaming)
 
@@ -59,28 +58,33 @@ for each iteration:
 | `research/gate.sh` | Can't weaken verification |
 | `research/baseline.py` | Fixed comparison point |
 
-## The Metric: Composite Score
+## The Metric: Multi-Budget Composite Score
 
+Evaluation is **threshold-free**. The model outputs probabilities; the judge selects signals at 6 budget levels (top 0.05% to 2%) and evaluates at 3 horizons (5d, 10d, 20d).
+
+Per (budget, horizon) cell:
 ```
-score = 0.30 * excess_return * 100         (alpha over equal-weight market)
-      + 0.25 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
-      - 0.20 * |worst_decile| * 100        (tail risk penalty)
-      - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
-      - 0.15 * |mean_mae| * 100            (path risk: avg max adverse excursion)
+raw = 0.50 * excess_return * 100         (alpha over equal-weight market)
+    + 0.15 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
+    - 0.15 * |worst_decile| * 100        (tail risk penalty)
+    - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
+    - 0.10 * |mean_mae| * 100            (path risk: avg max adverse excursion)
+
+W = sqrt(effective_n / (effective_n + 20))   (soft evidence scaling)
 ```
 
-Hard gates before composite score:
-- Tier 1: avg_precision > 0.05 (model better than random)
-- Tier 2: at least one horizon (5d/10d/20d) must show positive excess return vs market
+Final score = mean of W * raw across all 18 cells. Missing cells count as 0.
+
+Hard gate: avg_precision > 0.05 (model better than random)
 
 ## Two Loss Functions
 
 | What | Purpose | Used by |
 |------|---------|---------|
-| XGBoost logloss | Train the model to learn patterns | `model.fit()` |
-| Composite score | Judge if patterns translate to profitable trades | `gate.sh` keep/discard |
+| Model loss (logloss/gini/etc) | Train the model to learn patterns | `model.fit()` |
+| Multi-budget composite score | Judge if probability ranking translates to profitable trades | `gate.sh` keep/discard |
 
-These are intentionally different. The model optimizes logloss to find patterns. We evaluate whether those patterns make money. A model can have great logloss but terrible composite score (predicts labels accurately but the "bottoms" it finds keep dropping).
+These are intentionally different. The model optimizes its internal loss to find patterns. We evaluate whether those patterns make money across multiple signal budgets. A model can have great logloss but terrible composite score (predicts labels accurately but the "bottoms" it ranks highly keep dropping).
 
 ## From Research to Production
 

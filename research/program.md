@@ -15,7 +15,6 @@ You edit **two files only**:
 - **FEATURE_GROUPS**: which feature groups to use. Options: `"base"` (54), `"advanced"` (22), `"lag"` (70), `"rolling"` (64), `"roc"` (5), `"percentile"` (2), `"interaction"` (3). Or hand-pick individual features.
 - **TRAIN_END / VAL_END**: temporal split boundaries.
 - **build_model()**: model type, hyperparameters. You can use: sklearn, xgboost, lightgbm. Import what you need.
-- **threshold**: prediction threshold (default 0.5). With 1:32 class imbalance, lower thresholds may help.
 
 ### 2. `research/features_lab.py`
 - **add_custom_features(df)**: add new features to the DataFrame. Must be backward-looking only (no future data). Return `(df, list_of_new_feature_names)`.
@@ -29,19 +28,26 @@ You edit **two files only**:
 
 ## The Metric
 
-**Composite Score** (higher = better). Formula:
+**Multi-Budget Composite Score** (higher = better). The evaluation is **threshold-free** -- your model outputs probabilities, and the judge evaluates them at 6 signal budgets (top 0.05% to 2% of predictions) across 3 horizons (5d, 10d, 20d).
+
+For each (budget, horizon) cell, the raw score is:
 ```
-0.30 * excess_return * 100         (alpha over equal-weight market)
-+ 0.25 * (win_rate - 0.5) * 100     (consistency edge vs coin flip)
-- 0.20 * |worst_decile| * 100       (tail risk penalty)
+0.50 * excess_return * 100         (alpha over equal-weight market)
++ 0.15 * (win_rate - 0.5) * 100     (consistency edge vs coin flip)
+- 0.15 * |worst_decile| * 100       (tail risk penalty)
 - 0.10 * knife_rate * 100           (falling knife penalty, >5% loss)
-- 0.15 * |mean_mae| * 100           (path risk: avg max adverse excursion)
+- 0.10 * |mean_mae| * 100           (path risk: avg max adverse excursion)
 ```
 
-But there are **hard gates** before composite score:
+Each cell is then scaled by `W = sqrt(effective_n / (effective_n + 20))` -- a soft penalty for low evidence. The final score is the **mean of all 18 W*U cells**.
+
+This means your model must produce a good **ranking** across multiple operating points. You cannot game it by predicting rarely or frequently -- both extremes are captured.
+
+Hard gate:
 - Tier 1: avg_precision must be > 0.05 (sanity check)
-- Tier 2: at least one horizon (5d/10d/20d) must show positive excess return vs market
-- Fail either gate and the iteration is rejected.
+- Fail the gate and the iteration is rejected.
+
+**There is no THRESHOLD lever.** Signal selection is done by the immutable judge. Focus on model quality: architecture, features, hyperparameters, and calibration.
 
 ## The Dataset
 
@@ -84,7 +90,7 @@ interaction  (3)  rsi*volume, drawdown*panic, rsi*volatility
 | Neural (MLX) | `mlx.core`, `mlx.nn` -- build custom, wrap with fit/predict_proba interface |
 
 ### Class imbalance
-~5% positive rate (1:20 ratio). Address with `scale_pos_weight`, `class_weight`, threshold tuning, or other techniques.
+~5% positive rate (1:20 ratio). Address with `scale_pos_weight`, `class_weight`, calibration, or other techniques.
 
 ## The Loop
 
@@ -92,12 +98,12 @@ You are in an automated ratchet. After each edit, `gate.sh` runs the experiment.
 
 ## Rules
 
-1. **One hypothesis per iteration.** Multiple changes are fine if they serve a single testable idea. If it fails, you should know why. Don't confound independent variables (e.g. model + features + threshold).
+1. **One hypothesis per iteration.** Multiple changes are fine if they serve a single testable idea. If it fails, you should know why. Don't confound independent variables (e.g. model architecture + features + hyperparameters).
 2. **Read COMBAT_LOG.md first.** It contains reverted experiments with scores and diffs. Don't retry failed approaches.
 3. **30-minute gate timeout.** The gate kills runs exceeding this.
 4. **No future data in features.** Every feature must answer: "could I calculate this at market close on day T?"
 5. **Keep it simple.** A small improvement with ugly complexity is not worth it. Removing something for equal or better results is a win.
-6. **If stuck, try something radical.** Different model type, very different feature set, extreme threshold.
+6. **If stuck, try something radical.** Different model type, very different feature set, probability calibration.
 
 ## Dead Ends (updated as research progresses)
 

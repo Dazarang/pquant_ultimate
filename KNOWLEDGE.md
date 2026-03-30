@@ -22,37 +22,33 @@ A ratchet only moves in one direction. The composite score is the ratchet metric
 
 The branch can never get worse. Each winning iteration builds on the previous winner.
 
-## Composite Score Breakdown
+## Multi-Budget Composite Score
 
+Evaluation is **threshold-free**. The model outputs probabilities; the judge selects signals at 6 budget levels (top 0.05% to 2%) and evaluates at 3 horizons (5d, 10d, 20d).
+
+Per (budget, horizon) cell:
 ```
-score = 0.30 * excess_return * 100         (alpha over equal-weight market)
-      + 0.25 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
-      - 0.20 * |worst_decile| * 100        (tail risk penalty)
-      - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
-      - 0.15 * |mean_mae| * 100            (path risk: avg max adverse excursion)
+raw = 0.50 * excess_return * 100         (alpha over equal-weight market)
+    + 0.15 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
+    - 0.15 * |worst_decile| * 100        (tail risk penalty)
+    - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
+    - 0.10 * |mean_mae| * 100            (path risk: avg max adverse excursion)
+
+W = sqrt(effective_n / (effective_n + 20))   (soft evidence scaling)
 ```
 
-| Score | Meaning |
-|-------|---------|
-| < 0 | Negative alpha, path risk, or too many falling knives |
-| 0-1 | Marginal edge |
-| 1-3 | Decent |
-| 3-5 | Good |
-| 5+ | Excellent (validate to rule out overfitting) |
+Final score = mean of W * raw across all 18 cells. Missing cells count as 0.
 
-Scores above 3-4 on a small stock universe (5 stocks) should be validated on more stocks and with `benchmark_random_entry()` to confirm genuine skill.
+The multi-budget approach prevents gaming: the model must rank well at both sparse (high-conviction) and dense (screening) signal rates simultaneously.
 
-## 3-Tier Evaluation System
+## 2-Tier Evaluation System
 
 | Tier | What | Hard gate? |
 |------|------|------------|
-| Tier 1: Classification | Precision, recall, F1, ROC-AUC, avg_precision | AP must be > 0.05 |
-| Tier 2: Forward Returns | Mean/excess return, win rate, PF, MAE at 5/10/20 days | Any horizon must show positive excess return vs market |
-| Tier 3: Composite Score | Risk-adjusted score: excess return, win rate edge, tail/path risk | This is the ratchet metric |
+| Tier 1: Ranking Quality | ROC-AUC, avg_precision | AP must be > 0.05 |
+| Tier 2: Multi-Budget Composite | 6 budgets x 3 horizons, soft N-scaling | This is the ratchet metric |
 
-After Tier 3, a regime breakdown (bull/bear) reports signal quality per market environment (informational, no gating).
-
-Fail Tier 1 or 2 and the iteration is rejected regardless of composite score.
+Fail Tier 1 and the iteration is rejected.
 
 ## Benchmark vs Tiers
 
@@ -69,11 +65,10 @@ The benchmark picks random entry dates on the same stocks and compares returns. 
 
 ## Class Imbalance
 
-PivotLow is ~3% positive (1:32 ratio). This means:
-- Default threshold 0.5 often produces zero signals (model never predicts positive)
-- Must use `scale_pos_weight` in XGBoost (= neg_count / pos_count)
-- Lower thresholds (0.2-0.4) trade precision for more signals
-- More signals with decent forward returns can beat fewer signals with high precision
+PivotLow is ~5% positive (1:20 ratio). This means:
+- Must use `scale_pos_weight` in XGBoost (= neg_count / pos_count) or `class_weight="balanced"`
+- Probability calibration can improve ranking quality
+- The multi-budget eval handles the threshold question -- the model just needs good probability ranking
 
 ## Embargo Gap
 
@@ -104,21 +99,13 @@ Percentage of signals where the 10-day forward return is worse than -5%. Measure
 
 All features are backward-looking (no future data). Features are defined in `lib/features.py` with the `FEATURES` catalog.
 
-## macOS Dependencies
-
-XGBoost and LightGBM require OpenMP for parallel tree building:
-```bash
-brew install libomp
-```
-Without it, XGBoost's compiled C++ library (`libxgboost.dylib`) cannot load -- it needs `libomp.dylib` to parallelize across CPU cores. This is a macOS-specific requirement; Linux ships with libgomp.
-
 ## Pipeline Phases
 
 | Phase | What | When |
 |-------|------|------|
-| 1. Autoresearch | Ratchet loop explores model/feature/threshold space (open-ended) | Now |
+| 1. Autoresearch | Ratchet loop explores model/feature/hyperparameter space (open-ended) | Now |
 | 2. Validation | Test set eval, `benchmark_random_entry()`, regime breakdown, signal clustering | After ratchet converges |
-| 3. Optuna | Fine-tune hyperparams + threshold on winning architecture (defined search space) | After validation confirms skill |
+| 3. Optuna | Fine-tune hyperparams on winning architecture (defined search space) | After validation confirms skill |
 | 4. Production | Extract model outside research/, daily pipeline, signal generation, position sizing | After Optuna |
 
 Autoresearch finds the architecture, Optuna squeezes it. Sequential, not parallel.
@@ -128,15 +115,14 @@ Autoresearch finds the architecture, Optuna squeezes it. Sequential, not paralle
 Two nested optimization loops, model-agnostic (any `.fit()` + `.predict_proba()` model):
 
 - **Inner (model.fit):** Each model minimizes its own loss to learn P(bottom). XGBoost: logloss. RandomForest: Gini. Neural nets: BCE/focal loss. The model knows nothing about composite score.
-- **Outer (Optuna):** Maximizes composite_score -- evaluates buy/no-buy decisions after thresholding. Threshold is just another Optuna parameter.
+- **Outer (Optuna):** Maximizes multi-budget composite score -- evaluates probability ranking across 6 budgets x 3 horizons.
 
 The tiers map directly to Optuna:
 
 | Tier | Optuna role |
 |------|-------------|
 | Tier 1 (AP > 0.05) | Pruning -- kill trial early, cheap |
-| Tier 2 (positive excess) | Pruning -- kill trial early |
-| Tier 3 (composite score) | Objective -- the value Optuna maximizes |
+| Tier 2 (multi-budget composite) | Objective -- the value Optuna maximizes |
 
 `tiered_eval` already stops early on tier failure -- return `-inf` for failed trials. Multi-objective (excess return vs knife rate separately) is an alternative for Pareto exploration.
 

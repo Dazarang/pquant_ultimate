@@ -62,35 +62,9 @@ cat research/.best_score
 
 ### 2. Validate the winner
 ```bash
-uv run python -c "
-from lib.data import load_dataset, temporal_split, scale, LABEL_COL
-from lib.eval import tiered_eval, benchmark_random_entry
-
-# Load with same config as winning experiment
-df, fc = load_dataset('data/datasets/20260115/dataset.parquet', stocks=['AAPL','MSFT','GOOG','AMZN','TSLA'])
-train, val, test = temporal_split(df)
-train_s, val_s, test_s, scaler = scale(train, val, test, fc)
-
-# Train winning model (import from experiment.py)
-from research.experiment import build_model, THRESHOLD
-import numpy as np
-X_train, y_train = train_s[fc].values, train_s[LABEL_COL].values
-X_test, y_test = test_s[fc].values, test_s[LABEL_COL].values
-
-model = build_model(y_train)
-model.fit(X_train, y_train)
-
-y_proba = model.predict_proba(X_test)[:, 1]
-y_pred = (y_proba > THRESHOLD).astype(int)
-
-# Tier eval on TEST set (never seen during research)
-print('=== TEST SET (unseen) ===')
-results = tiered_eval(test, y_test, y_pred, y_proba)
-
-# Benchmark against random entry
-print('\n=== BENCHMARK ===')
-bm = benchmark_random_entry(test, y_pred)
-"
+# Use the dedicated test script (trains model, evaluates on held-out test set,
+# runs benchmark and backtest, generates signal plots)
+uv run python research/test_and_plot.py
 ```
 
 ### 3. If on a branch, merge

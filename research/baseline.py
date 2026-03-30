@@ -48,10 +48,8 @@ def run():
     model.fit(X_train, y_train)
 
     y_pred_proba = model.predict_proba(X_val)[:, 1]
-    y_pred = (y_pred_proba > 0.5).astype(int)
-    print(f"Predictions: {y_pred.sum()} signals / {len(y_pred)} total")
 
-    results = tiered_eval(val, y_val, y_pred, y_pred_proba)
+    results = tiered_eval(val, y_val, y_pred_proba)
     score = results.get("tier3", float("-inf"))
     print(f"\nBASELINE COMPOSITE_SCORE={score:.4f}")
     return results

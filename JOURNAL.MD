@@ -28,7 +28,7 @@ See `data/README.md` for usage.
 Shared utilities:
 - `features.py` - build_features() for ML dataset creation
 - `data.py` - load_dataset(), temporal_split(), scale(), list_features(), preview()
-- `eval.py` - 3-tier eval (evaluate, forward_returns, composite_score, tiered_eval), backtest_quick, plot_confusion
+- `eval.py` - 2-tier eval (ranking quality + multi-budget composite), select_top_frac, backtest_quick, benchmark_random_entry
 
 ### Pipeline (`pipeline/`) - DEPRECATED
 To be deleted in Phase 7. See `PLAN.md`.
@@ -57,6 +57,9 @@ Autoresearch system (Karpathy-style autonomous ML research):
 ---
 
 ## Journal Entries
+
+### 2026-03-30
+Replaced threshold-based composite score with threshold-free multi-budget evaluation. Previous metric was gameable (Goodhart's Law): researcher pushed threshold to 0.85, got 1 signal on val scoring 11.02 -- useless. New eval: model outputs probabilities only, judge selects signals at 6 budgets (0.05%-2%) x 3 horizons (5/10/20d), soft N-scaling via sqrt(eff_n/(eff_n+20)), missing cells=0. THRESHOLD removed from experiment.py. Baseline reset to -2.4874. All logs cleared for fresh research run. 155 tests pass.
 
 ### 2026-03-28
 Overhauled 3-tier eval (lib/eval.py): fixed composite score dimensional bug (win_rate now centered on 0.5 and properly scaled), added MAE path-risk penalty, uses excess return vs equal-weight market benchmark instead of raw return, multi-horizon Tier 2 gate (any horizon positive excess, not just mean_10d > 0), signal clustering metric (effective N), regime breakdown (bull/bear). Breaking change: historical scores incomparable.

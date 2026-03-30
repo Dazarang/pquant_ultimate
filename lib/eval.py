@@ -1,4 +1,4 @@
-"""Model evaluation: 3-tier framework (classification, forward returns, composite)."""
+"""Model evaluation: multi-budget ranking framework (threshold-free)."""
 
 import numba
 import numpy as np
@@ -151,7 +151,7 @@ def _print_backtest_summary(trades: pd.DataFrame) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Shared: per-signal analytics (used by Tier 2 & 3)
+# Shared: per-signal analytics
 # ---------------------------------------------------------------------------
 
 
@@ -354,6 +354,121 @@ def regime_breakdown(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) ->
 
 
 # ---------------------------------------------------------------------------
+# Multi-budget evaluation (threshold-free)
+# ---------------------------------------------------------------------------
+
+BUDGET_FRACS = (0.0005, 0.001, 0.0025, 0.005, 0.01, 0.02)
+
+
+def select_top_frac(y_pred_proba: np.ndarray, frac: float) -> np.ndarray:
+    """Select top fraction of predictions as signals. Returns binary array."""
+    k = max(1, int(len(y_pred_proba) * frac))
+    indices = np.argsort(-y_pred_proba)[:k]
+    y_pred = np.zeros(len(y_pred_proba), dtype=int)
+    y_pred[indices] = 1
+    return y_pred
+
+
+def _cell_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | None:
+    """Score one (budget, horizon) cell. Returns metrics dict or None."""
+    analytics = _signal_analytics(df, y_pred, horizon)
+    if analytics is None:
+        return None
+
+    fwd = analytics["returns"]
+    market = analytics["market"]
+    mae = analytics["mae"]
+    dates = analytics["dates"]
+
+    effective_n = dates.nunique()
+    excess = (fwd - market).mean()
+    win_rate = (fwd > 0).mean()
+    worst_decile = fwd.quantile(0.1)
+    knife_rate = (fwd < -0.05).mean()
+    mean_mae = mae.mean()
+
+    raw = (
+        0.50 * excess * 100
+        + 0.15 * (win_rate - 0.5) * 100
+        - 0.15 * abs(min(0.0, worst_decile)) * 100
+        - 0.10 * knife_rate * 100
+        - 0.10 * abs(mean_mae) * 100
+    )
+
+    w = np.sqrt(effective_n / (effective_n + 20))
+
+    return {
+        "raw": raw, "weighted": w * raw, "w": w,
+        "n_signals": len(fwd), "effective_n": effective_n,
+        "excess": excess, "win_rate": win_rate,
+        "worst_decile": worst_decile, "knife_rate": knife_rate,
+        "mean_mae": mean_mae,
+    }
+
+
+def multi_budget_composite(
+    df: pd.DataFrame,
+    y_pred_proba: np.ndarray,
+    budgets: tuple[float, ...] = BUDGET_FRACS,
+    horizons: tuple[int, ...] = (5, 10, 20),
+) -> tuple[float, dict]:
+    """Multi-budget, multi-horizon composite score with soft N-scaling.
+
+    Evaluates model ranking at multiple signal budgets and holding horizons.
+    Final score = mean of W * U across all (budget, horizon) pairs,
+    where W = sqrt(effective_n / (effective_n + 20)).
+    """
+    all_weighted = []
+    details = {}
+
+    for q in budgets:
+        y_pred = select_top_frac(y_pred_proba, q)
+        label = f"{q * 100:.2f}%"
+        details[label] = {"n_signals": int(y_pred.sum()), "cells": {}}
+
+        for h in horizons:
+            cell = _cell_score(df, y_pred, h)
+            if cell is None:
+                all_weighted.append(0.0)  # missing cell = neutral, prevents gaming
+                continue
+            all_weighted.append(cell["weighted"])
+            details[label]["cells"][h] = cell
+
+    score = np.mean(all_weighted) if all_weighted else float("-inf")
+    return score, details
+
+
+def _print_multi_budget(details: dict, horizons: tuple[int, ...], score: float) -> None:
+    """Print multi-budget evaluation as a compact table."""
+    h_str = "  ".join(f"{h}d W*U" for h in horizons)
+    print(f"\n  {'Budget':>8} {'Sig':>6} | {h_str}")
+    print("  " + "-" * (18 + 9 * len(horizons)))
+
+    for label, info in details.items():
+        cells = info["cells"]
+        vals = []
+        for h in horizons:
+            cell = cells.get(h)
+            vals.append(f"{cell['weighted']:>+7.2f}" if cell else f"{'n/a':>7}")
+        print(f"  {label:>8} {info['n_signals']:>6} | {'  '.join(vals)}")
+
+    ref = details.get("0.25%", {}).get("cells", {}).get(10)
+    if ref:
+        print(f"\n  Detail (0.25%, 10d):")
+        print(
+            f"    Excess: {ref['excess']:+.2%}  "
+            f"Win: {ref['win_rate']:.1%}  "
+            f"Knife: {ref['knife_rate']:.1%}  "
+            f"MAE: {ref['mean_mae']:+.2%}  "
+            f"Eff.N: {ref['effective_n']}  "
+            f"W: {ref['w']:.2f}"
+        )
+
+    n_cells = sum(len(info["cells"]) for info in details.values())
+    print(f"\n  Composite Score: {score:.4f} (mean of {n_cells} cells)")
+
+
+# ---------------------------------------------------------------------------
 # Full tiered evaluation
 # ---------------------------------------------------------------------------
 
@@ -361,63 +476,51 @@ def regime_breakdown(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) ->
 def tiered_eval(
     df: pd.DataFrame,
     y_true: np.ndarray,
-    y_pred: np.ndarray,
-    y_pred_proba: np.ndarray | None = None,
+    y_pred_proba: np.ndarray,
     min_ap: float = 0.05,
 ) -> dict:
-    """Run all 3 tiers. Returns combined results dict.
+    """Run threshold-free multi-budget evaluation.
 
-    Tier 1: Classification metrics (sanity check).
-    Tier 2: Forward returns -- gates on positive excess return at any horizon.
-    Tier 3: Composite score (risk-adjusted with path risk).
+    Tier 1: Ranking quality (AP, AUC) -- gates on AP.
+    Tier 2: Multi-budget, multi-horizon composite score.
 
-    Stops early if Tier 1 AP < min_ap or no horizon shows positive excess return.
+    The model is evaluated at multiple signal budgets (top 0.05% to 2%)
+    and multiple horizons (5d, 10d, 20d). Each cell is weighted by
+    sqrt(effective_n / (effective_n + 20)) to penalize low-evidence scores.
     """
     results = {"passed": False}
+    horizons = (5, 10, 20)
 
-    # Tier 1
+    # Tier 1: Ranking quality
     print("=" * 60)
-    print("TIER 1: Classification")
+    print("TIER 1: Ranking Quality")
     print("=" * 60)
-    t1 = evaluate(y_true, y_pred, y_pred_proba)
-    results["tier1"] = t1
-    for k, v in t1.items():
-        print(f"  {k}: {v:.4f}")
 
-    ap = t1.get("avg_precision", 0.0)
+    ap, auc = 0.0, 0.0
+    if len(np.unique(y_true)) > 1:
+        auc = roc_auc_score(y_true, y_pred_proba)
+        ap = average_precision_score(y_true, y_pred_proba)
+
+    results["tier1"] = {"avg_precision": ap, "roc_auc": auc}
+    print(f"  roc_auc:        {auc:.4f}")
+    print(f"  avg_precision:  {ap:.4f}")
+
     if ap < min_ap:
-        print(f"\n  FAIL: avg_precision {ap:.4f} < {min_ap} threshold. Stopping.")
+        print(f"\n  FAIL: avg_precision {ap:.4f} < {min_ap}. Stopping.")
         return results
 
-    # Tier 2
+    # Tier 2: Multi-budget composite
     print("\n" + "=" * 60)
-    print("TIER 2: Forward Returns")
+    print("TIER 2: Multi-Budget Composite Score")
     print("=" * 60)
-    t2 = forward_returns(df, y_pred)
-    results["tier2"] = t2
 
-    horizons = [5, 10, 20]
-    any_positive_excess = any(t2.get(f"excess_{h}d", -1) > 0 for h in horizons)
-    if not any_positive_excess:
-        best = max(t2.get(f"excess_{h}d", float("-inf")) for h in horizons)
-        print(f"\n  FAIL: no horizon shows positive excess return (best: {best:+.2%}). Stopping.")
-        return results
+    score, details = multi_budget_composite(df, y_pred_proba, horizons=horizons)
+    results["tier2"] = details
+    results["tier3"] = score
 
-    # Tier 3
-    print("\n" + "=" * 60)
-    print("TIER 3: Composite Score")
-    print("=" * 60)
-    t3 = composite_score(df, y_pred)
-    results["tier3"] = t3
+    _print_multi_budget(details, horizons, score)
 
-    # Regime breakdown (informational, no gating)
-    print("\n" + "=" * 60)
-    print("Regime Breakdown")
-    print("=" * 60)
-    rb = regime_breakdown(df, y_pred)
-    results["regime"] = rb
-
-    results["passed"] = True
+    results["passed"] = bool(score > float("-inf"))
     return results
 
 
