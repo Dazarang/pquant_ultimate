@@ -585,6 +585,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
                 parent[int(parts[-1])] = new_layer
             else:
                 setattr(parent, parts[-1], new_layer)
+            self._policy_head_built = True
         elif last_linear is not None:
             # Root module IS the Linear(*, 1) -- wrap with extra head
             self._policy_head = nn.Linear(last_linear.in_features, 2)
