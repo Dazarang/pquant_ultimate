@@ -134,8 +134,3 @@ You are in an automated ratchet. After each edit, `gate.sh` runs the experiment.
 5. **Keep it simple.** A small improvement with ugly complexity is not worth it. Removing something for equal or better results is a win.
 6. **If stuck, try something radical.** Different model type, very different feature set, probability calibration.
 7. **No editorial comments in code.** Don't write comments that justify or praise current choices (e.g. "balanced generalization", "replaces X -- adds diversity"). These anchor future iterations toward the status quo.
-
-## Dead Ends (updated as research progresses)
-
-Check COMBAT_LOG.md for the full list. Common dead ends:
-- (none yet -- you are the first researcher)
