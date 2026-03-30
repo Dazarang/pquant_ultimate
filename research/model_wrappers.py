@@ -398,9 +398,10 @@ class SequenceClassifier(_BaseTorchClassifier):
 
     def predict_proba(self, X, groups=None):
         X_seq, valid = self._build_sequences(X, groups=groups)
-        logits = self._batched_logits(X_seq)
         proba_1 = np.full(len(X), 0.5)
-        proba_1[valid] = expit(logits)
+        if len(valid) > 0:
+            logits = self._batched_logits(X_seq)
+            proba_1[valid] = expit(logits)
         return np.column_stack([1 - proba_1, proba_1])
 
     def predict(self, X, groups=None):
