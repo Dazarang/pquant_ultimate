@@ -101,6 +101,32 @@ class TestRankingXGB:
         assert proba.shape == (len(X_val), 2)
         assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
 
+    def test_non_contiguous_groups(self, pipeline_data):
+        """Non-contiguous group IDs (e.g. stock IDs interleaved) must not mis-group."""
+        from research.model_wrappers import RankingXGBClassifier
+
+        X_train, y_train, X_val, y_val, *_ = pipeline_data
+        # Simulate interleaved stock IDs: [0,1,2,0,1,2,...]
+        groups = np.tile(np.arange(3), len(y_train) // 3 + 1)[:len(y_train)]
+        model = RankingXGBClassifier(
+            objective="rank:map", n_estimators=30, max_depth=3,
+        )
+        model.fit(X_train, y_train, groups=groups)
+        proba = model.predict_proba(X_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
+
+    def test_sklearn_clone(self, pipeline_data):
+        from sklearn.base import clone
+
+        from research.model_wrappers import RankingXGBClassifier
+
+        original = RankingXGBClassifier(
+            objective="rank:map", group_size=100, n_estimators=30, max_depth=3,
+        )
+        cloned = clone(original)
+        assert cloned.get_params() == original.get_params()
+
 
 class TestLightGBM:
     def test_pipeline(self, pipeline_data):
@@ -478,6 +504,50 @@ class TestPolicyGradient:
 
         # Positive rewards should produce higher buy probability than negative
         assert p1 > p2, f"Positive rewards mean p={p1:.3f} should > negative p={p2:.3f}"
+
+    def test_repeated_fit_idempotent(self, pipeline_data):
+        """Calling fit() twice must not stack extra heads."""
+        import torch
+
+        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+        model = PolicyGradientClassifier(
+            module=TorchMLP(input_dim=n_features, hidden_dims=(16,), dropout=0.0),
+            epochs=3, lr=1e-3, batch_size=256, pos_weight=1.0,
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train)
+        p1 = model.predict_proba(X_val)
+        assert p1.shape == (len(X_val), 2)
+
+        # Second fit on same instance
+        model.fit(X_train, y_train)
+        p2 = model.predict_proba(X_val)
+        assert p2.shape == (len(X_val), 2), f"Shape changed on second fit: {p2.shape}"
+
+    def test_with_non_standard_module(self, pipeline_data):
+        """Module without Linear(*, 1) falls back to extra head."""
+        import torch
+        from torch import nn
+
+        from research.model_wrappers import PolicyGradientClassifier
+
+        X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
+
+        # Module ending in Linear(*, 8) -- no Linear(*, 1) to replace
+        module = nn.Sequential(
+            nn.Linear(n_features, 32), nn.ReLU(),
+            nn.Linear(32, 8),
+        )
+        model = PolicyGradientClassifier(
+            module=module, epochs=3, lr=1e-3, batch_size=256, pos_weight=1.0,
+        )
+        model.device = torch.device("cpu")
+        model.fit(X_train, y_train)
+        proba = model.predict_proba(X_val)
+        assert proba.shape == (len(X_val), 2)
+        assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
 
 
 class TestFocalTorchClassifier:

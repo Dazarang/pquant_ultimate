@@ -148,6 +148,7 @@ class RankingXGBClassifier(ClassifierMixin, BaseEstimator):
         params = {
             "objective": self.objective,
             "eval_metric": "map" if "map" in self.objective else "ndcg",
+            "tree_method": "hist",
             **{k: v for k, v in self._xgb_kwargs.items()
                if k not in ("n_estimators",)},
         }

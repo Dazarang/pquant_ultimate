@@ -112,7 +112,7 @@ Drop-in replacements for `TorchClassifier` / `SequenceClassifier` with focal los
 
 ### DirectUtilityClassifier
 
-Optimizes expected reward directly: `loss = -mean(P(buy|x) * reward)`. Accepts any `nn.Module`. Params: `module, epochs, lr, batch_size, pos_weight`. Supports custom signed rewards via `fit(X, y, rewards=...)`. Falls back to weighted BCE when rewards not provided.
+Optimizes expected reward directly: `loss = -mean(P(buy|x) * reward)`. No sampling -- uses deterministic gradients. Accepts any `nn.Module`. Params: `module, epochs, lr, batch_size, pos_weight`. Supports custom signed rewards via `fit(X, y, rewards=...)`. Falls back to weighted BCE when rewards not provided.
 
 ### PolicyGradientClassifier (REINFORCE)
 
