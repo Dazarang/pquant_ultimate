@@ -15,8 +15,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: F401,E402 -- available for researcher
 from lightgbm import LGBMClassifier  # noqa: E402
-from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier  # noqa: E402
+from sklearn.ensemble import VotingClassifier  # noqa: E402
 from xgboost import XGBClassifier  # noqa: E402
+
+from research.model_wrappers import CatBoostWrapper  # noqa: E402
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
 from lib.eval import tiered_eval  # noqa: E402
@@ -49,14 +51,15 @@ def build_model(y_train):
     pos = (y_train == 1).sum()
 
     xgb = XGBClassifier(
-        n_estimators=400,
+        n_estimators=600,
         max_depth=6,
-        learning_rate=0.05,
-        min_child_weight=3,
-        gamma=0.05,
-        reg_alpha=0.5,
-        subsample=0.8,
-        colsample_bytree=0.8,
+        learning_rate=0.03,
+        min_child_weight=10,
+        gamma=0.1,
+        reg_alpha=1.0,
+        reg_lambda=1.0,
+        subsample=0.75,
+        colsample_bytree=0.65,
         scale_pos_weight=neg / pos,
         tree_method="hist",
         random_state=42,
@@ -65,32 +68,34 @@ def build_model(y_train):
     )
 
     lgbm = LGBMClassifier(
-        n_estimators=400,
+        n_estimators=600,
         max_depth=6,
-        learning_rate=0.05,
-        reg_alpha=0.5,
-        subsample=0.8,
-        colsample_bytree=0.8,
+        learning_rate=0.03,
+        min_child_samples=40,
+        reg_alpha=1.0,
+        reg_lambda=1.0,
+        subsample=0.75,
+        colsample_bytree=0.65,
         scale_pos_weight=neg / pos,
         random_state=43,
         n_jobs=-1,
         verbose=-1,
     )
 
-    et = ExtraTreesClassifier(
-        n_estimators=800,
-        max_depth=12,
-        min_samples_leaf=40,
-        ccp_alpha=0.0003,
-        class_weight="balanced",
-        random_state=44,
-        n_jobs=-1,
+    cat = CatBoostWrapper(
+        iterations=600,
+        depth=6,
+        learning_rate=0.03,
+        l2_leaf_reg=5.0,
+        scale_pos_weight=neg / pos,
+        random_seed=44,
+        verbose=0,
     )
 
     model = VotingClassifier(
-        estimators=[("xgb", xgb), ("lgbm", lgbm), ("et", et)],
+        estimators=[("xgb", xgb), ("lgbm", lgbm), ("cat", cat)],
         voting="soft",
-        weights=[1, 1, 3],
+        weights=[1, 1, 1],
     )
     return model
 
