@@ -613,6 +613,8 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
 
         self.module = self._build_policy_head(self.module)
         self.module.to(self.device)
+        if self._has_extra_head:
+            self._policy_head.to(self.device)
         all_params = list(self.module.parameters())
         if self._has_extra_head:
             all_params += list(self._policy_head.parameters())
