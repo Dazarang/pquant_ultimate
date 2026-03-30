@@ -544,8 +544,13 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
 
         Finds the last Linear(*, 1) layer and swaps it for Linear(*, 2).
         If no such layer exists, appends a Linear(last_out, 2) head.
+        Idempotent: safe to call on repeated fit().
         """
         import torch.nn as nn
+
+        # Already converted on a previous fit() call
+        if self._has_extra_head:
+            return module
 
         last_linear = None
         last_name = None
@@ -554,7 +559,8 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
                 last_linear = layer
                 last_name = name
 
-        if last_linear is not None:
+        if last_linear is not None and last_name:
+            # Named child -- replace in-place
             new_layer = nn.Linear(last_linear.in_features, 2)
             parts = last_name.split(".")
             parent = module
@@ -564,15 +570,18 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
                 parent[int(parts[-1])] = new_layer
             else:
                 setattr(parent, parts[-1], new_layer)
+        elif last_linear is not None:
+            # Root module IS the Linear(*, 1) -- wrap with extra head
+            self._policy_head = nn.Linear(last_linear.in_features, 2)
+            self._has_extra_head = True
         else:
-            # No Linear(*, 1) found -- find any last Linear and append a 2-class head
+            # No Linear(*, 1) -- find any last Linear and append a 2-class head
             last_any = None
             for layer in module.modules():
                 if isinstance(layer, nn.Linear):
                     last_any = layer
             if last_any is not None:
                 self._policy_head = nn.Linear(last_any.out_features, 2)
-                self._policy_head.to(next(module.parameters()).device)
                 self._has_extra_head = True
             else:
                 raise ValueError("Module has no Linear layers; cannot build policy head")
