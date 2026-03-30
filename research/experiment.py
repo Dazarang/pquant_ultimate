@@ -51,16 +51,17 @@ def build_model(y_train):
     pos = (y_train == 1).sum()
     spw = np.sqrt(neg / pos)  # moderate weight (~4.4) instead of full ratio (~19)
 
+    # Deep, heavily regularized — captures complex interactions
     xgb = XGBClassifier(
-        n_estimators=600,
-        max_depth=6,
-        learning_rate=0.03,
-        min_child_weight=10,
-        gamma=0.1,
-        reg_alpha=1.0,
-        reg_lambda=1.0,
-        subsample=0.75,
-        colsample_bytree=0.65,
+        n_estimators=800,
+        max_depth=7,
+        learning_rate=0.02,
+        min_child_weight=20,
+        gamma=0.5,
+        reg_alpha=2.0,
+        reg_lambda=2.0,
+        subsample=0.65,
+        colsample_bytree=0.5,
         scale_pos_weight=spw,
         tree_method="hist",
         random_state=42,
@@ -68,26 +69,28 @@ def build_model(y_train):
         verbosity=0,
     )
 
+    # Shallow, smooth, many trees — captures gradual trends
     lgbm = LGBMClassifier(
-        n_estimators=600,
-        max_depth=6,
-        learning_rate=0.03,
-        min_child_samples=40,
-        reg_alpha=1.0,
-        reg_lambda=1.0,
-        subsample=0.75,
-        colsample_bytree=0.65,
+        n_estimators=1200,
+        max_depth=4,
+        learning_rate=0.01,
+        min_child_samples=80,
+        reg_alpha=0.5,
+        reg_lambda=0.5,
+        subsample=0.8,
+        colsample_bytree=0.7,
         scale_pos_weight=spw,
         random_state=43,
         n_jobs=-1,
         verbose=-1,
     )
 
+    # Medium depth, heavy L2 — balanced generalization
     cat = CatBoostWrapper(
-        iterations=600,
-        depth=6,
-        learning_rate=0.03,
-        l2_leaf_reg=5.0,
+        iterations=800,
+        depth=5,
+        learning_rate=0.025,
+        l2_leaf_reg=10.0,
         scale_pos_weight=spw,
         random_seed=44,
         verbose=0,
