@@ -60,7 +60,6 @@ These correct patterns LLMs specifically get wrong — code that "works" but rot
 
 - Delete dead code on sight — unused imports, unreachable branches, orphaned files, commented-out blocks. Never keep code "just in case."
 - No near-duplicate functions — if two functions share most of their logic, refactor into one with parameters. Copy-paste-tweak is the #1 source of structural rot.
-- Comments explain WHY, never WHAT — if the code already says what it does, a comment restating it is noise. Only comment non-obvious intent, constraints, or gotchas.
 - No docstrings on obvious methods — if the name and signature fully communicate the behavior, a docstring adds nothing. Only document non-obvious behavior, parameter constraints, or surprising return values.
 - Keep functions flat and short — deep nesting and long functions are slop magnets. Extract when a function does more than one conceptual thing.
 - Verify before creating or splitting — before adding a new function, class, or file, search whether existing code already handles it. Before splitting a module, understand its current shape and responsibilities — don't split prematurely or along arbitrary lines. New abstractions must earn their existence.

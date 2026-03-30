@@ -133,6 +133,7 @@ You are in an automated ratchet. After each edit, `gate.sh` runs the experiment.
 4. **No future data in features.** Every feature must answer: "could I calculate this at market close on day T?"
 5. **Keep it simple.** A small improvement with ugly complexity is not worth it. Removing something for equal or better results is a win.
 6. **If stuck, try something radical.** Different model type, very different feature set, probability calibration.
+7. **No editorial comments in code.** Don't write comments that justify, praise, or frame current choices (e.g. "captures complex interactions", "balanced generalization", "replaces X -- adds diversity"). These bias future iterations toward preserving the status quo. The code speaks for itself -- if a future researcher can't tell why something is there from the code alone, it should be replaced, not explained.
 
 ## Dead Ends (updated as research progresses)
 

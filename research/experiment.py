@@ -52,7 +52,6 @@ def build_model(y_train):
     pos = (y_train == 1).sum()
     spw = np.sqrt(neg / pos)  # moderate weight (~4.4) instead of full ratio (~19)
 
-    # Deep, heavily regularized — captures complex interactions
     xgb = XGBClassifier(
         n_estimators=1000,
         max_depth=7,
@@ -70,7 +69,6 @@ def build_model(y_train):
         verbosity=0,
     )
 
-    # Shallow, smooth, many trees — captures gradual trends
     lgbm = LGBMClassifier(
         n_estimators=1500,
         max_depth=4,
@@ -86,7 +84,6 @@ def build_model(y_train):
         verbose=-1,
     )
 
-    # Medium depth, heavy L2 — balanced generalization
     cat = CatBoostWrapper(
         iterations=1000,
         depth=5,
@@ -97,8 +94,6 @@ def build_model(y_train):
         verbose=0,
     )
 
-    # Ranking-optimized: directly optimizes rank quality (what the eval metric measures)
-    # Replaces ExtraTrees — adds objective diversity (3 classification + 1 ranking)
     rank = RankingXGBClassifier(
         objective="rank:ndcg",
         group_size=200,
