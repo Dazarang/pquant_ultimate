@@ -28,16 +28,8 @@ class CatBoostWrapper(ClassifierMixin, BaseEstimator):
     This wrapper stores params cleanly and delegates to a fresh CatBoostClassifier
     at fit() time.
 
-    Usage in experiment.py:
-        from research.model_wrappers import CatBoostWrapper
-
-        def build_model(y_train):
-            neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
-            cb = CatBoostWrapper(
-                iterations=400, depth=6, learning_rate=0.05,
-                scale_pos_weight=neg / pos, verbose=0, random_seed=43,
-            )
-            ...  # use in VotingClassifier, StackingClassifier, or standalone
+    Usage:
+        model = CatBoostWrapper(**catboost_params)
     """
 
     def __init__(self, **kwargs):
@@ -86,14 +78,9 @@ class RankingXGBClassifier(ClassifierMixin, BaseEstimator):
 
     Outputs pseudo-probabilities via sigmoid(ranking_score) for predict_proba.
 
-    Usage in experiment.py:
-        from research.model_wrappers import RankingXGBClassifier
-
-        def build_model(y_train):
-            return RankingXGBClassifier(
-                n_estimators=500, max_depth=6, learning_rate=0.05,
-                objective="rank:map", group_size=200,
-            )
+    Usage:
+        model = RankingXGBClassifier(**xgb_params)
+        model.fit(X, y, groups=group_ids)  # or omit for auto-grouping
     """
 
     def __init__(self, objective="rank:map", group_size=200, **kwargs):
@@ -230,15 +217,8 @@ class _BaseTorchClassifier:
 class TorchClassifier(_BaseTorchClassifier):
     """Sklearn-compatible wrapper for any PyTorch binary classifier.
 
-    Usage in experiment.py:
-        from research.model_wrappers import TorchClassifier, TorchMLP
-
-        def build_model(y_train):
-            return TorchClassifier(
-                module=TorchMLP(input_dim=54, hidden_dims=(128, 64)),
-                epochs=50, lr=1e-3, batch_size=512,
-                pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
-            )
+    Usage:
+        model = TorchClassifier(module=..., epochs=..., lr=..., batch_size=..., pos_weight=...)
     """
 
     def __init__(self, module, epochs=50, lr=1e-3, batch_size=512, pos_weight=1.0):
@@ -293,18 +273,8 @@ class FocalTorchClassifier(_BaseTorchClassifier):
     from high-confidence predictions, shifting training focus toward harder
     examples.
 
-    Compatible with TorchClassifier interface.
-
-    Usage in experiment.py:
-        from research.model_wrappers import FocalTorchClassifier, TorchMLP
-
-        def build_model(y_train):
-            return FocalTorchClassifier(
-                module=TorchMLP(input_dim=54, hidden_dims=(128, 64)),
-                epochs=50, lr=1e-3, batch_size=512,
-                alpha=(y_train == 0).sum() / len(y_train),  # class balance
-                focal_gamma=2.0,  # focusing strength
-            )
+    Usage:
+        model = FocalTorchClassifier(module=..., alpha=..., focal_gamma=..., ...)
     """
 
     def __init__(self, module, epochs=50, lr=1e-3, batch_size=512,
@@ -341,15 +311,9 @@ class SequenceClassifier(_BaseTorchClassifier):
     sliding windows. Pass groups= to fit/predict_proba to prevent windows
     from crossing stock boundaries.
 
-    Usage in experiment.py:
-        from research.model_wrappers import SequenceClassifier, LSTMNet
-
-        def build_model(y_train):
-            return SequenceClassifier(
-                module=LSTMNet(input_dim=54, hidden_dim=64),
-                window=10, epochs=30, lr=1e-3, batch_size=256,
-                pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
-            )
+    Usage:
+        model = SequenceClassifier(module=..., window=..., ...)
+        model.fit(X, y, groups=stock_ids)
     """
 
     def __init__(self, module, window=10, epochs=30, lr=1e-3, batch_size=256, pos_weight=1.0):
@@ -410,15 +374,9 @@ class SequenceClassifier(_BaseTorchClassifier):
 class FocalSequenceClassifier(SequenceClassifier):
     """SequenceClassifier variant using focal loss.
 
-    Usage in experiment.py:
-        from research.model_wrappers import FocalSequenceClassifier, GRUNet
-
-        def build_model(y_train):
-            return FocalSequenceClassifier(
-                module=GRUNet(input_dim=54, hidden_dim=64),
-                window=10, epochs=30, lr=1e-3, batch_size=256,
-                alpha=(y_train == 0).sum() / len(y_train), focal_gamma=2.0,
-            )
+    Usage:
+        model = FocalSequenceClassifier(module=..., window=..., alpha=..., focal_gamma=..., ...)
+        model.fit(X, y, groups=stock_ids)
     """
 
     def __init__(self, module, window=10, epochs=30, lr=1e-3, batch_size=256,
@@ -456,17 +414,9 @@ class DirectUtilityClassifier(_BaseTorchClassifier):
     Positive rewards increase P(buy), negative rewards decrease it.
     Falls back to weighted BCE when rewards=None.
 
-    Usage in experiment.py:
-        from research.model_wrappers import DirectUtilityClassifier, TorchMLP
-
-        def build_model(y_train):
-            return DirectUtilityClassifier(
-                module=TorchMLP(input_dim=54, hidden_dims=(128, 64)),
-                epochs=50, lr=1e-3, batch_size=512,
-            )
-
-        # With custom rewards:
-        model.fit(X_train, y_train, rewards=forward_returns_5d)
+    Usage:
+        model = DirectUtilityClassifier(module=..., ...)
+        model.fit(X, y, rewards=per_sample_rewards)  # or omit for BCE fallback
     """
 
     def __init__(self, module, epochs=50, lr=1e-3, batch_size=512, pos_weight=1.0):
@@ -544,18 +494,9 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
     The network outputs action logits for 2 classes. During training, actions
     are sampled from the policy; during inference, softmax gives probabilities.
 
-    Usage in experiment.py:
-        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
-
-        def build_model(y_train):
-            return PolicyGradientClassifier(
-                module=TorchMLP(input_dim=54, hidden_dims=(128, 64)),
-                epochs=50, lr=1e-3, batch_size=512,
-                entropy_coef=0.01, baseline=True,
-            )
-
-        # In pipeline, with custom rewards:
-        model.fit(X_train, y_train, rewards=forward_returns_5d)
+    Usage:
+        model = PolicyGradientClassifier(module=..., entropy_coef=..., baseline=..., ...)
+        model.fit(X, y, rewards=per_sample_rewards)  # or omit for label-based rewards
     """
 
     def __init__(self, module, epochs=50, lr=1e-3, batch_size=512,
