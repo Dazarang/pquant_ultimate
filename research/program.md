@@ -14,7 +14,7 @@ You edit **two files only**:
 - **STOCKS**: which stocks to train on (None=all, or a list). Smaller = faster iteration.
 - **FEATURE_GROUPS**: which feature groups to use. Options: `"base"` (54), `"advanced"` (22), `"lag"` (70), `"rolling"` (64), `"roc"` (5), `"percentile"` (2), `"interaction"` (3). Or hand-pick individual features.
 - **TRAIN_END / VAL_END**: temporal split boundaries.
-- **build_model()**: model type, hyperparameters. You can use: sklearn, xgboost, lightgbm. Import what you need.
+- **build_model()**: model type, hyperparameters. See the **Models** section below for all available options.
 
 ### 2. `research/features_lab.py`
 - **add_custom_features(df)**: add new features to the DataFrame. Must be backward-looking only (no future data). Return `(df, list_of_new_feature_names)`.
