@@ -29,7 +29,7 @@ Must pass avg_precision > 0.05 or the iteration is rejected.
 | Metric | Description |
 |--------|-------------|
 | **ROC-AUC** | Ability to rank bottoms higher than non-bottoms (threshold-free) |
-| **Avg Precision (AP)** | Area under precision-recall curve. Best single metric for imbalanced data |
+| **Avg Precision (AP)** | Area under precision-recall curve. Summarizes precision-recall tradeoff |
 
 ## Tier 2: Multi-Budget Composite
 
@@ -49,7 +49,7 @@ Each cell is then scaled by W = sqrt(effective_n / (effective_n + 20)):
 - N=100: W=0.91
 - N=500: W=0.98
 
-This prevents gaming via tiny sample sizes while avoiding hard cliffs.
+Soft evidence scaling; see W values above.
 
 ## Forward Return Metrics (per budget, per horizon)
 
@@ -60,7 +60,7 @@ Entry: next-day open after signal. Exit: open N days later.
 | **Mean Nd return** | Average return N trading days after buying |
 | **Excess Nd** | Signal return minus equal-weight market return over same window |
 | **Win rate Nd** | % of signals where the stock went up after N days |
-| **Profit factor Nd** | Total wins / total losses. >1 profitable, >2 good |
+| **Profit factor Nd** | Total wins / total losses. >1 net positive, >2 wins outweigh losses 2:1 |
 | **MAE Nd** | Mean max adverse excursion: avg worst drawdown during holding period |
 | **Worst MAE Nd** | Single worst drawdown across all signals |
 | **N signals** | Number of buy signals with valid forward data |

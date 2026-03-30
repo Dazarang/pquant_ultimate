@@ -1,4 +1,4 @@
-"""Feature laboratory -- experimental features created by the researcher.
+"""Feature laboratory -- custom features created by the researcher.
 
 Features accumulate here across iterations.
 Stable features may be moved to lib/features.py later.

@@ -287,13 +287,13 @@ def _train_focal_loop(module, loader, optimizer, device, alpha, gamma, epochs):
 
 
 class FocalTorchClassifier(_BaseTorchClassifier):
-    """TorchClassifier with focal loss -- downweights easy negatives.
+    """TorchClassifier variant using focal loss.
 
     Focal loss: -alpha * (1-p)^gamma * log(p). Reduces gradient contribution
     from high-confidence predictions, shifting training focus toward harder
     examples.
 
-    Same interface as TorchClassifier -- drop-in replacement.
+    Compatible with TorchClassifier interface.
 
     Usage in experiment.py:
         from research.model_wrappers import FocalTorchClassifier, TorchMLP
@@ -408,7 +408,7 @@ class SequenceClassifier(_BaseTorchClassifier):
 
 
 class FocalSequenceClassifier(SequenceClassifier):
-    """SequenceClassifier with focal loss. Drop-in replacement.
+    """SequenceClassifier variant using focal loss.
 
     Usage in experiment.py:
         from research.model_wrappers import FocalSequenceClassifier, GRUNet

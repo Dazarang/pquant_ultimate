@@ -41,7 +41,7 @@ For each (budget, horizon) cell, the raw score is:
 
 Each cell is then scaled by `W = sqrt(effective_n / (effective_n + 20))` -- a soft penalty for low evidence. The final score is the **mean of all 18 W*U cells**.
 
-This means your model must produce a good **ranking** across multiple operating points. You cannot game it by predicting rarely or frequently -- both extremes are captured.
+The composite score evaluates across multiple operating points and prediction frequencies.
 
 Hard gate:
 - Tier 1: avg_precision must be > 0.05 (sanity check)
