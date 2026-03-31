@@ -58,7 +58,7 @@ def build_model(y_train):
         min_child_weight=20,
         gamma=0.5,
         reg_alpha=0.5,
-        reg_lambda=2.0,
+        reg_lambda=1.0,
         subsample=0.65,
         colsample_bytree=0.7,
         scale_pos_weight=spw,
