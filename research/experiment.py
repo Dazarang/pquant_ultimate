@@ -85,7 +85,7 @@ def build_model(y_train):
     model = StackingClassifier(
         estimators=[("xgb", xgb), ("rank", rank)],
         final_estimator=LogisticRegression(C=1.0, max_iter=1000),
-        cv=2,
+        cv=3,
         n_jobs=1,
     )
     return model
