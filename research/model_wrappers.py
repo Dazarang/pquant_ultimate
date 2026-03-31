@@ -184,14 +184,14 @@ class _BaseTorchClassifier:
 
         self.module.to(self.device)
         self.module.train()
+        X_t, y_t = X_t.to(self.device), y_t.to(self.device)
         loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
         pw = torch.tensor([self.pos_weight], dtype=torch.float32, device=self.device)
         criterion = nn.BCEWithLogitsLoss(pos_weight=pw)
         optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
         for _ in range(self.epochs):
             for xb, yb in loader:
-                xb, yb = xb.to(self.device), yb.to(self.device)
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
                 criterion(self.module(xb), yb).backward()
                 optimizer.step()
 
@@ -204,7 +204,7 @@ class _BaseTorchClassifier:
 
         self.module.eval()
         all_logits = []
-        with torch.no_grad():
+        with torch.inference_mode():
             for i in range(0, len(X), self.batch_size):
                 batch = torch.tensor(X[i:i + self.batch_size], dtype=torch.float32).to(self.device)
                 all_logits.append(self.module(batch).cpu().numpy().flatten())
@@ -259,9 +259,8 @@ def _train_focal_loop(module, loader, optimizer, device, alpha, gamma, epochs):
     for _ in range(epochs):
         module.train()
         for xb, yb in loader:
-            xb, yb = xb.to(device), yb.to(device)
             loss = _focal_loss(module(xb), yb, alpha, gamma)
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
 
@@ -290,8 +289,8 @@ class FocalTorchClassifier(_BaseTorchClassifier):
         if len(X) == 0:
             return self
         self.module.to(self.device)
-        X_t = torch.tensor(X, dtype=torch.float32)
-        y_t = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
+        X_t = torch.tensor(X, dtype=torch.float32, device=self.device)
+        y_t = torch.tensor(y, dtype=torch.float32, device=self.device).unsqueeze(1)
         loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
         optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
         _train_focal_loop(self.module, loader, optimizer, self.device,
@@ -393,6 +392,7 @@ class FocalSequenceClassifier(SequenceClassifier):
         if len(X_t) == 0:
             return
         self.module.to(self.device)
+        X_t, y_t = X_t.to(self.device), y_t.to(self.device)
         loader = DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=True)
         optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
         _train_focal_loop(self.module, loader, optimizer, self.device,
@@ -442,26 +442,24 @@ class DirectUtilityClassifier(_BaseTorchClassifier):
         self.module.to(self.device)
         optimizer = torch.optim.Adam(self.module.parameters(), lr=self.lr)
 
-        X_t = torch.tensor(X, dtype=torch.float32)
-        y_t = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
+        X_t = torch.tensor(X, dtype=torch.float32, device=self.device)
+        y_t = torch.tensor(y, dtype=torch.float32, device=self.device).unsqueeze(1)
 
         if rewards is not None:
-            r_t = torch.tensor(rewards, dtype=torch.float32).unsqueeze(1)
+            r_t = torch.tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
             loader = DataLoader(TensorDataset(X_t, y_t, r_t),
                                 batch_size=self.batch_size, shuffle=True)
 
             for _ in range(self.epochs):
                 self.module.train()
                 for xb, yb, rb in loader:
-                    xb = xb.to(self.device)
-                    rb = rb.to(self.device)
                     logits = self.module(xb)
                     p_buy = torch.sigmoid(logits)
                     # Expected utility: P(buy)*r_buy + P(skip)*r_skip
                     # With r_skip = 0: utility = P(buy) * reward
                     utility = p_buy * rb
                     loss = -utility.mean()
-                    optimizer.zero_grad()
+                    optimizer.zero_grad(set_to_none=True)
                     loss.backward()
                     optimizer.step()
         else:
@@ -595,11 +593,11 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
             all_params += list(self._policy_head.parameters())
         optimizer = torch.optim.Adam(all_params, lr=self.lr)
 
-        X_t = torch.tensor(X, dtype=torch.float32)
-        y_t = torch.tensor(y, dtype=torch.long)
+        X_t = torch.tensor(X, dtype=torch.float32, device=self.device)
+        y_t = torch.tensor(y, dtype=torch.long, device=self.device)
 
         if rewards is not None:
-            r_t = torch.tensor(rewards, dtype=torch.float32)
+            r_t = torch.tensor(rewards, dtype=torch.float32, device=self.device)
         else:
             r_t = None
 
@@ -609,9 +607,9 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
         for _ in range(self.epochs):
             self.module.train()
             for batch in loader:
-                xb = batch[0].to(self.device)
-                yb = batch[1].to(self.device)
-                rb = batch[2].to(self.device) if rewards is not None else None
+                xb = batch[0]
+                yb = batch[1]
+                rb = batch[2] if rewards is not None else None
 
                 logits = self._policy_forward(xb)
                 dist = Categorical(logits=logits)
@@ -636,7 +634,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
                 policy_loss = -(log_probs * batch_rewards).mean()
                 loss = policy_loss - self.entropy_coef * entropy
 
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
                 loss.backward()
                 optimizer.step()
 
@@ -651,7 +649,7 @@ class PolicyGradientClassifier(ClassifierMixin, _BaseTorchClassifier):
 
         self.module.eval()
         all_probs = []
-        with torch.no_grad():
+        with torch.inference_mode():
             for i in range(0, len(X), self.batch_size):
                 batch = torch.tensor(X[i:i + self.batch_size], dtype=torch.float32).to(self.device)
                 logits = self._policy_forward(batch)
