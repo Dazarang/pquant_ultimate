@@ -86,16 +86,13 @@ The loop: researcher edits experiment.py/features_lab.py -> gate runs experiment
 CONSECUTIVE FAILURES: $CONSECUTIVE_FAILS
 CURRENT BEST SCORE: $BEST_SCORE
 
-Analyze the state below. Write a briefing (under 300 words) for the researcher covering:
-1. PATTERN ANALYSIS: Categorize attempted changes with counts and success rates
-2. EXHAUSTED AXES: Change types tried repeatedly with no recent improvement
-3. UNEXPLORED TERRITORY: What areas have NOT been tried -- state facts only, do not rank or prioritize them
-4. BOLDNESS LEVEL: How radical the next change should be based on consecutive failures
-5. TRAPS TO AVOID: Only STRUCTURAL anti-patterns likely to fail regardless of regime (e.g., API misuse, incompatible model configs). Tag each trap with which regime it was tested under. Do NOT list data-dependent failures from old regimes as universal traps.
+Analyze the state below. Write a SHORT briefing (under 200 words) covering ONLY:
+1. PATTERN ANALYSIS: Categorize attempted changes with counts and success rates. Pure accounting -- just the numbers.
+2. BOLDNESS LEVEL: Based on consecutive failures and recent trajectory, how radical should the next change be? This is meta-guidance about intensity, NOT about what to try.
 
-CRITICAL: You are a cartographer, not a navigator. Map the terrain -- do NOT prescribe what to try next. No priority lists, no "try X first", no recommendations. The researcher decides their own path. Your job is to show what ground has been covered and what remains uncharted.
+Do NOT include: exhausted axes, unexplored territory, traps to avoid, suggestions, recommendations, or priority lists. The researcher reads the combat log directly and draws its own conclusions. Your only job is to provide the summary statistics and a boldness calibration.
 
-REGIME AWARENESS: When a recent improvement involved a structural change (different temporal split, different model architecture, different data config), the landscape has shifted. Prior combat log failures were tested under a DIFFERENT configuration and may no longer apply. Distinguish clearly between "tested under current config" vs "tested under a previous regime." After a regime shift, previously exhausted axes may be worth revisiting.
+REGIME AWARENESS: When a recent improvement involved a structural change (different temporal split, different model architecture, different data config), note it. Prior combat log entries were tested under a different configuration.
 
 Available models (immutable model_wrappers.py): CatBoostWrapper, RankingXGBClassifier, TorchClassifier, FocalTorchClassifier, SequenceClassifier (LSTM/GRU/Transformer), FocalSequenceClassifier, DirectUtilityClassifier, PolicyGradientClassifier.
 Neural modules: TorchMLP, LSTMNet, GRUNet, TransformerNet.
