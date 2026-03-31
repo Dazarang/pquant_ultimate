@@ -25,6 +25,12 @@ from lib.eval import tiered_eval  # noqa: E402
 from research.features_lab import add_custom_features  # noqa: E402
 
 # ===========================================================================
+# DATA -- static
+# ===========================================================================
+
+DATASET_PATH = "data/datasets/20260115/dataset.parquet"
+
+# ===========================================================================
 # CONFIGURATION -- researcher edits this section
 # ===========================================================================
 
