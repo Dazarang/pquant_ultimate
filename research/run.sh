@@ -91,7 +91,7 @@ Analyze the state below. Write a briefing (under 300 words) for the researcher c
 2. EXHAUSTED AXES: Change types tried repeatedly with no recent improvement
 3. UNEXPLORED TERRITORY: What areas have NOT been tried -- state facts only, do not rank or prioritize them
 4. BOLDNESS LEVEL: How radical the next change should be based on consecutive failures
-5. TRAPS TO AVOID: Anti-patterns from the combat log that always regress
+5. TRAPS TO AVOID: Only STRUCTURAL anti-patterns likely to fail regardless of regime (e.g., API misuse, incompatible model configs). Tag each trap with which regime it was tested under. Do NOT list data-dependent failures from old regimes as universal traps.
 
 CRITICAL: You are a cartographer, not a navigator. Map the terrain -- do NOT prescribe what to try next. No priority lists, no "try X first", no recommendations. The researcher decides their own path. Your job is to show what ground has been covered and what remains uncharted.
 
