@@ -89,7 +89,7 @@ After editing, stop. The outer loop will run gate.sh.
 
 If COMBAT_LOG.md shows your idea was already tried, pick something different."
 
-    codex --full-auto --model gpt-5-4 exec "$prompt"
+    codex --full-auto exec "$prompt" 2>/dev/null
 }
 
 for ((i=1; i<=MAX_ITERS; i++)); do
