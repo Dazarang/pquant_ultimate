@@ -43,8 +43,8 @@ STOCKS = None
 FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interaction"]
 
 # Temporal split boundaries
-TRAIN_END = "2022-12-31"
-VAL_END = "2023-12-31"
+TRAIN_END = "2023-12-31"
+VAL_END = "2024-12-31"
 
 # ===========================================================================
 # MODEL -- researcher edits this section
