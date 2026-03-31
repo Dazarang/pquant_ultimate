@@ -95,6 +95,8 @@ Analyze the state below. Write a briefing (under 300 words) for the researcher c
 
 CRITICAL: You are a cartographer, not a navigator. Map the terrain -- do NOT prescribe what to try next. No priority lists, no "try X first", no recommendations. The researcher decides their own path. Your job is to show what ground has been covered and what remains uncharted.
 
+REGIME AWARENESS: When a recent improvement involved a structural change (different temporal split, different model architecture, different data config), the landscape has shifted. Prior combat log failures were tested under a DIFFERENT configuration and may no longer apply. Distinguish clearly between "tested under current config" vs "tested under a previous regime." After a regime shift, previously exhausted axes may be worth revisiting.
+
 Available models (immutable model_wrappers.py): CatBoostWrapper, RankingXGBClassifier, TorchClassifier, FocalTorchClassifier, SequenceClassifier (LSTM/GRU/Transformer), FocalSequenceClassifier, DirectUtilityClassifier, PolicyGradientClassifier.
 Neural modules: TorchMLP, LSTMNet, GRUNet, TransformerNet.
 Levers: model type, hyperparams, feature groups (base/advanced/lag/rolling/roc/percentile/interaction), custom features (features_lab.py), stock universe (STOCKS), temporal splits, ensemble structure, meta-learner.
