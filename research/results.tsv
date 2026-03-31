@@ -88,3 +88,17 @@ iter	score	status	description
 48	-1.1423	discard	        gamma=0.3, 
 49	-1.1523	discard	        subsample=0.70, 
 50	-1.1432	discard	        n_estimators=1200, 
+1	-1.3679	discard	import numpy as np     day_range = (df["high"] - df["low"]).replace(0, np.nan)  
+2	-3.5875	discard	        passthrough=True, 
+3	-1.3680	discard	    stock_key = df["stock_id"]     g = df.groupby("stock_id", sort=False)      d
+4	-1.3651	discard	    stock_key = df["stock_id"]     g = df.groupby("stock_id", sort=False)      d
+1	-1.2163	discard	    spw = (neg / pos) ** (1 / 3) 
+2	-1.6452	discard	FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"] 
+3	-1.1996	discard	        cv=5, 
+4	-1.6751	discard	from sklearn.ensemble import VotingClassifier  # noqa: E402     model = VotingCl
+5	-1.2749	discard	        n_estimators=750, 
+6	-1.1919	discard	        reg_lambda=0.7, 
+7	-1.1200	discard	        grow_policy="lossguide",         max_leaves=128, 
+8	-1.2172	discard	        min_child_weight=5, 
+9	-1.1850	discard	        colsample_bynode=0.8, 
+10	-1.1711	discard	        learning_rate=0.02, 

@@ -66,6 +66,58 @@ get_change_description() {
     echo "$desc" | tr '\t' ' '
 }
 
+# ---------------------------------------------------------------------------
+# Advisor: sonnet pre-pass that analyzes research state and briefs the researcher
+# ---------------------------------------------------------------------------
+run_advisor() {
+    local entry_count
+    entry_count=$(grep -c "^### " "$COMBAT_LOG" 2>/dev/null || echo 0)
+    if [ "$entry_count" -eq 0 ]; then
+        echo "First iteration. No prior data. Explore freely."
+        return
+    fi
+
+    {
+        cat <<ADVISOR_EOF
+You are a research advisor for an ML experiment loop optimizing stock bottom (PivotLow) prediction.
+
+The loop: researcher edits experiment.py/features_lab.py -> gate runs experiment -> score improves = commit, else revert + log to COMBAT_LOG.md.
+
+CONSECUTIVE FAILURES: $CONSECUTIVE_FAILS
+CURRENT BEST SCORE: $BEST_SCORE
+
+Analyze the state below. Write a briefing (under 300 words) for the researcher covering:
+1. PATTERN ANALYSIS: Categorize attempted changes with counts and success rates
+2. EXHAUSTED AXES: Change types tried repeatedly with no recent improvement
+3. UNEXPLORED TERRITORY: What areas have NOT been tried -- state facts only, do not rank or prioritize them
+4. BOLDNESS LEVEL: How radical the next change should be based on consecutive failures
+5. TRAPS TO AVOID: Anti-patterns from the combat log that always regress
+
+CRITICAL: You are a cartographer, not a navigator. Map the terrain -- do NOT prescribe what to try next. No priority lists, no "try X first", no recommendations. The researcher decides their own path. Your job is to show what ground has been covered and what remains uncharted.
+
+Available models (immutable model_wrappers.py): CatBoostWrapper, RankingXGBClassifier, TorchClassifier, FocalTorchClassifier, SequenceClassifier (LSTM/GRU/Transformer), FocalSequenceClassifier, DirectUtilityClassifier, PolicyGradientClassifier.
+Neural modules: TorchMLP, LSTMNet, GRUNet, TransformerNet.
+Levers: model type, hyperparams, feature groups (base/advanced/lag/rolling/roc/percentile/interaction), custom features (features_lab.py), stock universe (STOCKS), temporal splits, ensemble structure, meta-learner.
+
+Be blunt. State facts. Do NOT suggest, recommend, or prioritize.
+
+---
+
+ADVISOR_EOF
+        echo "## Current experiment.py"
+        cat research/experiment.py
+        echo ""
+        echo "## Current features_lab.py"
+        cat research/features_lab.py
+        echo ""
+        echo "## Combat Log"
+        cat "$COMBAT_LOG"
+        echo ""
+        echo "## Results History"
+        cat "$RESULTS_TSV"
+    } | env -u CLAUDECODE claude -p --model sonnet 2>/dev/null || echo "Advisor unavailable. Use your own judgment."
+}
+
 echo "============================================================"
 echo "AUTORESEARCH"
 echo "============================================================"
@@ -76,10 +128,15 @@ echo ""
 
 run_claude_attempt() {
     local iter=$1
+    local advisor_report="${2:-}"
     local prompt="You are an autonomous ML researcher. Your goal: maximize the composite score for PivotLow (stock bottom) prediction.
 
 CURRENT BEST SCORE: $BEST_SCORE
 ITERATION: $iter / $MAX_ITERS
+CONSECUTIVE FAILURES (no improvement): $CONSECUTIVE_FAILS
+
+## RESEARCH ADVISOR BRIEFING
+$advisor_report
 
 READ FIRST:
 - research/COMBAT_LOG.md (what has been tried, what failed, what worked)
@@ -112,8 +169,12 @@ for ((i=1; i<=MAX_ITERS; i++)); do
         echo "Edit research/experiment.py and/or research/features_lab.py, then press Enter."
         read -r
     else
+        echo "Running research advisor..."
+        ADVISOR_REPORT=$(run_advisor)
+        echo "$ADVISOR_REPORT"
+        echo ""
         echo "Dispatching Claude Code agent..."
-        run_claude_attempt "$i" || true
+        run_claude_attempt "$i" "$ADVISOR_REPORT" || true
     fi
 
     # --- Check if anything changed ---

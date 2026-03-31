@@ -293,3 +293,60 @@ Score: -1.1523 |         subsample=0.70,
 
 ### Iteration 50 -- REVERTED (-0.0232)
 Score: -1.1432 |         n_estimators=1200, 
+
+### Iteration 1 -- REVERTED (-0.2479)
+Score: -1.3679 | import numpy as np     day_range = (df["high"] - df["low"]).replace(0, np.nan)  
+
+### Iteration 2 -- REVERTED (-2.4675)
+Score: -3.5875 |         passthrough=True, 
+
+### Iteration 3 -- REVERTED (-0.2480)
+Score: -1.3680 |     stock_key = df["stock_id"]     g = df.groupby("stock_id", sort=False)      d
+
+### Iteration 4 -- REVERTED (-0.2451)
+Score: -1.3651 |     stock_key = df["stock_id"]     g = df.groupby("stock_id", sort=False)      d
+
+### Iteration 5 -- KNOWLEDGE
+No code changes.
+
+### Iteration 6 -- KNOWLEDGE
+No code changes.
+
+### Iteration 7 -- KNOWLEDGE
+No code changes.
+
+### Iteration 8 -- KNOWLEDGE
+No code changes.
+
+### Iteration 9 -- KNOWLEDGE
+No code changes.
+
+### Iteration 1 -- REVERTED (-0.0963)
+Score: -1.2163 |     spw = (neg / pos) ** (1 / 3) 
+
+### Iteration 2 -- REVERTED (-0.5252)
+Score: -1.6452 | FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"] 
+
+### Iteration 3 -- REVERTED (-0.0796)
+Score: -1.1996 |         cv=5, 
+
+### Iteration 4 -- REVERTED (-0.5551)
+Score: -1.6751 | from sklearn.ensemble import VotingClassifier  # noqa: E402     model = VotingCl
+
+### Iteration 5 -- REVERTED (-0.1549)
+Score: -1.2749 |         n_estimators=750, 
+
+### Iteration 6 -- REVERTED (-0.0719)
+Score: -1.1919 |         reg_lambda=0.7, 
+
+### Iteration 7 -- REVERTED (+0.0000)
+Score: -1.1200 |         grow_policy="lossguide",         max_leaves=128, 
+
+### Iteration 8 -- REVERTED (-0.0972)
+Score: -1.2172 |         min_child_weight=5, 
+
+### Iteration 9 -- REVERTED (-0.0650)
+Score: -1.1850 |         colsample_bynode=0.8, 
+
+### Iteration 10 -- REVERTED (-0.0511)
+Score: -1.1711 |         learning_rate=0.02, 
