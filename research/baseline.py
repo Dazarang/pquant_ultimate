@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split
 from lib.eval import tiered_eval
 
-DATASET_PATH = "data/datasets/20260115/dataset.parquet"
+DATASET_PATH = "data/datasets/20260331/dataset.parquet"
 
 
 def run():

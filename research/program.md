@@ -48,13 +48,19 @@ Hard gate:
 
 **There is no THRESHOLD lever.** Signal selection is done by the immutable judge.
 
+## Evaluation: Walk-Forward
+
+The pipeline uses **walk-forward evaluation** with 6 non-overlapping 6-month validation windows covering 2023-03 to 2026-03. Data is filtered to 2020+ after feature computation. The final score is the **mean of all fold scores**. All folds must pass Tier 1 or the iteration is rejected.
+
+You cannot change the folds, dataset path, or data filter. These are fixed in the PIPELINE section.
+
 ## The Dataset
 
-- ~3M rows, 1,336 stocks, 2015-2026
+- ~3M rows (filtered to 2020+), 1,336 stocks, dataset ending 2026-03
 - 231 features across 7 groups (see `list_features()`)
 - Label: PivotLow (binary, ~5% positive rate, ~1:20 imbalance, window [-1,+1] @ 1% tolerance)
 - Mix of US, S&P 500, and Swedish stocks
-- Temporal split with 13-session embargo at boundaries
+- 13-session embargo at split boundaries
 - Stock lists: `data/tickers/tickers_validated_20251031.json` (US 7,478 / S&P 500 503 / Sweden 718; ~1,336 survived filtering)
 
 ## Features

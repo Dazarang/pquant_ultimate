@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Evaluate the current experiment on the held-out TEST set and visualize buy signals.
+"""Evaluate the current model on the last walk-forward fold and visualize buy signals.
 
-1. Train model (same config as experiment.py)
-2. Evaluate on val (sanity) + test (2024+, never seen during research)
+1. Train model on last fold's train split
+2. Evaluate on last fold's val split
 3. Run benchmark_random_entry + backtest at a reference budget
 4. Plot price timelines with buy-signal markers
 """
@@ -28,8 +28,7 @@ from research.experiment import (
     DATASET_PATH,
     FEATURE_GROUPS,
     STOCKS,
-    TRAIN_END,
-    VAL_END,
+    _WF_FOLDS,
     build_model,
 )
 from research.features_lab import add_custom_features
@@ -41,76 +40,66 @@ VIZ_BUDGET = 0.0025  # top 0.25% of predictions
 
 
 def train_and_evaluate():
-    """Train model, evaluate on val + test, run benchmarks."""
+    """Train model on last fold, evaluate on its val set, run benchmarks."""
 
-    # Load & prepare (same pipeline as experiment.py)
     features = list_features(FEATURE_GROUPS)
     df, feature_cols = load_dataset(DATASET_PATH, stocks=STOCKS, features=features)
     df, new_features = add_custom_features(df)
     feature_cols = feature_cols + new_features
     df[new_features] = df[new_features].replace([float("inf"), float("-inf")], float("nan"))
     df = df.dropna(subset=feature_cols).reset_index(drop=True)
+    df = df[df["date"] >= "2020-01-01"].reset_index(drop=True)
 
-    # Split & scale
-    train, val, test = temporal_split(df, train_end=TRAIN_END, val_end=VAL_END)
-    train_s, val_s, test_s, scaler = scale(train, val, test, feature_cols)
+    train_end, val_end = _WF_FOLDS[-1]
+    train, val, _ = temporal_split(df, train_end=train_end, val_end=val_end, include_test=False)
+    train_s, val_s, _, _ = scale(train, val, val.iloc[:0], feature_cols)
 
     X_train = train_s[feature_cols].values
     y_train = train_s[LABEL_COL].values
 
-    # Train
     print(f"\nTraining on {X_train.shape[0]:,} rows, {X_train.shape[1]} features...")
     model = build_model(y_train)
     model.fit(X_train, y_train)
 
-    # --- Val evaluation (sanity check) ---
+    # --- Val evaluation ---
     print("\n" + "=" * 70)
-    print("VALIDATION SET (in-sample for research, 2023)")
+    print(f"LAST FOLD: train_end={train_end}, val_end={val_end}")
     print("=" * 70)
     X_val = val_s[feature_cols].values
     y_val = val_s[LABEL_COL].values
     y_val_proba = model.predict_proba(X_val)[:, 1]
-    tiered_eval(val, y_val, y_val_proba)
-
-    # --- Test evaluation (never seen!) ---
-    print("\n" + "=" * 70)
-    print("TEST SET (held-out, 2024+, never seen during research)")
-    print("=" * 70)
-    X_test = test_s[feature_cols].values
-    y_test = test_s[LABEL_COL].values
-    y_test_proba = model.predict_proba(X_test)[:, 1]
-    test_results = tiered_eval(test, y_test, y_test_proba)
+    val_results = tiered_eval(val, y_val, y_val_proba)
 
     # --- Benchmark & backtest at reference budget ---
-    y_test_pred = select_top_frac(y_test_proba, VIZ_BUDGET)
-    n_sig = int(y_test_pred.sum())
+    y_val_pred = select_top_frac(y_val_proba, VIZ_BUDGET)
+    n_sig = int(y_val_pred.sum())
 
     print("\n" + "=" * 70)
-    print(f"BENCHMARK: Random Entry vs Model (Test, top {VIZ_BUDGET*100:.2f}%, {n_sig} signals)")
+    print(f"BENCHMARK: Random Entry vs Model (top {VIZ_BUDGET*100:.2f}%, {n_sig} signals)")
     print("=" * 70)
-    benchmark_random_entry(test, y_test_pred)
+    benchmark_random_entry(val, y_val_pred)
 
     print("\n" + "=" * 70)
-    print(f"BACKTEST: Quick (Test, top {VIZ_BUDGET*100:.2f}%, {n_sig} signals)")
+    print(f"BACKTEST: Quick (top {VIZ_BUDGET*100:.2f}%, {n_sig} signals)")
     print("=" * 70)
-    test_bt = test.copy()
-    test_bt["prediction"] = y_test_pred
-    backtest_quick(test_bt)
+    val_bt = val.copy()
+    val_bt["prediction"] = y_val_pred
+    backtest_quick(val_bt)
 
-    return test, y_test_proba, test_results
+    return val, y_val_proba, val_results
 
 
-def plot_signals(test_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
+def plot_signals(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
     """Plot price timeline with buy signals for top stocks by signal count."""
 
-    test = test_df.copy()
+    val = val_df.copy()
     y_pred = select_top_frac(y_proba, budget)
-    test["pred"] = y_pred
-    test["proba"] = y_proba
+    val["pred"] = y_pred
+    val["proba"] = y_proba
 
-    signal_stocks = test[test["pred"] == 1].groupby("stock_id").size().sort_values(ascending=False)
+    signal_stocks = val[val["pred"] == 1].groupby("stock_id").size().sort_values(ascending=False)
     if len(signal_stocks) == 0:
-        print("No signals in test set!")
+        print("No signals!")
         return
 
     top_stocks = signal_stocks.head(max_stocks).index.tolist()
@@ -118,10 +107,11 @@ def plot_signals(test_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
     cols = min(4, n)
     rows = (n + cols - 1) // cols
 
+    date_range = f"{val['date'].min().date()} to {val['date'].max().date()}"
     n_total_signals = int(y_pred.sum())
     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows), squeeze=False)
     fig.suptitle(
-        f"Test Set Buy Signals (2024+)  |  budget={budget*100:.2f}%  |  "
+        f"Buy Signals ({date_range})  |  budget={budget*100:.2f}%  |  "
         f"{n_total_signals} total signals across {len(signal_stocks)} stocks",
         fontsize=14,
         fontweight="bold",
@@ -130,14 +120,12 @@ def plot_signals(test_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
 
     for i, stock_id in enumerate(top_stocks):
         ax = axes[i // cols][i % cols]
-        stock = test[test["stock_id"] == stock_id].sort_values("date").copy()
+        stock = val[val["stock_id"] == stock_id].sort_values("date").copy()
         dates = stock["date"]
         close = stock["close"]
 
-        # Price line
         ax.plot(dates, close, color="#555", linewidth=0.7, alpha=0.9)
 
-        # True pivot lows (ground truth)
         true_pivots = stock[stock[LABEL_COL] == 1]
         ax.scatter(
             true_pivots["date"], true_pivots["close"],
@@ -145,7 +133,6 @@ def plot_signals(test_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
             label=f"{len(true_pivots)} true",
         )
 
-        # Predicted buy signals
         signals = stock[stock["pred"] == 1]
         ax.scatter(
             signals["date"], signals["close"],
@@ -153,7 +140,6 @@ def plot_signals(test_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
             label=f"{len(signals)} pred",
         )
 
-        # Annotate forward 10d return per signal
         for _, row in signals.iterrows():
             ret = forward_open_return(stock, row["date"], horizon=10)
             if ret is None:
@@ -183,20 +169,20 @@ def plot_signals(test_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
     plt.close(fig)
 
 
-def plot_returns_distribution(test_df, y_proba, budget=VIZ_BUDGET):
+def plot_returns_distribution(val_df, y_proba, budget=VIZ_BUDGET):
     """Plot distribution of forward returns for buy signals."""
 
-    test = test_df.copy()
+    val = val_df.copy()
     y_pred = select_top_frac(y_proba, budget)
-    test["pred"] = y_pred
+    val["pred"] = y_pred
 
-    signals = test[test["pred"] == 1].copy()
+    signals = val[val["pred"] == 1].copy()
     if len(signals) == 0:
         return
 
     stocks_by_id = {
         stock_id: stock.sort_values("date").copy()
-        for stock_id, stock in test.groupby("stock_id")
+        for stock_id, stock in val.groupby("stock_id")
     }
     fwd_returns = []
     for _, row in signals.iterrows():
@@ -234,6 +220,6 @@ def plot_returns_distribution(test_df, y_proba, budget=VIZ_BUDGET):
 
 
 if __name__ == "__main__":
-    test, y_proba, results = train_and_evaluate()
-    plot_signals(test, y_proba)
-    plot_returns_distribution(test, y_proba)
+    val, y_proba, results = train_and_evaluate()
+    plot_signals(val, y_proba)
+    plot_returns_distribution(val, y_proba)

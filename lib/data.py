@@ -114,6 +114,7 @@ def temporal_split(
     train_end: str = "2022-12-31",
     val_end: str = "2023-12-31",
     embargo_sessions: int = 13,
+    include_test: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Split dataset by date with embargo gap at boundaries.
 
@@ -132,13 +133,20 @@ def temporal_split(
     train_cutoff = dates[max(0, train_end_idx - embargo_sessions)]
     val_start = dates[min(len(dates) - 1, train_end_idx + 1)]
     val_cutoff = dates[max(0, val_end_idx - embargo_sessions)]
-    test_start = dates[min(len(dates) - 1, val_end_idx + 1)]
 
     train = df[df["date"] <= train_cutoff].copy()
     val = df[(df["date"] >= val_start) & (df["date"] <= val_cutoff)].copy()
-    test = df[df["date"] >= test_start].copy()
 
-    for name, split in [("Train", train), ("Val", val), ("Test", test)]:
+    if include_test:
+        test_start = dates[min(len(dates) - 1, val_end_idx + 1)]
+        test = df[df["date"] >= test_start].copy()
+    else:
+        test = df.iloc[:0].copy()
+
+    splits = [("Train", train), ("Val", val)]
+    if include_test:
+        splits.append(("Test", test))
+    for name, split in splits:
         if split.empty:
             print(f"  {name}:         0 rows | (empty)")
         else:
@@ -164,6 +172,7 @@ def scale(
 
     train[feature_cols] = scaler.fit_transform(train[feature_cols])
     val[feature_cols] = scaler.transform(val[feature_cols])
-    test[feature_cols] = scaler.transform(test[feature_cols])
+    if not test.empty:
+        test[feature_cols] = scaler.transform(test[feature_cols])
 
     return train, val, test, scaler
