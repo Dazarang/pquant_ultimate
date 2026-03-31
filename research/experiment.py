@@ -73,7 +73,7 @@ def build_model(y_train):
         group_size=200,
         n_estimators=500,
         max_depth=5,
-        learning_rate=0.025,
+        learning_rate=0.02,
         subsample=0.75,
         colsample_bytree=0.65,
         reg_alpha=0.5,
