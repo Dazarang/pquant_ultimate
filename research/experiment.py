@@ -56,7 +56,7 @@ def build_model(y_train):
         max_depth=7,
         learning_rate=0.016,
         min_child_weight=3,
-        gamma=0.5,
+        gamma=0.4,
         reg_alpha=0.5,
         reg_lambda=0.5,
         subsample=0.65,
