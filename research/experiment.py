@@ -25,26 +25,22 @@ from lib.eval import tiered_eval  # noqa: E402
 from research.features_lab import add_custom_features  # noqa: E402
 
 # ===========================================================================
-# DATA -- static
+# DATA & TEMPORAL SPLIT -- fixed, do not edit
 # ===========================================================================
 
-DATASET_PATH = "data/datasets/20260115/dataset.parquet"
+DATASET_PATH = "data/datasets/20260331/dataset.parquet"
+TRAIN_END = "2025-09-15"
+VAL_END = "2026-03-15"
 
 # ===========================================================================
 # CONFIGURATION -- researcher edits this section
 # ===========================================================================
-
-DATASET_PATH = "data/datasets/20260115/dataset.parquet"
 
 # Stock universe: None = all, "AAPL" = single, ["AAPL", "MSFT", ...] = subset
 STOCKS = None
 
 # Feature groups: see list_features() for options
 FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interaction"]
-
-# Temporal split boundaries
-TRAIN_END = "2024-06-30"
-VAL_END = "2024-12-31"
 
 # ===========================================================================
 # MODEL -- researcher edits this section

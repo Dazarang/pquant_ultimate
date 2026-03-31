@@ -350,3 +350,36 @@ Score: -1.1850 |         colsample_bynode=0.8,
 
 ### Iteration 10 -- REVERTED (-0.0511)
 Score: -1.1711 |         learning_rate=0.02, 
+
+### Iteration 1 -- REVERTED (-0.7885)
+Score: -1.9085 | from research.model_wrappers import CatBoostWrapper  # noqa: E402     cat = CatB
+
+### Iteration 2 -- REVERTED (-0.2047)
+Score: -1.3247 |         colsample_bytree=0.75, 
+
+### Iteration 3 -- REVERTED (-0.9666)
+Score: -2.0866 |     model = XGBClassifier( 
+
+### Iteration 4 -- IMPROVED (+2.3164)
+Score: 1.1964 | TRAIN_END = "2023-12-31" VAL_END = "2024-12-31" 
+Commit: 7761092
+
+### Iteration 5 -- REVERTED (-0.0053)
+Score: 1.1911 | from research.model_wrappers import CatBoostWrapper, RankingXGBClassifier  # noq
+
+### Iteration 6 -- REVERTED (-0.0612)
+Score: 1.1352 | from sklearn.ensemble import GradientBoostingClassifier, StackingClassifier  # n
+
+### Iteration 7 -- IMPROVED (+0.0361)
+Score: 1.2325 | TRAIN_END = "2024-03-31" 
+Commit: 50ad224
+
+### Iteration 8 -- REVERTED (-0.3107)
+Score: 0.9218 | VAL_END = "2025-03-31" 
+
+### Iteration 9 -- IMPROVED (+0.0254)
+Score: 1.2579 | TRAIN_END = "2024-06-30" 
+Commit: 0deef81
+
+### Iteration 10 -- REVERTED (-1.1562)
+Score: 0.1017 | TRAIN_END = "2024-09-30" 

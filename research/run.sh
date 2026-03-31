@@ -92,11 +92,11 @@ Analyze the state below. Write a SHORT briefing (under 200 words) covering ONLY:
 
 Do NOT include: exhausted axes, unexplored territory, traps to avoid, suggestions, recommendations, or priority lists. The researcher reads the combat log directly and draws its own conclusions. Your only job is to provide the summary statistics and a boldness calibration.
 
-REGIME AWARENESS: When a recent improvement involved a structural change (different temporal split, different model architecture, different data config), note it. Prior combat log entries were tested under a different configuration.
+REGIME AWARENESS: When a recent improvement involved a structural change (different model architecture, different data config), note it. Prior combat log entries were tested under a different configuration.
 
 Available models (immutable model_wrappers.py): CatBoostWrapper, RankingXGBClassifier, TorchClassifier, FocalTorchClassifier, SequenceClassifier (LSTM/GRU/Transformer), FocalSequenceClassifier, DirectUtilityClassifier, PolicyGradientClassifier.
 Neural modules: TorchMLP, LSTMNet, GRUNet, TransformerNet.
-Levers: model type, hyperparams, feature groups (base/advanced/lag/rolling/roc/percentile/interaction), custom features (features_lab.py), stock universe (STOCKS), temporal splits, ensemble structure, meta-learner.
+Levers: model type, hyperparams, feature groups (base/advanced/lag/rolling/roc/percentile/interaction), custom features (features_lab.py), stock universe (STOCKS), ensemble structure, meta-learner.
 
 Be blunt. State facts. Do NOT suggest, recommend, or prioritize.
 

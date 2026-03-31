@@ -13,7 +13,6 @@ You edit **two files only**:
 ### 1. `research/experiment.py`
 - **STOCKS**: which stocks to train on (None=all, or a list). Smaller = faster iteration.
 - **FEATURE_GROUPS**: which feature groups to use. Options: `"base"` (54), `"advanced"` (22), `"lag"` (70), `"rolling"` (64), `"roc"` (5), `"percentile"` (2), `"interaction"` (3). Or hand-pick individual features.
-- **TRAIN_END / VAL_END**: temporal split boundaries.
 - **build_model()**: model type, hyperparameters. See the **Models** section below for all available options.
 
 ### 2. `research/features_lab.py`

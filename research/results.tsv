@@ -102,3 +102,13 @@ iter	score	status	description
 8	-1.2172	discard	        min_child_weight=5, 
 9	-1.1850	discard	        colsample_bynode=0.8, 
 10	-1.1711	discard	        learning_rate=0.02, 
+1	-1.9085	discard	from research.model_wrappers import CatBoostWrapper  # noqa: E402     cat = CatB
+2	-1.3247	discard	        colsample_bytree=0.75, 
+3	-2.0866	discard	    model = XGBClassifier( 
+4	1.1964	keep	TRAIN_END = "2023-12-31" VAL_END = "2024-12-31" 
+5	1.1911	discard	from research.model_wrappers import CatBoostWrapper, RankingXGBClassifier  # noq
+6	1.1352	discard	from sklearn.ensemble import GradientBoostingClassifier, StackingClassifier  # n
+7	1.2325	keep	TRAIN_END = "2024-03-31" 
+8	0.9218	discard	VAL_END = "2025-03-31" 
+9	1.2579	keep	TRAIN_END = "2024-06-30" 
+10	0.1017	discard	TRAIN_END = "2024-09-30" 
