@@ -112,3 +112,184 @@ Score: -1.4102 | from sklearn.feature_selection import SelectFromModel  # noqa: 
 
 ### Iteration 21 -- REVERTED (-0.0344)
 Score: -1.3215 |         n_estimators=1000,         max_depth=-1,         num_leaves=31,         
+
+### Iteration 1 -- REVERTED (-1.9362)
+Score: -3.2063 |     from research.model_wrappers import FocalTorchClassifier, TorchMLP     neg =
+
+### Iteration 2 -- REVERTED (-0.8576)
+Score: -2.1277 |     model = XGBClassifier( 
+
+### Iteration 3 -- REVERTED (-0.0147)
+Score: -1.2848 | from research.model_wrappers import CatBoostWrapper, RankingXGBClassifier  # noq
+
+### Iteration 4 -- REVERTED (-0.8576)
+Score: -2.1277 |     model = XGBClassifier( 
+
+### Iteration 5 -- REVERTED (-0.0403)
+Score: -1.3104 | from research.model_wrappers import CatBoostWrapper, RankingXGBClassifier  # noq
+
+### Iteration 6 -- KNOWLEDGE
+No code changes.
+
+### Iteration 1 -- KNOWLEDGE
+No code changes.
+
+### Iteration 1 -- IMPROVED (+0.0195)
+Score: -1.2506 |         reg_alpha=0.5,         colsample_bytree=0.7, 
+Commit: 88a4cef
+
+### Iteration 2 -- REVERTED (-0.0024)
+Score: -1.2530 |         max_depth=0,         max_leaves=128,         grow_policy="lossguide", 
+
+### Iteration 3 -- REVERTED (-0.0064)
+Score: -1.2570 |         min_child_weight=15,         gamma=0.3, 
+
+### Iteration 4 -- REVERTED (-0.1288)
+Score: -1.3794 |     g_dd = df.groupby("stock_id")["drawdown"]     df["drawdown_velocity_5d"] = d
+
+### Iteration 5 -- REVERTED (-0.0425)
+Score: -1.2931 |     spw = (neg / pos) ** 0.6 
+
+### Iteration 6 -- REVERTED (-0.1773)
+Score: -1.4279 |     gr = df.groupby("stock_id")["ret_1d"]     vol_5 = gr.transform(lambda x: x.r
+
+### Iteration 7 -- REVERTED (-0.1232)
+Score: -1.3738 | FEATURE_GROUPS = ["base", "advanced", "lag", "rolling", "roc", "percentile", "in
+
+### Iteration 8 -- REVERTED (-3.1663)
+Score: -4.4169 |         passthrough=True, 
+
+### Iteration 9 -- REVERTED (-0.4414)
+Score: -1.6920 | from sklearn.ensemble import VotingClassifier  # noqa: E402     model = VotingCl
+
+### Iteration 10 -- REVERTED (-0.1762)
+Score: -1.4268 |         n_estimators=800, 
+
+### Iteration 11 -- IMPROVED (+0.0343)
+Score: -1.2163 |         cv=3, 
+Commit: 92461be
+
+### Iteration 12 -- IMPROVED (+0.0297)
+Score: -1.1866 |         reg_lambda=1.0, 
+Commit: 69232c6
+
+### Iteration 13 -- REVERTED (-0.0060)
+Score: -1.1926 |         gamma=0.2, 
+
+### Iteration 14 -- REVERTED (-0.0314)
+Score: -1.2180 |         colsample_bylevel=0.7, 
+
+### Iteration 15 -- REVERTED (-0.0321)
+Score: -1.2187 |         subsample=0.80, 
+
+### Iteration 16 -- REVERTED (-0.0545)
+Score: -1.2411 |         min_child_weight=15, 
+
+### Iteration 17 -- REVERTED (-0.0424)
+Score: -1.2290 |         max_delta_step=1, 
+
+### Iteration 18 -- REVERTED (-0.0283)
+Score: -1.2149 |         cv=5, 
+
+### Iteration 19 -- IMPROVED (+0.0458)
+Score: -1.1408 |         reg_lambda=0.5, 
+Commit: dd6b99b
+
+### Iteration 20 -- REVERTED (-0.1285)
+Score: -1.2693 |         n_estimators=1400,         learning_rate=0.01, 
+
+### Iteration 21 -- REVERTED (-0.0943)
+Score: -1.2351 |         reg_lambda=0.5, 
+
+### Iteration 22 -- REVERTED (-0.0681)
+Score: -1.2089 |         max_depth=6, 
+
+### Iteration 23 -- REVERTED (-0.1201)
+Score: -1.2609 |         reg_lambda=1.5, 
+
+### Iteration 24 -- REVERTED (-0.0711)
+Score: -1.2119 |         reg_alpha=0.3, 
+
+### Iteration 25 -- REVERTED (-0.1043)
+Score: -1.2451 |         gamma=0.5, 
+
+### Iteration 26 -- REVERTED (-0.0286)
+Score: -1.1694 |         final_estimator=LogisticRegression(C=5.0, max_iter=1000), 
+
+### Iteration 27 -- REVERTED (-0.0833)
+Score: -1.2241 |         learning_rate=0.02, 
+
+### Iteration 28 -- REVERTED (-0.1773)
+Score: -1.3181 |         max_depth=4, 
+
+### Iteration 29 -- REVERTED (-0.2288)
+Score: -1.3696 |     g = df.groupby("stock_id")     avg_vol = g["volume"].transform(lambda x: x.r
+
+### Iteration 30 -- IMPROVED (+0.0062)
+Score: -1.1346 |         learning_rate=0.02, 
+Commit: fe6fb24
+
+### Iteration 31 -- REVERTED (-0.0432)
+Score: -1.1778 |         max_depth=8, 
+
+### Iteration 32 -- REVERTED (-0.0476)
+Score: -1.1822 | from lightgbm import LGBMClassifier  # noqa: E402     lgb = LGBMClassifier(     
+
+### Iteration 33 -- IMPROVED (+0.0023)
+Score: -1.1323 |         min_child_weight=12, 
+Commit: e637072
+
+### Iteration 34 -- REVERTED (-0.0811)
+Score: -1.2134 |         max_depth=6, 
+
+### Iteration 35 -- IMPROVED (+0.0040)
+Score: -1.1283 |         min_child_weight=8, 
+Commit: a882931
+
+### Iteration 36 -- IMPROVED (+0.0011)
+Score: -1.1272 |         min_child_weight=5, 
+Commit: dace9c5
+
+### Iteration 37 -- IMPROVED (+0.0031)
+Score: -1.1241 |         min_child_weight=3, 
+Commit: abb10dd
+
+### Iteration 38 -- REVERTED (-0.0229)
+Score: -1.1470 |         min_child_weight=1, 
+
+### Iteration 39 -- IMPROVED (+0.0041)
+Score: -1.1200 |         gamma=0.4, 
+Commit: f3ab845
+
+### Iteration 40 -- REVERTED (-0.2212)
+Score: -1.3412 |         group_size=150, 
+
+### Iteration 41 -- REVERTED (-0.0270)
+Score: -1.1470 |         reg_alpha=0.4, 
+
+### Iteration 42 -- REVERTED (-0.0911)
+Score: -1.2111 |         objective="rank:map", 
+
+### Iteration 43 -- REVERTED (-0.0466)
+Score: -1.1666 | from sklearn.ensemble import ExtraTreesClassifier, StackingClassifier  # noqa: E
+
+### Iteration 44 -- REVERTED (-0.0401)
+Score: -1.1601 |         colsample_bytree=0.65, 
+
+### Iteration 45 -- REVERTED (-0.1766)
+Score: -1.2966 |         learning_rate=0.015, 
+
+### Iteration 46 -- REVERTED (-0.0218)
+Score: -1.1418 |         reg_lambda=0.3, 
+
+### Iteration 47 -- REVERTED (-0.1188)
+Score: -1.2388 | FEATURE_GROUPS = ["base", "advanced", "lag", "rolling", "roc", "percentile", "in
+
+### Iteration 48 -- REVERTED (-0.0223)
+Score: -1.1423 |         gamma=0.3, 
+
+### Iteration 49 -- REVERTED (-0.0323)
+Score: -1.1523 |         subsample=0.70, 
+
+### Iteration 50 -- REVERTED (-0.0232)
+Score: -1.1432 |         n_estimators=1200, 
