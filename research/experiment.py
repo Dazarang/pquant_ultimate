@@ -14,11 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: F401,E402 -- available for researcher
-from sklearn.ensemble import StackingClassifier  # noqa: E402
-from sklearn.linear_model import LogisticRegression  # noqa: E402
-from xgboost import XGBClassifier  # noqa: E402
-
-from research.model_wrappers import RankingXGBClassifier  # noqa: E402
+from lightgbm import LGBMClassifier  # noqa: E402
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
 from lib.eval import tiered_eval  # noqa: E402
@@ -51,42 +47,20 @@ def build_model(y_train):
     pos = (y_train == 1).sum()
     spw = np.sqrt(neg / pos)
 
-    xgb = XGBClassifier(
-        n_estimators=1000,
-        max_depth=7,
-        learning_rate=0.016,
-        min_child_weight=3,
-        gamma=0.4,
-        reg_alpha=0.5,
-        reg_lambda=0.5,
-        subsample=0.65,
-        colsample_bytree=0.7,
-        scale_pos_weight=spw,
-        tree_method="hist",
-        random_state=42,
-        n_jobs=-1,
-        verbosity=0,
-    )
-
-    rank = RankingXGBClassifier(
-        objective="rank:ndcg",
-        group_size=200,
-        n_estimators=500,
-        max_depth=5,
-        learning_rate=0.02,
-        subsample=0.75,
-        colsample_bytree=0.65,
+    model = LGBMClassifier(
+        n_estimators=2000,
+        num_leaves=63,
+        learning_rate=0.01,
+        min_child_samples=50,
+        subsample=0.7,
+        subsample_freq=1,
+        colsample_bytree=0.6,
         reg_alpha=0.5,
         reg_lambda=1.0,
-        seed=45,
-        verbosity=0,
-    )
-
-    model = StackingClassifier(
-        estimators=[("xgb", xgb), ("rank", rank)],
-        final_estimator=LogisticRegression(C=1.0, max_iter=1000),
-        cv=3,
-        n_jobs=1,
+        scale_pos_weight=spw,
+        n_jobs=-1,
+        random_state=42,
+        verbose=-1,
     )
     return model
 
