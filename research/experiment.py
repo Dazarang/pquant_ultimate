@@ -96,10 +96,8 @@ def build_model(y_train):
 # ===========================================================================
 
 # Walk-forward folds: (train_end, val_end). Non-overlapping 6-month val windows.
-# 6 equal 6-month folds, aligned backwards from data end. 3 years OOS coverage.
+# 4 equal 6-month folds, aligned backwards from data end. 2 years OOS coverage.
 _WF_FOLDS = [
-    ("2023-03-15", "2023-09-15"),
-    ("2023-09-15", "2024-03-15"),
     ("2024-03-15", "2024-09-15"),
     ("2024-09-15", "2025-03-15"),
     ("2025-03-15", "2025-09-15"),
@@ -117,7 +115,7 @@ def run():
     df[new_features] = df[new_features].replace([float("inf"), float("-inf")], float("nan"))
     df = df.dropna(subset=feature_cols).reset_index(drop=True)
 
-    df = df[df["date"] >= "2020-01-01"].reset_index(drop=True)
+    df = df[df["date"] >= "2021-01-01"].reset_index(drop=True)
 
     fold_scores = []
     for fold_idx, (train_end, val_end) in enumerate(_WF_FOLDS, 1):
