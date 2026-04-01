@@ -37,3 +37,31 @@ Score: 0.2084 | from lightgbm import LGBMClassifier  # noqa: E402     model = LG
 
 ### Iteration 11 -- REVERTED (-0.3499)
 Score: 0.0060 |         grow_policy="Lossguide",         max_leaves=64,         depth=8, 
+
+### Iteration 1 -- IMPROVED (+0.0039)
+Score: 0.3598 |         posterior_sampling=True, 
+Commit: 104b0f7
+
+### Iteration 2 -- REVERTED (-0.0373)
+Score: 0.3225 |         rsm=0.5, 
+
+### Iteration 3 -- REVERTED (-0.0663)
+Score: 0.2935 |         sampling_frequency="PerTreeLevel", 
+
+### Iteration 1 -- REVERTED (+0.0000)
+Score: 0.3598 |         min_data_in_leaf=30, 
+
+### Iteration 2 -- REVERTED (-0.0781)
+Score: 0.2817 | FEATURE_GROUPS = ["base", "advanced", "roc", "percentile"] 
+
+### Iteration 3 -- REVERTED (-0.0349)
+Score: 0.3249 |         l2_leaf_reg=1.0, 
+
+### Iteration 4 -- REVERTED (-0.5289)
+Score: -0.1691 | FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interacti
+
+### Iteration 5 -- REVERTED (-0.6028)
+Score: -0.2430 | class _LazyFocal:     """Defers TorchMLP construction to fit() to get input_dim 
+
+### Iteration 1 -- KNOWLEDGE
+No code changes.

@@ -10,3 +10,11 @@ iter	score	status	description
 9	0.2206	discard	import numpy as np     g = df.groupby("stock_id")      # Consecutive negative-re
 10	0.2084	discard	from lightgbm import LGBMClassifier  # noqa: E402     model = LGBMClassifier(   
 11	0.0060	discard	        grow_policy="Lossguide",         max_leaves=64,         depth=8, 
+1	0.3598	keep	        posterior_sampling=True, 
+2	0.3225	discard	        rsm=0.5, 
+3	0.2935	discard	        sampling_frequency="PerTreeLevel", 
+1	0.3598	discard	        min_data_in_leaf=30, 
+2	0.2817	discard	FEATURE_GROUPS = ["base", "advanced", "roc", "percentile"] 
+3	0.3249	discard	        l2_leaf_reg=1.0, 
+4	-0.1691	discard	FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interacti
+5	-0.2430	discard	class _LazyFocal:     """Defers TorchMLP construction to fit() to get input_dim 

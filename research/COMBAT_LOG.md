@@ -349,3 +349,185 @@ index df79845..2c3750a 100644
          min_data_in_leaf=50,
          bootstrap_type="MVS",
 ```
+
+### Iteration 2 -- REVERTED (-0.0373)
+Score: 0.3225 vs best 0.3598
+Change:         rsm=0.5, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 8b88678..26e797c 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -54,7 +54,7 @@ def build_model(y_train):
+         min_data_in_leaf=50,
+         bootstrap_type="MVS",
+         subsample=0.7,
+-        rsm=0.6,
++        rsm=0.5,
+         l2_leaf_reg=3.0,
+         posterior_sampling=True,
+         scale_pos_weight=spw,
+```
+
+### Iteration 3 -- REVERTED (-0.0663)
+Score: 0.2935 vs best 0.3598
+Change:         sampling_frequency="PerTreeLevel", 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 8b88678..db56a17 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -53,6 +53,7 @@ def build_model(y_train):
+         learning_rate=0.01,
+         min_data_in_leaf=50,
+         bootstrap_type="MVS",
++        sampling_frequency="PerTreeLevel",
+         subsample=0.7,
+         rsm=0.6,
+         l2_leaf_reg=3.0,
+```
+
+### Iteration 1 -- REVERTED (+0.0000)
+Score: 0.3598 vs best 0.3598
+Change:         min_data_in_leaf=30, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 8b88678..e1d3b54 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -51,7 +51,7 @@ def build_model(y_train):
+         iterations=2000,
+         depth=6,
+         learning_rate=0.01,
+-        min_data_in_leaf=50,
++        min_data_in_leaf=30,
+         bootstrap_type="MVS",
+         subsample=0.7,
+         rsm=0.6,
+```
+
+### Iteration 2 -- REVERTED (-0.0781)
+Score: 0.2817 vs best 0.3598
+Change: FEATURE_GROUPS = ["base", "advanced", "roc", "percentile"] 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 8b88678..165ceca 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -34,7 +34,7 @@ DATASET_PATH = "data/datasets/20260331/dataset.parquet"
+ STOCKS = None
+ 
+ # Feature groups: see list_features() for options
+-FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
++FEATURE_GROUPS = ["base", "advanced", "roc", "percentile"]
+ 
+ # ===========================================================================
+ # MODEL -- researcher edits this section
+```
+
+### Iteration 3 -- REVERTED (-0.0349)
+Score: 0.3249 vs best 0.3598
+Change:         l2_leaf_reg=1.0, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 8b88678..1fbaf51 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -55,7 +55,7 @@ def build_model(y_train):
+         bootstrap_type="MVS",
+         subsample=0.7,
+         rsm=0.6,
+-        l2_leaf_reg=3.0,
++        l2_leaf_reg=1.0,
+         posterior_sampling=True,
+         scale_pos_weight=spw,
+         random_seed=42,
+```
+
+### Iteration 4 -- REVERTED (-0.5289)
+Score: -0.1691 vs best 0.3598
+Change: FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interacti
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 8b88678..ff41917 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -33,8 +33,9 @@ DATASET_PATH = "data/datasets/20260331/dataset.parquet"
+ # Stock universe: None = all, "AAPL" = single, ["AAPL", "MSFT", ...] = subset
+ STOCKS = None
+ 
+-# Feature groups: see list_features() for options
+-FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
++# Feature groups: see list_features() for options. None = all
++
++FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interaction"]
+ 
+ # ===========================================================================
+ # MODEL -- researcher edits this section
+```
+
+### Iteration 5 -- REVERTED (-0.6028)
+Score: -0.2430 vs best 0.3598
+Change: class _LazyFocal:     """Defers TorchMLP construction to fit() to get input_dim 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index a007f5a..806bb7f 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -14,7 +14,6 @@ from pathlib import Path
+ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ 
+ import numpy as np  # noqa: F401,E402 -- available for researcher
+-from research.model_wrappers import CatBoostWrapper  # noqa: E402
+ 
+ from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
+ from lib.eval import tiered_eval  # noqa: E402
+@@ -41,28 +40,32 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
+ # ===========================================================================
+ 
+ 
++class _LazyFocal:
++    """Defers TorchMLP construction to fit() to get input_dim from data."""
++
++    def __init__(self, **kw):
++        self._kw = kw
++
++    def fit(self, X, y):
++        from research.model_wrappers import FocalTorchClassifier, TorchMLP
++        module = TorchMLP(X.shape[1], hidden_dims=(256, 128, 64), dropout=0.3)
++        self._m = FocalTorchClassifier(module=module, **self._kw)
++        self._m.fit(X, y)
++        return self
++
++    def predict_proba(self, X):
++        return self._m.predict_proba(X)
++
++
+ def build_model(y_train):
+     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
+-    neg = (y_train == 0).sum()
+-    pos = (y_train == 1).sum()
+-    spw = np.sqrt(neg / pos)
+-
+-    model = CatBoostWrapper(
+-        iterations=2000,
+-        depth=6,
+-        learning_rate=0.01,
+-        min_data_in_leaf=50,
+-        bootstrap_type="MVS",
+-        subsample=0.7,
+-        rsm=0.6,
+-        l2_leaf_reg=3.0,
+-        posterior_sampling=True,
+-        scale_pos_weight=spw,
+-        random_seed=42,
+-        verbose=0,
+-        thread_count=-1,
++    return _LazyFocal(
++        alpha=0.75,
++        focal_gamma=2.0,
++        epochs=50,
++        lr=1e-3,
++        batch_size=4096,
+     )
+```
