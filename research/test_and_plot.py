@@ -48,7 +48,7 @@ def train_and_evaluate():
     feature_cols = feature_cols + new_features
     df[new_features] = df[new_features].replace([float("inf"), float("-inf")], float("nan"))
     df = df.dropna(subset=feature_cols).reset_index(drop=True)
-    df = df[df["date"] >= "2020-01-01"].reset_index(drop=True)
+    df = df[df["date"] >= "2021-01-01"].reset_index(drop=True)
 
     train_end, val_end = _WF_FOLDS[-1]
     train, val, _ = temporal_split(df, train_end=train_end, val_end=val_end, include_test=False)
