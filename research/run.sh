@@ -87,12 +87,22 @@ CONSECUTIVE FAILURES: $CONSECUTIVE_FAILS
 CURRENT BEST SCORE: $BEST_SCORE
 
 Analyze the state below. Write a SHORT briefing (under 200 words) covering ONLY:
-1. PATTERN ANALYSIS: Categorize attempted changes with counts and success rates. Pure accounting -- just the numbers.
-2. BOLDNESS LEVEL: Based on consecutive failures and recent trajectory, how radical should the next change be? This is meta-guidance about intensity, NOT about what to try.
 
-Do NOT include: exhausted axes, unexplored territory, traps to avoid, suggestions, recommendations, or priority lists. The researcher reads the combat log directly and draws its own conclusions. Your only job is to provide the summary statistics and a boldness calibration.
+1. PATTERN ANALYSIS: A table of change categories with attempt count, success count, and success rate. No commentary.
+2. REGIME NOTE: If the current best was set by a structural change (model swap, data config change), state what it was and which prior combat log entries were tested under a different configuration. One sentence.
+3. CONSECUTIVE FAILURES: State the count.
+4. EXPLORATION RADIUS: Report as a single label using this fixed scale:
+   - 0-2 consecutive failures: NARROW
+   - 3-5 consecutive failures: WIDE
+   - 6+ consecutive failures: FULL
+   This is a mechanical mapping from the failure count. Do not add interpretation or reasoning.
 
-REGIME AWARENESS: When a recent improvement involved a structural change (different model architecture, different data config), note it. Prior combat log entries were tested under a different configuration.
+STRICT OUTPUT RULES:
+- Tables, counts, and single-sentence facts only. No adjectives, no qualifiers, no interpretation.
+- Do NOT characterize scores as "solid", "strong", "weak", "minor", etc.
+- Do NOT characterize failures as "shallow", "deep", "concerning", etc.
+- Do NOT say what the researcher should or should not do, try, abandon, or consider.
+- Do NOT editorialize. If a sentence contains an opinion or recommendation, delete it.
 
 Available models (immutable model_wrappers.py): CatBoostWrapper, RankingXGBClassifier, TorchClassifier, FocalTorchClassifier, SequenceClassifier (LSTM/GRU/Transformer), FocalSequenceClassifier, DirectUtilityClassifier, PolicyGradientClassifier.
 Neural modules: TorchMLP, LSTMNet, GRUNet, TransformerNet.
