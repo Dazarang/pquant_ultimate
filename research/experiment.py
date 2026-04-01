@@ -14,7 +14,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: F401,E402 -- available for researcher
-from research.model_wrappers import CatBoostWrapper  # noqa: E402
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
 from lib.eval import tiered_eval  # noqa: E402
@@ -41,14 +40,35 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
 # ===========================================================================
 
 
+class _EarlyStopCB:
+    """CatBoost with internal early stopping on a temporal holdout."""
+
+    def __init__(self, val_frac, **kwargs):
+        self._val_frac = val_frac
+        self._kwargs = kwargs
+
+    def fit(self, X, y):
+        from catboost import CatBoostClassifier, Pool
+        n = len(X)
+        cut = int(n * (1 - self._val_frac))
+        self._model = CatBoostClassifier(**self._kwargs)
+        self._model.fit(Pool(X[:cut], y[:cut]), eval_set=Pool(X[cut:], y[cut:]))
+        self.classes_ = self._model.classes_
+        return self
+
+    def predict_proba(self, X):
+        return self._model.predict_proba(X)
+
+
 def build_model(y_train):
     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
     neg = (y_train == 0).sum()
     pos = (y_train == 1).sum()
     spw = np.sqrt(neg / pos)
 
-    model = CatBoostWrapper(
-        iterations=2000,
+    return _EarlyStopCB(
+        val_frac=0.1,
+        iterations=3000,
         depth=6,
         learning_rate=0.01,
         min_data_in_leaf=50,
@@ -61,8 +81,10 @@ def build_model(y_train):
         random_seed=42,
         verbose=0,
         thread_count=-1,
+        od_type="Iter",
+        od_wait=200,
+        use_best_model=True,
     )
-    return model
 
 
 # ===========================================================================
