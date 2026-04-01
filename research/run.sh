@@ -39,7 +39,11 @@ RESEARCH_LOG="research/RESEARCH_LOG.md"
 COMBAT_LOG="research/COMBAT_LOG.md"
 RESULTS_TSV="research/results.tsv"
 BEST_SCORE_FILE="research/.best_score"
+# Count trailing non-keep entries in results.tsv
 CONSECUTIVE_FAILS=0
+if [ -f "$RESULTS_TSV" ]; then
+    CONSECUTIVE_FAILS=$(awk -F'\t' 'NR>1{a[NR]=$3} END{c=0; for(i=NR;i>=2;i--){if(a[i]=="keep")break; c++}; print c}' "$RESULTS_TSV")
+fi
 MAX_CONSECUTIVE_FAILS=$(( MAX_ITERS / 2 < 10 ? 10 : MAX_ITERS / 2 ))
 CONSECUTIVE_KNOWLEDGE=0
 MAX_CONSECUTIVE_KNOWLEDGE=5
