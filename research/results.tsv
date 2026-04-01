@@ -18,3 +18,6 @@ iter	score	status	description
 3	0.3249	discard	        l2_leaf_reg=1.0, 
 4	-0.1691	discard	FEATURE_GROUPS = ["base", "advanced", "rolling", "roc", "percentile", "interacti
 5	-0.2430	discard	class _LazyFocal:     """Defers TorchMLP construction to fit() to get input_dim 
+1	0.2445	discard	        bootstrap_type="Bayesian",         bagging_temperature=1.0, 
+2	0.3519	discard	        depth=7, 
+3	0.2589	discard	        iterations=3000, 

@@ -65,3 +65,12 @@ Score: -0.2430 | class _LazyFocal:     """Defers TorchMLP construction to fit() 
 
 ### Iteration 1 -- KNOWLEDGE
 No code changes.
+
+### Iteration 1 -- REVERTED (-0.1153)
+Score: 0.2445 |         bootstrap_type="Bayesian",         bagging_temperature=1.0, 
+
+### Iteration 2 -- REVERTED (-0.0079)
+Score: 0.3519 |         depth=7, 
+
+### Iteration 3 -- REVERTED (-0.1009)
+Score: 0.2589 |         iterations=3000, 

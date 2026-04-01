@@ -531,3 +531,62 @@ index a007f5a..806bb7f 100644
 +        batch_size=4096,
      )
 ```
+
+### Iteration 1 -- REVERTED (-0.1153)
+Score: 0.2445 vs best 0.3598
+Change:         bootstrap_type="Bayesian",         bagging_temperature=1.0, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index a007f5a..2230690 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -52,8 +52,8 @@ def build_model(y_train):
+         depth=6,
+         learning_rate=0.01,
+         min_data_in_leaf=50,
+-        bootstrap_type="MVS",
+-        subsample=0.7,
++        bootstrap_type="Bayesian",
++        bagging_temperature=1.0,
+         rsm=0.6,
+         l2_leaf_reg=3.0,
+         posterior_sampling=True,
+```
+
+### Iteration 2 -- REVERTED (-0.0079)
+Score: 0.3519 vs best 0.3598
+Change:         depth=7, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index a007f5a..0281ffe 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -49,7 +49,7 @@ def build_model(y_train):
+ 
+     model = CatBoostWrapper(
+         iterations=2000,
+-        depth=6,
++        depth=7,
+         learning_rate=0.01,
+         min_data_in_leaf=50,
+         bootstrap_type="MVS",
+```
+
+### Iteration 3 -- REVERTED (-0.1009)
+Score: 0.2589 vs best 0.3598
+Change:         iterations=3000, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index a007f5a..fd229ef 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -48,7 +48,7 @@ def build_model(y_train):
+     spw = np.sqrt(neg / pos)
+ 
+     model = CatBoostWrapper(
+-        iterations=2000,
++        iterations=3000,
+         depth=6,
+         learning_rate=0.01,
+         min_data_in_leaf=50,
+```
