@@ -33,7 +33,7 @@ DATASET_PATH = "data/datasets/20260331/dataset.parquet"
 # Stock universe: None = all, "AAPL" = single, ["AAPL", "MSFT", ...] = subset
 STOCKS = None
 
-# Feature groups: see list_features() for options
+# Feature groups: see list_features() for options. None = all
 FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
 
 # ===========================================================================
