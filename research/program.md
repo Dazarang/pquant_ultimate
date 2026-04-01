@@ -139,3 +139,4 @@ You are in an automated ratchet. After each edit, `gate.sh` runs the experiment.
 5. **Keep it simple.** A small improvement with ugly complexity is not worth it. Removing something for equal or better results is a win.
 6. **If stuck, try something radical.** Different model type, very different feature set, probability calibration.
 7. **No editorial comments in code.** Don't write comments that justify or praise current choices (e.g. "balanced generalization", "replaces X -- adds diversity"). These anchor future iterations toward the status quo.
+8. **Non-capacity parameters are not hypotheses.** Parameters that do not change model capacity, feature set, or training procedure (e.g. random seed, n_jobs, verbose, random_state, seed-bagging over the same base model) produce score differences that reflect evaluation variance, not model improvement.
