@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: F401,E402 -- available for researcher
-from lightgbm import LGBMClassifier  # noqa: E402
+from research.model_wrappers import CatBoostWrapper  # noqa: E402
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
 from lib.eval import tiered_eval  # noqa: E402
@@ -47,20 +47,19 @@ def build_model(y_train):
     pos = (y_train == 1).sum()
     spw = np.sqrt(neg / pos)
 
-    model = LGBMClassifier(
-        n_estimators=2000,
-        num_leaves=63,
+    model = CatBoostWrapper(
+        iterations=2000,
+        depth=6,
         learning_rate=0.01,
-        min_child_samples=50,
+        min_data_in_leaf=50,
+        bootstrap_type="MVS",
         subsample=0.7,
-        subsample_freq=1,
-        colsample_bytree=0.6,
-        reg_alpha=0.5,
-        reg_lambda=1.0,
+        rsm=0.6,
+        l2_leaf_reg=3.0,
         scale_pos_weight=spw,
-        n_jobs=-1,
-        random_state=42,
-        verbose=-1,
+        random_seed=42,
+        verbose=0,
+        thread_count=-1,
     )
     return model
 
