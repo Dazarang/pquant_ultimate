@@ -56,6 +56,7 @@ def build_model(y_train):
         subsample=0.7,
         rsm=0.6,
         l2_leaf_reg=3.0,
+        posterior_sampling=True,
         scale_pos_weight=spw,
         random_seed=42,
         verbose=0,
