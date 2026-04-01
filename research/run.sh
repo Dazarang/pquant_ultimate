@@ -39,12 +39,14 @@ RESEARCH_LOG="research/RESEARCH_LOG.md"
 COMBAT_LOG="research/COMBAT_LOG.md"
 RESULTS_TSV="research/results.tsv"
 BEST_SCORE_FILE="research/.best_score"
-# Count trailing non-keep entries in results.tsv
+# Count trailing non-keep entries in results.tsv (for advisor)
 CONSECUTIVE_FAILS=0
 if [ -f "$RESULTS_TSV" ]; then
     CONSECUTIVE_FAILS=$(awk -F'\t' 'NR>1{a[NR]=$3} END{c=0; for(i=NR;i>=2;i--){if(a[i]=="keep")break; c++}; print c}' "$RESULTS_TSV")
 fi
-MAX_CONSECUTIVE_FAILS=$(( MAX_ITERS / 2 < 10 ? 10 : MAX_ITERS / 2 ))
+# Session-local counter for circuit breaker
+SESSION_FAILS=0
+MAX_SESSION_FAILS=$(( MAX_ITERS / 2 < 10 ? 10 : MAX_ITERS / 2 ))
 CONSECUTIVE_KNOWLEDGE=0
 MAX_CONSECUTIVE_KNOWLEDGE=5
 
@@ -236,6 +238,7 @@ EOF
             BEST_SCORE="$SCORE"
             echo "$BEST_SCORE" > "$BEST_SCORE_FILE"
             CONSECUTIVE_FAILS=0
+            SESSION_FAILS=0
 
             # TSV log
             printf "%d\t%s\t%s\t%s\n" "$i" "$SCORE" "keep" "$DESCRIPTION" >> "$RESULTS_TSV"
@@ -265,6 +268,7 @@ EOF
             # Revert
             git checkout -- research/experiment.py research/features_lab.py
             CONSECUTIVE_FAILS=$((CONSECUTIVE_FAILS + 1))
+            SESSION_FAILS=$((SESSION_FAILS + 1))
 
             # Markdown log
             echo "" >> "$RESEARCH_LOG"
@@ -299,6 +303,7 @@ EOF
         # Revert
         git checkout -- research/experiment.py research/features_lab.py
         CONSECUTIVE_FAILS=$((CONSECUTIVE_FAILS + 1))
+        SESSION_FAILS=$((SESSION_FAILS + 1))
 
         # Markdown log
         echo "" >> "$RESEARCH_LOG"
@@ -308,8 +313,8 @@ EOF
     fi
 
     # --- Stop conditions ---
-    if [ "$CONSECUTIVE_FAILS" -ge "$MAX_CONSECUTIVE_FAILS" ]; then
-        echo "STOP: $MAX_CONSECUTIVE_FAILS consecutive failures. Circuit breaker."
+    if [ "$SESSION_FAILS" -ge "$MAX_SESSION_FAILS" ]; then
+        echo "STOP: $MAX_SESSION_FAILS consecutive session failures. Circuit breaker."
         break
     fi
 
