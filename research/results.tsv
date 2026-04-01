@@ -1,1 +1,12 @@
 iter	score	status	description
+1	-0.0160	keep	from lightgbm import LGBMClassifier  # noqa: E402     model = LGBMClassifier(   
+2	-0.1783	discard	import numpy as np     g = df.groupby("stock_id")      candle_range = df["high"]
+3	0.2278	keep	FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"] 
+4	-0.0160	discard	FEATURE_GROUPS = ["base", "advanced", "lag", "rolling", "roc", "percentile", "in
+5	0.3559	keep	from research.model_wrappers import CatBoostWrapper  # noqa: E402     model = Ca
+6	0.3391	discard	        iterations=3000,         depth=5,         learning_rate=0.005,         l
+7	0.2265	discard	from sklearn.ensemble import VotingClassifier  # noqa: E402 from xgboost import 
+8	-0.6067	discard	from research.model_wrappers import RankingXGBClassifier  # noqa: E402     model
+9	0.2206	discard	import numpy as np     g = df.groupby("stock_id")      # Consecutive negative-re
+10	0.2084	discard	from lightgbm import LGBMClassifier  # noqa: E402     model = LGBMClassifier(   
+11	0.0060	discard	        grow_policy="Lossguide",         max_leaves=64,         depth=8, 

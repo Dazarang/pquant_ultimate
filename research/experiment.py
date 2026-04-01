@@ -20,30 +20,6 @@ from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_spl
 from lib.eval import tiered_eval  # noqa: E402
 from research.features_lab import add_custom_features  # noqa: E402
 
-
-class SeedBaggedCatBoost:
-    """Average predictions across CatBoost models with different random seeds.
-
-    Pure variance reduction: same architecture, same hyperparams, different seeds.
-    CatBoost's MVS bootstrap + RSM create meaningfully different trees per seed.
-    """
-
-    def __init__(self, n_models=5, **kwargs):
-        self.n_models = n_models
-        self._kwargs = kwargs
-
-    def fit(self, X, y):
-        self._models = []
-        for i in range(self.n_models):
-            params = {**self._kwargs, "random_seed": 42 + i * 137}
-            m = CatBoostWrapper(**params)
-            m.fit(X, y)
-            self._models.append(m)
-        return self
-
-    def predict_proba(self, X):
-        return np.mean([m.predict_proba(X) for m in self._models], axis=0)
-
 # ===========================================================================
 # DATA -- fixed, do not edit
 # ===========================================================================
@@ -71,8 +47,7 @@ def build_model(y_train):
     pos = (y_train == 1).sum()
     spw = np.sqrt(neg / pos)
 
-    model = SeedBaggedCatBoost(
-        n_models=5,
+    model = CatBoostWrapper(
         iterations=2000,
         depth=6,
         learning_rate=0.01,
@@ -82,6 +57,7 @@ def build_model(y_train):
         rsm=0.6,
         l2_leaf_reg=3.0,
         scale_pos_weight=spw,
+        random_seed=42,
         verbose=0,
         thread_count=-1,
     )
