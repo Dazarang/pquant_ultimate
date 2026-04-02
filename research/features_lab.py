@@ -40,9 +40,22 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
     df["high_vol_reversal"] = df["close_position"] * df["volume_sma_ratio"]
 
+    df["signed_candle"] = (df["close"] - df["open"]) / rng
+
+    df["_range"] = df["high"] - df["low"]
+    avg_range_10d = df.groupby("stock_id")["_range"].transform(
+        lambda s: s.rolling(10, min_periods=3).mean()
+    ).clip(lower=1e-10)
+    df["range_ratio_10d"] = df["_range"] / avg_range_10d
+    df.drop(columns=["_range"], inplace=True)
+
+    prev_high = df.groupby("stock_id")["high"].shift(1)
+    df["close_vs_prev_high"] = (df["close"] - prev_high) / prev_high.clip(lower=1e-10)
+
     new_features = [
         "close_position", "lower_wick_ratio", "gap_return",
         "body_ratio", "volume_sma_ratio", "high_vol_reversal",
+        "signed_candle", "range_ratio_10d", "close_vs_prev_high",
     ]
 
     # --- END researcher section ---
