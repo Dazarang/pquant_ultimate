@@ -144,11 +144,20 @@ echo ""
 run_claude_attempt() {
     local iter=$1
     local advisor_report="${2:-}"
+
+    local posture=""
+    if [ "$CONSECUTIVE_FAILS" -ge 6 ]; then
+        posture="You have been stuck for $CONSECUTIVE_FAILS iterations. Nothing incremental is working. Step back, rethink your assumptions, and explore something that hasn't been fully explored. A real researcher stuck this long would question the whole approach, not just small tuning."
+    elif [ "$CONSECUTIVE_FAILS" -ge 3 ]; then
+        posture="You are stuck. Small tweaks are not working. Think harder about what is actually limiting the model."
+    fi
+
     local prompt="You are an autonomous ML researcher. Your goal: maximize the composite score for PivotLow (stock bottom) prediction.
 
 CURRENT BEST SCORE: $BEST_SCORE
 ITERATION: $iter / $MAX_ITERS
 CONSECUTIVE FAILURES (no improvement): $CONSECUTIVE_FAILS
+$posture
 
 ## RESEARCH ADVISOR BRIEFING
 $advisor_report
