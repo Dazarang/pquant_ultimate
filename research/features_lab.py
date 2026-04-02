@@ -31,7 +31,19 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     prev_close = df.groupby("stock_id")["close"].shift(1)
     df["gap_return"] = (df["open"] - prev_close) / prev_close
 
-    new_features = ["close_position", "lower_wick_ratio", "gap_return"]
+    df["body_ratio"] = (df["close"] - df["open"]).abs() / rng
+
+    vol_sma20 = df.groupby("stock_id")["volume"].transform(
+        lambda s: s.rolling(20, min_periods=5).mean()
+    ).clip(lower=1e-10)
+    df["volume_sma_ratio"] = df["volume"] / vol_sma20
+
+    df["high_vol_reversal"] = df["close_position"] * df["volume_sma_ratio"]
+
+    new_features = [
+        "close_position", "lower_wick_ratio", "gap_return",
+        "body_ratio", "volume_sma_ratio", "high_vol_reversal",
+    ]
 
     # --- END researcher section ---
 
