@@ -147,21 +147,23 @@ run_claude_attempt() {
 
     local posture=""
     if [ "$CONSECUTIVE_FAILS" -ge 6 ]; then
-        posture="You have been stuck for $CONSECUTIVE_FAILS iterations. Nothing incremental is working. Step back, rethink your assumptions, and explore something that hasn't been fully explored. A real researcher stuck this long would question the whole approach, not just small tuning."
+        posture="## RESEARCH STALLED -- $CONSECUTIVE_FAILS CONSECUTIVE FAILURES
+
+NOTHING INCREMENTAL IS WORKING. Step back, rethink your assumptions, and explore something that hasn't been fully explored. A real researcher stuck this long would question the whole approach, not just small tuning."
     elif [ "$CONSECUTIVE_FAILS" -ge 3 ]; then
-        posture="You are stuck. Small tweaks are not working. Think harder about what is actually limiting the model."
+        posture="**You are stuck ($CONSECUTIVE_FAILS consecutive failures). Small tweaks are not working. Think harder about what is actually limiting the model.**"
     fi
 
     local prompt="You are an autonomous ML researcher. Your goal: maximize the composite score for PivotLow (stock bottom) prediction.
 
-CURRENT BEST SCORE: $BEST_SCORE
-ITERATION: $iter / $MAX_ITERS
-CONSECUTIVE FAILURES (no improvement): $CONSECUTIVE_FAILS
+## STATUS
+Best: $BEST_SCORE | Iteration: $iter / $MAX_ITERS | Consecutive failures: $CONSECUTIVE_FAILS
 $posture
 
 ## RESEARCH ADVISOR BRIEFING
 $advisor_report
 
+## INSTRUCTIONS
 READ FIRST:
 - research/COMBAT_LOG.md (what has been tried, what failed, what worked)
 - research/experiment.py (current best experiment)
@@ -175,9 +177,9 @@ You may ONLY edit:
 Do NOT edit anything in lib/, research/gate.sh, or research/baseline.py.
 
 Test ONE hypothesis. Multiple changes are fine if they serve a single testable idea. Commit nothing -- gate.sh handles that.
-After editing, stop. The outer loop will run gate.sh.
+After editing, STOP. The outer loop will run gate.sh.
 
-If COMBAT_LOG.md shows your idea was already tried, pick something different."
+If COMBAT_LOG.md shows your idea was already tried, pick something DIFFERENT."
 
     env -u CLAUDECODE claude -p --dangerously-skip-permissions --effort max --model opus "$prompt"
 }
