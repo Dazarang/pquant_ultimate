@@ -22,6 +22,16 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
     # --- RESEARCHER: add features below ---
 
+    rng = (df["high"] - df["low"]).clip(lower=1e-10)
+
+    df["close_position"] = (df["close"] - df["low"]) / rng
+
+    df["lower_wick_ratio"] = (df[["open", "close"]].min(axis=1) - df["low"]) / rng
+
+    prev_close = df.groupby("stock_id")["close"].shift(1)
+    df["gap_return"] = (df["open"] - prev_close) / prev_close
+
+    new_features = ["close_position", "lower_wick_ratio", "gap_return"]
 
     # --- END researcher section ---
 
