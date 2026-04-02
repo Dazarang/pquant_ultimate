@@ -69,7 +69,7 @@ def build_model(y_train):
     return _EarlyStopCB(
         val_frac=0.1,
         iterations=3000,
-        depth=6,
+        depth=7,
         learning_rate=0.01,
         min_data_in_leaf=50,
         boosting_type="Ordered",
