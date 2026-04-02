@@ -198,6 +198,10 @@ for ((i=1; i<=MAX_ITERS; i++)); do
         echo "$ADVISOR_REPORT"
         echo ""
         echo "Dispatching Claude Code agent..."
+        # Show posture if active (computed inside run_claude_attempt)
+        if [ "$CONSECUTIVE_FAILS" -ge 3 ]; then
+            echo "[Posture: $([ "$CONSECUTIVE_FAILS" -ge 6 ] && echo "FULL RETHINK" || echo "NUDGE")]"
+        fi
         run_claude_attempt "$i" "$ADVISOR_REPORT" || true
     fi
 
