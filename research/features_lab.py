@@ -54,7 +54,7 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
     g = df.groupby("stock_id")
     lag_cols = []
-    for col in ["rsi_14", "drawdown"]:
+    for col in ["rsi_14", "drawdown", "close_position", "lower_wick_ratio"]:
         for lag in [1, 2, 3]:
             name = f"{col}_lag{lag}"
             df[name] = g[col].shift(lag)
