@@ -33,7 +33,7 @@ DATASET_PATH = "data/datasets/20260331/dataset.parquet"
 STOCKS = None
 
 # Feature groups: see list_features() for options. None = all
-FEATURE_GROUPS = None
+FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
 
 # ===========================================================================
 # MODEL -- researcher edits this section
