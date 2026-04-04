@@ -13,6 +13,14 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+from lib.pivot_events import (
+    LABEL_COL,
+    PIVOT_LOW_BASE_COL,
+    PIVOT_LOW_EVENT_ID_COL,
+    PIVOT_LOW_EVENT_OFFSET_COL,
+    ensure_pivot_low_event_columns,
+)
+
 
 def evaluate(y_true: np.ndarray, y_pred: np.ndarray, y_pred_proba: np.ndarray | None = None) -> dict:
     """Calculate classification metrics. Returns dict of metric name -> value."""
@@ -96,12 +104,10 @@ def backtest_quick(
     return_pct, exit_reason.
     """
     trades = []
+    df = ensure_pivot_low_event_columns(df).copy()
 
-    for stock_id, stock_df in df.groupby("stock_id"):
+    for stock_id, stock_df in df.groupby("stock_id", sort=False):
         stock_df = stock_df.sort_values("date").reset_index(drop=True)
-        signals = stock_df.index[stock_df[pred_col] == 1].tolist()
-        if not signals:
-            continue
 
         highs = stock_df["high"].values.astype(np.float64)
         lows = stock_df["low"].values.astype(np.float64)
@@ -109,8 +115,18 @@ def backtest_quick(
         opens = stock_df["open"].values.astype(np.float64)
         dates = stock_df["date"].values
         n = len(stock_df)
+        valid_entry = pd.Series(np.arange(n) + 1 < n, index=stock_df.index)
+        collapsed = _collapsed_binary_prediction_rows(stock_df, pred_col, valid_mask=valid_entry)
+        signals = collapsed["date"].tolist() if not collapsed.empty else []
+        if not signals:
+            continue
 
-        for idx in signals:
+        date_to_idx = {d: i for i, d in enumerate(dates)}
+
+        for signal_date in signals:
+            idx = date_to_idx.get(signal_date)
+            if idx is None:
+                continue
             entry_idx = idx + 1
             if entry_idx >= n:
                 continue
@@ -155,47 +171,201 @@ def _print_backtest_summary(trades: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _signal_analytics(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | None:
-    """Compute forward returns, MAE, and market benchmark per buy signal.
-
-    Returns None if no valid signals exist for the given horizon.
-    """
-    signal_weights = np.asarray(y_pred, dtype=float)
-    if len(signal_weights) != len(df):
-        raise ValueError("signal weights must align 1:1 with df rows")
-
-    weight_series = pd.Series(signal_weights, index=df.index)
-    buy_mask = weight_series > 0
+def _valid_event_panel(df: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    """Build a per-row panel with forward-return inputs and event metadata."""
+    df = ensure_pivot_low_event_columns(df).copy()
+    df = df.sort_values(["stock_id", "date"]).copy()
 
     entry = df.groupby("stock_id")["open"].shift(-1)
     exit_ = df.groupby("stock_id")["open"].shift(-(horizon + 1))
     fwd = exit_ / entry - 1
 
-    # MAE: min low during holding period (entry day through day before exit)
     min_low = df.groupby("stock_id")["low"].transform(
         lambda x: x.rolling(horizon).min().shift(-horizon)
     )
     mae = min_low / entry - 1
 
-    # Market benchmark: equal-weight avg forward return per date
     market_by_date = fwd.groupby(df["date"]).mean()
     market = df["date"].map(market_by_date)
+    valid = fwd.notna() & mae.notna() & market.notna()
 
-    valid_idx = fwd.loc[buy_mask].dropna().index
-    if len(valid_idx) == 0:
+    panel = df[[
+        "stock_id",
+        "date",
+        "open",
+        "high",
+        "low",
+        "close",
+        LABEL_COL,
+        PIVOT_LOW_BASE_COL,
+        PIVOT_LOW_EVENT_ID_COL,
+        PIVOT_LOW_EVENT_OFFSET_COL,
+    ]].copy()
+    panel["_entry"] = entry
+    panel["_exit"] = exit_
+    panel["_return"] = fwd
+    panel["_mae"] = mae
+    panel["_market"] = market
+    panel["_valid"] = valid
+
+    event_rows = panel[(panel[PIVOT_LOW_EVENT_ID_COL] > 0) & panel["_valid"]].copy()
+    if event_rows.empty:
+        panel["_best_zone_entry"] = np.nan
+        return panel
+
+    best_zone_entry = event_rows.groupby(["stock_id", PIVOT_LOW_EVENT_ID_COL])["_entry"].min()
+    panel["_best_zone_entry"] = list(
+        zip(panel["stock_id"], panel[PIVOT_LOW_EVENT_ID_COL])
+    )
+    panel["_best_zone_entry"] = panel["_best_zone_entry"].map(best_zone_entry)
+    return panel
+
+
+def _collapse_selected_signals(selected: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Collapse duplicate predictions inside the same true bottom event."""
+    if selected.empty:
+        return selected.copy(), {
+            "duplicate_rows": 0,
+            "duplicate_mass_discarded": 0.0,
+        }
+
+    selected = selected.sort_values(["stock_id", "date"]).copy()
+    hit_mask = selected[PIVOT_LOW_EVENT_ID_COL] > 0
+
+    misses = selected.loc[~hit_mask].copy()
+    misses["_event_exact_hit"] = False
+    misses["_duplicate_rows"] = 0
+    misses["_duplicate_mass_discarded"] = 0.0
+
+    reps = []
+    duplicate_rows = 0
+    duplicate_mass_discarded = 0.0
+    hit_signals = selected.loc[hit_mask].sort_values(
+        ["stock_id", PIVOT_LOW_EVENT_ID_COL, "date"]
+    )
+    for _, grp in hit_signals.groupby(["stock_id", PIVOT_LOW_EVENT_ID_COL], sort=False):
+        rep = grp.iloc[0].copy()
+        total_weight = float(grp["_weight"].sum())
+        rep["_weight"] = min(1.0, total_weight)
+        rep["_event_exact_hit"] = bool((grp[PIVOT_LOW_BASE_COL] == 1).any())
+        rep["_duplicate_rows"] = len(grp) - 1
+        rep["_duplicate_mass_discarded"] = max(0.0, total_weight - rep["_weight"])
+
+        duplicate_rows += int(rep["_duplicate_rows"])
+        duplicate_mass_discarded += float(rep["_duplicate_mass_discarded"])
+        reps.append(rep)
+
+    hit_reps = pd.DataFrame(reps) if reps else selected.iloc[0:0].copy()
+    collapsed = pd.concat([misses, hit_reps], ignore_index=False)
+    collapsed = collapsed.sort_values(["stock_id", "date"]).copy()
+
+    return collapsed, {
+        "duplicate_rows": duplicate_rows,
+        "duplicate_mass_discarded": duplicate_mass_discarded,
+    }
+
+
+def _collapsed_binary_prediction_rows(
+    df: pd.DataFrame,
+    pred_col: str,
+    valid_mask: pd.Series | np.ndarray | None = None,
+) -> pd.DataFrame:
+    """Return selected rows after event-aware duplicate collapsing."""
+    annotated = ensure_pivot_low_event_columns(df).copy()
+
+    if valid_mask is None:
+        mask = pd.Series(True, index=annotated.index)
+    else:
+        if isinstance(valid_mask, pd.Series):
+            mask = valid_mask.reindex(annotated.index, fill_value=False).astype(bool)
+        else:
+            values = np.asarray(valid_mask, dtype=bool)
+            if len(values) != len(annotated):
+                raise ValueError("valid_mask must align 1:1 with df rows")
+            mask = pd.Series(values, index=annotated.index)
+
+    annotated = annotated.sort_values(["stock_id", "date"]).copy()
+    mask = mask.reindex(annotated.index, fill_value=False)
+
+    selected = annotated[(annotated[pred_col] == 1) & mask].copy()
+    if selected.empty:
+        return selected
+
+    selected["_weight"] = 1.0
+    collapsed, _ = _collapse_selected_signals(selected)
+    return collapsed
+
+
+def _signal_analytics(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | None:
+    """Compute forward returns, MAE, and market benchmark per evaluated entry.
+
+    Duplicate predictions inside the same true bottom event are collapsed to the
+    earliest valid tradable row and their cumulative credit is capped at 1.
+    Returns None if no valid evaluated entries exist for the given horizon.
+    """
+    signal_weights = np.asarray(y_pred, dtype=float)
+    if len(signal_weights) != len(df):
+        raise ValueError("signal weights must align 1:1 with df rows")
+
+    panel = _valid_event_panel(df, horizon)
+    panel["_weight"] = signal_weights
+
+    valid_selected = panel[(panel["_weight"] > 0) & panel["_valid"]].copy()
+    if valid_selected.empty:
         return None
 
-    valid_mask = mae.loc[valid_idx].notna() & market.loc[valid_idx].notna()
-    valid_idx = valid_idx[valid_mask]
-    if len(valid_idx) == 0:
+    collapsed, duplicate_stats = _collapse_selected_signals(valid_selected)
+    if collapsed.empty:
         return None
+
+    valid_true_events = panel[(panel[PIVOT_LOW_EVENT_ID_COL] > 0) & panel["_valid"]]
+    n_true_events = int(
+        valid_true_events[["stock_id", PIVOT_LOW_EVENT_ID_COL]].drop_duplicates().shape[0]
+    )
+    n_true_bases = int(panel[(panel[PIVOT_LOW_BASE_COL] == 1) & panel["_valid"]].shape[0])
+
+    hit_entries = collapsed[collapsed[PIVOT_LOW_EVENT_ID_COL] > 0].copy()
+    event_hits = int(hit_entries[["stock_id", PIVOT_LOW_EVENT_ID_COL]].drop_duplicates().shape[0])
+    exact_hits = int(hit_entries["_event_exact_hit"].sum()) if not hit_entries.empty else 0
+    total_mass = float(collapsed["_weight"].sum())
+    hit_mass = float(hit_entries["_weight"].sum()) if not hit_entries.empty else 0.0
+
+    avg_entry_offset = np.nan
+    avg_entry_slippage = np.nan
+    if not hit_entries.empty:
+        avg_entry_offset = float(
+            np.average(
+                hit_entries[PIVOT_LOW_EVENT_OFFSET_COL].to_numpy(dtype=float),
+                weights=hit_entries["_weight"].to_numpy(dtype=float),
+            )
+        )
+        slippage = hit_entries["_entry"] / hit_entries["_best_zone_entry"] - 1
+        avg_entry_slippage = float(
+            np.average(slippage.to_numpy(dtype=float), weights=hit_entries["_weight"].to_numpy(dtype=float))
+        )
 
     return {
-        "returns": fwd.loc[valid_idx],
-        "mae": mae.loc[valid_idx],
-        "market": market.loc[valid_idx],
-        "dates": df.loc[valid_idx, "date"],
-        "weights": weight_series.loc[valid_idx],
+        "returns": collapsed["_return"],
+        "mae": collapsed["_mae"],
+        "market": collapsed["_market"],
+        "dates": collapsed["date"],
+        "weights": collapsed["_weight"],
+        "raw_signal_rows": int(len(valid_selected)),
+        "raw_signal_mass": float(valid_selected["_weight"].sum()),
+        "collapsed_rows": int(len(collapsed)),
+        "collapsed_signal_mass": total_mass,
+        "duplicate_rows": int(duplicate_stats["duplicate_rows"]),
+        "duplicate_mass_discarded": float(duplicate_stats["duplicate_mass_discarded"]),
+        "false_positive_rows": int((collapsed[PIVOT_LOW_EVENT_ID_COL] == 0).sum()),
+        "event_hits": event_hits,
+        "exact_hits": exact_hits,
+        "n_true_events": n_true_events,
+        "n_true_bases": n_true_bases,
+        "event_recall": event_hits / n_true_events if n_true_events else 0.0,
+        "exact_center_recall": exact_hits / n_true_bases if n_true_bases else 0.0,
+        "zone_precision": hit_mass / total_mass if total_mass > 0 else 0.0,
+        "avg_entry_offset_days": avg_entry_offset,
+        "avg_entry_slippage": avg_entry_slippage,
     }
 
 
@@ -205,11 +375,10 @@ def _signal_analytics(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dic
 
 
 def forward_returns(df: pd.DataFrame, y_pred: np.ndarray, horizons: list[int] | None = None) -> dict:
-    """Measure actual returns at fixed horizons for every positive prediction.
+    """Measure actual returns at fixed horizons for evaluated event-aware entries.
 
-    Entry at next-day open, exit at open N days later. Includes MAE (max adverse
-    excursion), excess return vs equal-weight market, and effective N (unique
-    signal dates as proxy for independent bets).
+    Entry at next-day open, exit at open N days later. Duplicate predictions
+    inside a true bottom event collapse to one earliest tradable entry.
     """
     if horizons is None:
         horizons = [5, 10, 20]
@@ -231,16 +400,25 @@ def forward_returns(df: pd.DataFrame, y_pred: np.ndarray, horizons: list[int] | 
         losses = fwd[fwd < 0]
         pf = wins.sum() / abs(losses.sum()) if len(losses) and losses.sum() != 0 else float("inf")
 
-        results[f"mean_{h}d"] = fwd.mean()
-        results[f"excess_{h}d"] = excess.mean()
-        results[f"win_rate_{h}d"] = (fwd > 0).mean()
-        results[f"avg_win_{h}d"] = wins.mean() if len(wins) else 0.0
-        results[f"avg_loss_{h}d"] = losses.mean() if len(losses) else 0.0
+        results[f"mean_{h}d"] = _weighted_mean(fwd, weights)
+        results[f"excess_{h}d"] = _weighted_mean(excess, weights)
+        results[f"win_rate_{h}d"] = _weighted_mean(fwd > 0, weights)
+        results[f"avg_win_{h}d"] = _weighted_mean(wins, weights.loc[wins.index]) if len(wins) else 0.0
+        results[f"avg_loss_{h}d"] = _weighted_mean(losses, weights.loc[losses.index]) if len(losses) else 0.0
         results[f"profit_factor_{h}d"] = pf
-        results[f"mae_{h}d"] = mae.mean()
+        results[f"mae_{h}d"] = _weighted_mean(mae, weights)
         results[f"worst_mae_{h}d"] = mae.min()
         results[f"n_signals_{h}d"] = len(fwd)
         results[f"effective_n_{h}d"] = _effective_signal_days(dates, weights)
+        results[f"event_recall_{h}d"] = analytics["event_recall"]
+        results[f"exact_center_recall_{h}d"] = analytics["exact_center_recall"]
+        results[f"zone_precision_{h}d"] = analytics["zone_precision"]
+        results[f"event_hits_{h}d"] = analytics["event_hits"]
+        results[f"true_events_{h}d"] = analytics["n_true_events"]
+        results[f"duplicate_rows_{h}d"] = analytics["duplicate_rows"]
+        results[f"duplicate_mass_{h}d"] = analytics["duplicate_mass_discarded"]
+        results[f"avg_entry_offset_{h}d"] = analytics["avg_entry_offset_days"]
+        results[f"avg_entry_slippage_{h}d"] = analytics["avg_entry_slippage"]
 
     _print_forward_returns(results, horizons)
     return results
@@ -259,6 +437,8 @@ def _print_forward_returns(results: dict, horizons: list[int]) -> None:
             f"win={results[f'win_rate_{h}d']:.1%}  "
             f"PF={results[f'profit_factor_{h}d']:.2f}  "
             f"MAE={results[f'mae_{h}d']:+.2%}  "
+            f"event_recall={results[f'event_recall_{h}d']:.1%}  "
+            f"zone_precision={results[f'zone_precision_{h}d']:.1%}  "
             f"n={n} (eff={eff_n})"
         )
 
@@ -284,13 +464,13 @@ def composite_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) -> 
     dates = analytics["dates"]
     weights = analytics["weights"]
 
-    excess_return = (fwd - market).mean()
-    mean_return = fwd.mean()
-    market_mean = market.mean()
-    win_rate = (fwd > 0).mean()
-    worst_decile = fwd.quantile(0.1)
-    knife_rate = (fwd < -0.05).mean()
-    mean_mae = mae.mean()
+    excess_return = _weighted_mean(fwd - market, weights)
+    mean_return = _weighted_mean(fwd, weights)
+    market_mean = _weighted_mean(market, weights)
+    win_rate = _weighted_mean(fwd > 0, weights)
+    worst_decile = _weighted_quantile(fwd, weights, 0.1)
+    knife_rate = _weighted_mean(fwd < -0.05, weights)
+    mean_mae = _weighted_mean(mae, weights)
     effective_n = _effective_signal_days(dates, weights)
 
     score = (
@@ -308,6 +488,19 @@ def composite_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) -> 
     print(f"  Knife rate:    {knife_rate:.1%} (>{5}% loss)")
     print(f"  Mean MAE:      {mean_mae:+.2%}")
     print(f"  Signals:       {len(fwd)} (effective: {_format_count(effective_n)})")
+    print(
+        f"  Event recall:  {analytics['event_recall']:.1%} "
+        f"({analytics['event_hits']}/{analytics['n_true_events']})"
+    )
+    print(
+        f"  Exact recall:  {analytics['exact_center_recall']:.1%} "
+        f"({analytics['exact_hits']}/{analytics['n_true_bases']})"
+    )
+    print(
+        f"  Zone precision:{analytics['zone_precision']:.1%}  "
+        f"dup_rows={analytics['duplicate_rows']}  "
+        f"dup_mass={analytics['duplicate_mass_discarded']:.2f}"
+    )
 
     return score
 
@@ -480,14 +673,17 @@ def _cell_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | No
     win_rate = _weighted_mean(fwd > 0, weights)
     worst_decile = _weighted_quantile(fwd, weights, 0.1)
     knife_rate = _weighted_mean(fwd < -0.05, weights)
-    mean_mae = _weighted_mean(mae, weights)
+    tail_mae = _weighted_quantile(mae, weights, 0.25)
+    slip = analytics["avg_entry_slippage"]
+    entry_slip = abs(slip) if not np.isnan(slip) else 0.0
 
     raw = (
         0.50 * excess * 100
         + 0.15 * (win_rate - 0.5) * 100
         - 0.15 * abs(min(0.0, worst_decile)) * 100
         - 0.10 * knife_rate * 100
-        - 0.10 * abs(mean_mae) * 100
+        - 0.05 * abs(tail_mae) * 100
+        - 0.05 * entry_slip * 100
     )
 
     w = np.sqrt(effective_n / (effective_n + 20))
@@ -500,7 +696,18 @@ def _cell_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | No
         "effective_n": effective_n,
         "excess": excess, "win_rate": win_rate,
         "worst_decile": worst_decile, "knife_rate": knife_rate,
-        "mean_mae": mean_mae,
+        "tail_mae": tail_mae, "entry_slippage": entry_slip,
+        "event_recall": analytics["event_recall"],
+        "exact_center_recall": analytics["exact_center_recall"],
+        "zone_precision": analytics["zone_precision"],
+        "event_hits": analytics["event_hits"],
+        "n_true_events": analytics["n_true_events"],
+        "exact_hits": analytics["exact_hits"],
+        "n_true_bases": analytics["n_true_bases"],
+        "duplicate_rows": analytics["duplicate_rows"],
+        "duplicate_mass_discarded": analytics["duplicate_mass_discarded"],
+        "avg_entry_offset_days": analytics["avg_entry_offset_days"],
+        "avg_entry_slippage": analytics["avg_entry_slippage"],
     }
 
 
@@ -546,18 +753,19 @@ def multi_budget_composite(
 def _print_multi_budget(details: dict, horizons: tuple[int, ...], score: float) -> None:
     """Print multi-budget evaluation as a compact table."""
     h_str = "  ".join(f"{h}d W*U" for h in horizons)
-    print(f"\n  {'Budget':>8} {'Mass':>6} {'Rows':>6} | {h_str}")
-    print("  " + "-" * (25 + 9 * len(horizons)))
+    print(f"\n  {'Budget':>8} {'Mass':>6} {'Rows':>6} {'Dup':>6} | {h_str}")
+    print("  " + "-" * (32 + 9 * len(horizons)))
 
     for info in details.values():
         cells = info["cells"]
         vals = []
+        dup_mass = sum(cell["duplicate_mass_discarded"] for cell in cells.values())
         for h in horizons:
             cell = cells.get(h)
             vals.append(f"{cell['weighted']:>+7.2f}" if cell else f"{'n/a':>7}")
         print(
             f"  {info['label']:>8} {_format_count(info['signal_mass']):>6} "
-            f"{info['n_rows']:>6} | {'  '.join(vals)}"
+            f"{info['n_rows']:>6} {_format_count(dup_mass):>6} | {'  '.join(vals)}"
         )
 
     ref = details.get(0.0025, {}).get("cells", {}).get(10)
@@ -567,9 +775,21 @@ def _print_multi_budget(details: dict, horizons: tuple[int, ...], score: float) 
             f"    Excess: {ref['excess']:+.2%}  "
             f"Win: {ref['win_rate']:.1%}  "
             f"Knife: {ref['knife_rate']:.1%}  "
-            f"MAE: {ref['mean_mae']:+.2%}  "
+            f"TailMAE: {ref['tail_mae']:+.2%}  "
+            f"Slip: {ref['entry_slippage']:+.2%}  "
             f"Eff.N: {_format_count(ref['effective_n'])}  "
             f"W: {ref['w']:.2f}"
+        )
+        print(
+            f"    Event recall: {ref['event_recall']:.1%} "
+            f"({ref['event_hits']}/{ref['n_true_events']})  "
+            f"Exact recall: {ref['exact_center_recall']:.1%} "
+            f"({ref['exact_hits']}/{ref['n_true_bases']})"
+        )
+        print(
+            f"    Zone precision: {ref['zone_precision']:.1%}  "
+            f"Avg offset: {ref['avg_entry_offset_days']:+.2f}d  "
+            f"Dup mass: {ref['duplicate_mass_discarded']:.2f}"
         )
 
     if any(info["tied_rows"] > 0 for info in details.values()):
@@ -608,13 +828,27 @@ def tiered_eval(
     print("=" * 60)
 
     ap, auc = 0.0, 0.0
+    base_ap, base_auc = 0.0, 0.0
     if len(np.unique(y_true)) > 1:
         auc = roc_auc_score(y_true, y_pred_proba)
         ap = average_precision_score(y_true, y_pred_proba)
 
-    results["tier1"] = {"avg_precision": ap, "roc_auc": auc}
+    annotated = ensure_pivot_low_event_columns(df)
+    y_base = annotated[PIVOT_LOW_BASE_COL].to_numpy(dtype=int)
+    if len(np.unique(y_base)) > 1:
+        base_auc = roc_auc_score(y_base, y_pred_proba)
+        base_ap = average_precision_score(y_base, y_pred_proba)
+
+    results["tier1"] = {
+        "avg_precision": ap,
+        "roc_auc": auc,
+        "base_avg_precision": base_ap,
+        "base_roc_auc": base_auc,
+    }
     print(f"  roc_auc:        {auc:.4f}")
     print(f"  avg_precision:  {ap:.4f}")
+    print(f"  base_roc_auc:   {base_auc:.4f}")
+    print(f"  base_ap:        {base_ap:.4f}")
 
     if ap < min_ap:
         print(f"\n  FAIL: avg_precision {ap:.4f} < {min_ap}. Stopping.")
@@ -674,7 +908,14 @@ def benchmark_random_entry(
     # Compute forward returns for each signal
     signal_returns = []
     signal_stocks = []
-    for stock_id, group in signals.groupby("stock_id"):
+    valid_mask = pd.Series(False, index=df.index, dtype=bool)
+    for stock_id, grp in df.groupby("stock_id", sort=False):
+        grp = grp.sort_values("date")
+        idx = grp.index.to_numpy()
+        valid_mask.loc[idx] = np.arange(len(grp)) + horizon + 1 < len(grp)
+
+    collapsed_signals = _collapsed_binary_prediction_rows(df, "_pred", valid_mask=valid_mask)
+    for stock_id, group in collapsed_signals.groupby("stock_id"):
         opens, dates_idx = stock_data[stock_id]
         sig_dates = group["date"].values
 

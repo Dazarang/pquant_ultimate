@@ -8,6 +8,7 @@ from lib.data import LABEL_COL, load_dataset, scale, temporal_split
 from lib.eval import (
     _select_top_frac_weights,
     _cell_score,
+    _signal_analytics,
     backtest_quick,
     benchmark_random_entry,
     composite_score,
@@ -20,6 +21,7 @@ from lib.eval import (
     select_top_frac,
     tiered_eval,
 )
+from lib.pivot_events import PIVOT_LOW_BASE_COL, PIVOT_LOW_EVENT_ID_COL, PIVOT_LOW_EVENT_OFFSET_COL
 
 DS_PATH = "data/datasets/20260115/dataset.parquet"
 
@@ -50,6 +52,26 @@ def simulated_preds(val_split):
     y_pred = (y_proba > 0.3).astype(int)
 
     return y_val, y_pred, y_proba
+
+
+@pytest.fixture
+def event_eval_df():
+    """Synthetic single-stock frame with two true bottom events."""
+    n_days = 14
+    dates = pd.bdate_range("2024-01-01", periods=n_days)
+    df = pd.DataFrame({
+        "date": dates,
+        "stock_id": ["TEST"] * n_days,
+        "open": [10.0, 10.2, 10.4, 10.1, 9.9, 9.8, 10.2, 10.5, 10.1, 9.7, 10.4, 10.8, 11.0, 11.2],
+        "high": [10.3, 10.5, 10.6, 10.4, 10.1, 10.0, 10.5, 10.7, 10.3, 10.0, 10.6, 11.0, 11.2, 11.4],
+        "low": [9.8, 10.0, 10.1, 9.9, 9.7, 9.6, 10.0, 10.2, 9.9, 9.5, 10.1, 10.6, 10.8, 11.0],
+        "close": [10.1, 10.3, 10.2, 10.0, 9.8, 9.9, 10.3, 10.4, 10.0, 9.8, 10.5, 10.9, 11.1, 11.3],
+        LABEL_COL: [0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0],
+        PIVOT_LOW_BASE_COL: [0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+        PIVOT_LOW_EVENT_ID_COL: [0, 0, 0, 0, 1, 1, 0, 0, 0, 2, 0, 0, 0, 0],
+        PIVOT_LOW_EVENT_OFFSET_COL: [np.nan, np.nan, np.nan, np.nan, 0.0, 1.0, np.nan, np.nan, np.nan, 0.0, np.nan, np.nan, np.nan, np.nan],
+    })
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +184,63 @@ class TestForwardReturns:
 
 
 # ---------------------------------------------------------------------------
+# Event-aware analytics
+# ---------------------------------------------------------------------------
+
+
+class TestEventAwareAnalytics:
+    def test_duplicate_predictions_collapse_inside_event(self, event_eval_df):
+        y_pred = np.zeros(len(event_eval_df), dtype=int)
+        y_pred[[2, 4, 5]] = 1  # one false positive + duplicate hit inside event 1
+
+        analytics = _signal_analytics(event_eval_df, y_pred, horizon=2)
+
+        assert analytics is not None
+        assert analytics["raw_signal_rows"] == 3
+        assert analytics["collapsed_rows"] == 2
+        assert analytics["event_hits"] == 1
+        assert analytics["exact_hits"] == 1
+        assert analytics["duplicate_rows"] == 1
+        assert analytics["duplicate_mass_discarded"] == pytest.approx(1.0)
+        assert analytics["event_recall"] == pytest.approx(0.5)
+        assert analytics["exact_center_recall"] == pytest.approx(0.5)
+        assert analytics["zone_precision"] == pytest.approx(0.5)
+
+    def test_near_bottom_hit_counts_without_exact_center(self, event_eval_df):
+        y_pred = np.zeros(len(event_eval_df), dtype=int)
+        y_pred[5] = 1  # +1 day inside event 1 only
+
+        analytics = _signal_analytics(event_eval_df, y_pred, horizon=2)
+
+        assert analytics is not None
+        assert analytics["event_hits"] == 1
+        assert analytics["exact_hits"] == 0
+        assert analytics["event_recall"] == pytest.approx(0.5)
+        assert analytics["exact_center_recall"] == pytest.approx(0.0)
+        assert analytics["avg_entry_offset_days"] == pytest.approx(1.0)
+
+    def test_forward_returns_exposes_event_metrics(self, event_eval_df):
+        y_pred = np.zeros(len(event_eval_df), dtype=int)
+        y_pred[[2, 4, 5]] = 1
+
+        result = forward_returns(event_eval_df, y_pred, horizons=[2])
+
+        assert result["event_recall_2d"] == pytest.approx(0.5)
+        assert result["exact_center_recall_2d"] == pytest.approx(0.5)
+        assert result["zone_precision_2d"] == pytest.approx(0.5)
+        assert result["duplicate_rows_2d"] == 1
+
+    def test_backtest_collapses_duplicate_rows_in_same_event(self, event_eval_df):
+        df = event_eval_df.copy()
+        df["prediction"] = 0
+        df.loc[[4, 5], "prediction"] = 1
+
+        trades = backtest_quick(df, max_hold_days=3)
+
+        assert len(trades) == 1
+
+
+# ---------------------------------------------------------------------------
 # Tier 3: Composite score
 # ---------------------------------------------------------------------------
 
@@ -219,6 +298,13 @@ class TestTieredEval:
         assert "passed" in result
         assert isinstance(result["passed"], bool)
         assert isinstance(result["tier1"], dict)
+
+    def test_tier1_includes_base_metrics(self, val_split, simulated_preds):
+        val, _, _ = val_split
+        y_true, _, y_proba = simulated_preds
+        result = tiered_eval(val, y_true, y_proba, min_ap=0.01)
+        assert "base_avg_precision" in result["tier1"]
+        assert "base_roc_auc" in result["tier1"]
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +397,23 @@ class TestBenchmarkRandomEntry:
             pytest.skip("Not enough signals in val")
         result = benchmark_random_entry(val, y_pred, n_simulations=100)
         assert result["excess_return"] > 0
+
+    def test_duplicate_same_event_counts_once(self, event_eval_df):
+        y_pred = np.zeros(len(event_eval_df), dtype=int)
+        y_pred[[4, 5]] = 1
+        result = benchmark_random_entry(event_eval_df, y_pred, horizon=2, n_simulations=20)
+        assert result["n_signals"] == 1
+
+    def test_non_contiguous_index(self, event_eval_df):
+        df = event_eval_df.copy()
+        df.index = np.arange(100, 100 + 3 * len(df), 3)
+
+        y_pred = np.zeros(len(df), dtype=int)
+        y_pred[[4, 5]] = 1
+
+        result = benchmark_random_entry(df, y_pred, horizon=2, n_simulations=20)
+
+        assert result["n_signals"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +528,9 @@ class TestCellScore:
         if result is None:
             pytest.skip("No valid signals in synthetic data")
         for key in ["raw", "weighted", "w", "n_signals", "effective_n",
-                     "excess", "win_rate", "worst_decile", "knife_rate", "mean_mae"]:
+                     "excess", "win_rate", "worst_decile", "knife_rate",
+                     "tail_mae", "entry_slippage",
+                     "event_recall", "exact_center_recall", "zone_precision"]:
             assert key in result
 
     def test_w_scaling_formula(self, known_cell_df):
@@ -464,16 +569,18 @@ class TestCellScore:
         win_rate = 0.6
         worst_decile = -0.04
         knife_rate = 0.1
-        mean_mae = -0.03
+        tail_mae = -0.05
+        entry_slip = 0.01
 
         expected = (
             0.50 * excess * 100
             + 0.15 * (win_rate - 0.5) * 100
             - 0.15 * abs(min(0.0, worst_decile)) * 100
             - 0.10 * knife_rate * 100
-            - 0.10 * abs(mean_mae) * 100
+            - 0.05 * abs(tail_mae) * 100
+            - 0.05 * entry_slip * 100
         )
-        # 1.0 + 1.5 - 0.6 - 1.0 - 0.3 = 0.6
+        # 1.0 + 1.5 - 0.6 - 1.0 - 0.25 - 0.05 = 0.6
         assert expected == pytest.approx(0.6)
 
 
@@ -644,3 +751,42 @@ class TestTieredEvalIntegration:
         result = tiered_eval(val, y_true, y_proba, min_ap=0.01)
         direct_score, _ = multi_budget_composite(val, y_proba)
         assert result["tier3"] == pytest.approx(direct_score)
+
+
+# ---------------------------------------------------------------------------
+# Score calibration: empirical reference points
+# ---------------------------------------------------------------------------
+
+
+class TestScoreCalibration:
+    """Establish empirical score baselines to back the interpretation bands."""
+
+    def test_random_model_scores_negative(self, val_split):
+        """A random model should score negative (penalties dominate rewards)."""
+        val, _, _ = val_split
+        np.random.seed(42)
+        y_proba = np.random.rand(len(val))
+        score, _ = multi_budget_composite(val, y_proba)
+        assert score < 0, f"Random model should score negative, got {score}"
+
+    def test_skilled_model_beats_random(self, val_split):
+        """A model with label signal + feature noise should beat random.
+
+        Pure oracle (just labels) can lose to random because the composite
+        measures trading quality, not prediction quality. But a model that
+        ranks positives higher while maintaining some diversification through
+        noise should consistently beat random.
+        """
+        val, _, _ = val_split
+        if val["stock_id"].nunique() < 20:
+            pytest.skip("Need >= 20 stocks for reliable comparison")
+        y_true = val[LABEL_COL].values
+        np.random.seed(42)
+        random_proba = np.random.rand(len(val))
+        skilled_proba = np.random.rand(len(val)) * 0.1
+        skilled_proba[y_true == 1] += np.random.rand((y_true == 1).sum()) * 0.7
+        random_score, _ = multi_budget_composite(val, random_proba)
+        skilled_score, _ = multi_budget_composite(val, skilled_proba)
+        assert skilled_score > random_score, (
+            f"Skilled ({skilled_score:.4f}) should beat random ({random_score:.4f})"
+        )

@@ -36,6 +36,11 @@ from indicators import (
     detect_rsi_divergence,
     find_pivots,
 )
+from lib.pivot_events import (
+    PIVOT_LABEL_PRICE_TOLERANCE,
+    PIVOT_LABEL_WINDOW_VARIATIONS,
+    annotate_pivot_low_events,
+)
 
 # ---------------------------------------------------------------------------
 # Feature catalog -- kept here next to the code that creates them.
@@ -308,16 +313,18 @@ def _add_rolling_features(stock_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _add_pivot_labels(stock_df: pd.DataFrame, lb: int = 8, rb: int = 13) -> pd.DataFrame:
-    """Add pivot labels for a single stock. Uses [-1, +1] window with 1% tolerance."""
-    pivot_high, pivot_low = find_pivots(
-        stock_df, lb=lb, rb=rb, return_boolean=True,
-        window_variations=[-1, 1], price_tolerance=0.01,
+    """Add pivot labels and event provenance for a single stock."""
+    stock_df = annotate_pivot_low_events(stock_df, lb=lb, rb=rb)
+    pivot_high, _ = find_pivots(
+        stock_df,
+        lb=lb,
+        rb=rb,
+        return_boolean=True,
+        window_variations=list(PIVOT_LABEL_WINDOW_VARIATIONS),
+        price_tolerance=PIVOT_LABEL_PRICE_TOLERANCE,
     )
-    new_cols = {
-        "PivotHigh": pivot_high.astype(int).values,
-        "PivotLow": pivot_low.astype(int).values,
-    }
-    return pd.concat([stock_df, pd.DataFrame(new_cols, index=stock_df.index)], axis=1)
+    stock_df["PivotHigh"] = pivot_high.astype(int).values
+    return stock_df
 
 
 def _process_step3(stock_df: pd.DataFrame) -> pd.DataFrame:

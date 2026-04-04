@@ -62,6 +62,12 @@ for each iteration:
 
 Evaluation is **threshold-free**. The model outputs probabilities; the judge selects signals at 6 budget levels (top 0.05% to 2%) and evaluates at 3 horizons (5d, 10d, 20d).
 
+The scorer is event-aware:
+- row-level AP still uses the expanded `PivotLow` label
+- trading metrics collapse duplicate predictions inside the same true bottom event
+- exact pivot-center hits and buyable-zone hits are tracked separately
+- legacy scores from the old row-based evaluator are not directly comparable
+
 Per (budget, horizon) cell:
 ```
 raw = 0.50 * excess_return * 100         (alpha over equal-weight market)
@@ -75,7 +81,7 @@ W = sqrt(effective_n / (effective_n + 20))   (soft evidence scaling)
 
 Final score = mean of W * raw across all 18 cells. Missing cells count as 0.
 
-Hard gate: avg_precision > 0.05 (model better than random)
+Hard gate: avg_precision > 0.05 on expanded `PivotLow` (model better than random)
 
 ## Two Loss Functions
 

@@ -29,6 +29,12 @@ You edit **two files only**:
 
 **Multi-Budget Composite Score** (higher = better). The evaluation is **threshold-free** -- your model outputs probabilities, and the judge evaluates them at 6 signal budgets (top 0.05% to 2% of predictions) across 3 horizons (5d, 10d, 20d).
 
+The scorer is **event-aware**, not purely row-based:
+- Tier 1 ranking still uses the expanded `PivotLow` label.
+- Trade evaluation collapses duplicate predictions inside the same true bottom event to one earliest tradable entry.
+- Exact pivot-center hits and buyable-zone hits are reported separately.
+- Legacy scores from the old row-based evaluator are not directly comparable.
+
 For each (budget, horizon) cell, the raw score is:
 ```
 0.50 * excess_return * 100         (alpha over equal-weight market)
@@ -43,7 +49,7 @@ Each cell is then scaled by `W = sqrt(effective_n / (effective_n + 20))` -- a so
 The composite score evaluates across multiple operating points and prediction frequencies.
 
 Hard gate:
-- Tier 1: avg_precision must be > 0.05 (sanity check)
+- Tier 1: avg_precision on expanded `PivotLow` must be > 0.05 (sanity check)
 - Fail the gate and the iteration is rejected.
 
 **There is no THRESHOLD lever.** Signal selection is done by the immutable judge.
@@ -58,7 +64,7 @@ You cannot change the folds, dataset path, or data filter. These are fixed in th
 
 - ~3M rows (filtered to 2020+), 1,336 stocks, dataset ending 2026-03
 - 231 features across 7 groups (see `list_features()`)
-- Label: PivotLow (binary, ~5% positive rate, ~1:20 imbalance, window [-1,+1] @ 1% tolerance)
+- Label: `PivotLow` expanded buy zone around a base pivot center; adjacent `-1/+1` rows are labeled only when their close is within 1% of the base pivot close
 - Mix of US, S&P 500, and Swedish stocks
 - 13-session embargo at split boundaries
 - Stock lists: `data/tickers/tickers_validated_20251031.json` (US 7,478 / S&P 500 503 / Sweden 718; ~1,336 survived filtering)

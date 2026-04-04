@@ -22,6 +22,7 @@ import pandas as pd
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from lib.data import LABEL_AUX_COLS, NON_FEATURE_COLS  # noqa: E402
 from lib.features import build_features  # noqa: E402
 
 # Lookback buffer in calendar days (covers 252 trading days for indicators)
@@ -155,6 +156,11 @@ def validate_final(df: pd.DataFrame, feature_cols: list[str]) -> bool:
     """Final validation."""
     print("\nFinal validation...")
 
+    forbidden_feature_cols = sorted(set(feature_cols) & (set(NON_FEATURE_COLS) | {"PivotHigh"}))
+    if forbidden_feature_cols:
+        print(f"  FAILED: non-feature columns leaked into feature set: {forbidden_feature_cols}")
+        return False
+
     nan_count = df[feature_cols].isnull().sum().sum()
     if nan_count > 0:
         print(f"  FAILED: {nan_count} NaN remain")
@@ -169,6 +175,27 @@ def validate_final(df: pd.DataFrame, feature_cols: list[str]) -> bool:
     if "PivotLow" not in df.columns:
         print("  FAILED: Missing PivotLow")
         return False
+
+    missing_aux = [c for c in LABEL_AUX_COLS if c not in df.columns]
+    if missing_aux:
+        print(f"  FAILED: Missing label metadata columns: {missing_aux}")
+        return False
+
+    label_counts = df["PivotLow"].value_counts(dropna=False)
+    if set(label_counts.index.tolist()) == {1}:
+        print("  FAILED: PivotLow is all ones. Labels were likely treated as features during cleaning.")
+        return False
+
+    if set(label_counts.index.tolist()) == {0}:
+        print("  FAILED: PivotLow is all zeros.")
+        return False
+
+    if "PivotLow_event_offset" in df.columns:
+        non_event_nan_ok = df.loc[df["PivotLow"] == 0, "PivotLow_event_offset"].isna().all()
+        event_non_nan_ok = df.loc[df["PivotLow"] == 1, "PivotLow_event_offset"].notna().all()
+        if not non_event_nan_ok or not event_non_nan_ok:
+            print("  FAILED: PivotLow_event_offset does not match event-zone sparsity expectations")
+            return False
 
     print("  PASSED")
     return True
@@ -209,9 +236,7 @@ def save_dataset(df: pd.DataFrame, dataset_dir: Path, incremental: bool = False)
         with open(metadata_path) as f:
             metadata = json.load(f)
 
-    feature_cols = [
-        col for col in df.columns if col not in ["date", "stock_id", "open", "high", "low", "close", "volume"]
-    ]
+    feature_cols = [col for col in df.columns if col not in NON_FEATURE_COLS and col != "PivotHigh"]
 
     metadata["features"] = {
         "created_at": datetime.now().isoformat(),
@@ -224,6 +249,9 @@ def save_dataset(df: pd.DataFrame, dataset_dir: Path, incremental: bool = False)
         },
         "labels": {
             "PivotLow": int(df["PivotLow"].sum()),
+            "PivotLow_base": int(df["PivotLow_base"].sum()) if "PivotLow_base" in df.columns else 0,
+            "PivotLow_events": int(df.loc[df["PivotLow_event_id"] > 0, "PivotLow_event_id"].nunique())
+            if "PivotLow_event_id" in df.columns else 0,
             "PivotHigh": int(df["PivotHigh"].sum()) if "PivotHigh" in df.columns else 0,
         },
     }
@@ -456,8 +484,7 @@ def build_full(dataset_dir: Path, test_stocks: int | None = None) -> None:
     df = build_features(df, verbose=True)
     print(f"  Feature building took {time.time() - start:.1f}s")
 
-    exclude = ["date", "stock_id", "open", "high", "low", "close", "volume"]
-    feature_cols = [col for col in df.columns if col not in exclude]
+    feature_cols = [col for col in df.columns if col not in NON_FEATURE_COLS and col != "PivotHigh"]
 
     before = len(df)
     df = clean_dataset(df, feature_cols)

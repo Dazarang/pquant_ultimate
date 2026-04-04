@@ -10,9 +10,11 @@ import pyarrow.parquet as pq
 from sklearn.preprocessing import StandardScaler
 
 from lib.features import FEATURES
+from lib.pivot_events import LABEL_COL, PIVOT_LOW_EVENT_COLS
 
 META_COLS = ["date", "stock_id", "open", "high", "low", "close", "volume"]
-LABEL_COL = "PivotLow"
+LABEL_AUX_COLS = list(PIVOT_LOW_EVENT_COLS)
+NON_FEATURE_COLS = META_COLS + [LABEL_COL, *LABEL_AUX_COLS]
 
 
 def list_features(groups: str | list[str] | None = None) -> list[str]:
@@ -58,10 +60,11 @@ def load_dataset(
 
     # Parquet pushdown: only read needed columns and rows
     read_cols = None
+    schema_cols = set(pq.read_schema(path).names)
+    aux_cols = [c for c in LABEL_AUX_COLS if c in schema_cols]
     if features is not None:
-        read_cols = list(dict.fromkeys(META_COLS + features + [LABEL_COL]))
-        valid_cols = set(pq.read_schema(path).names)
-        read_cols = [c for c in read_cols if c in valid_cols]
+        read_cols = list(dict.fromkeys(META_COLS + features + [LABEL_COL] + aux_cols))
+        read_cols = [c for c in read_cols if c in schema_cols]
     row_filters = [("stock_id", "in", stocks)] if stocks is not None else None
 
     df = pd.read_parquet(path, columns=read_cols, filters=row_filters)
@@ -76,7 +79,7 @@ def load_dataset(
     if "PivotHigh" in df.columns:
         df = df.drop(columns=["PivotHigh"])
 
-    all_features = [c for c in df.columns if c not in META_COLS + [LABEL_COL]]
+    all_features = [c for c in df.columns if c not in NON_FEATURE_COLS]
 
     if features is not None:
         missing_f = set(features) - set(all_features)
@@ -100,7 +103,9 @@ def preview(df: pd.DataFrame, feature_cols: list[str], n: int = 5) -> pd.DataFra
     if df.empty:
         print("Empty DataFrame")
         return df.head(0)
-    cols = [c for c in META_COLS if c in df.columns] + feature_cols + [LABEL_COL]
+    cols = [c for c in META_COLS if c in df.columns] + feature_cols + [LABEL_COL] + [
+        c for c in LABEL_AUX_COLS if c in df.columns
+    ]
     sample = df[cols].head(n)
     print(f"Shape: {df.shape} | Stocks: {df['stock_id'].nunique()} | Features: {len(feature_cols)}")
     print(f"Date range: {df['date'].min().date()} to {df['date'].max().date()}")

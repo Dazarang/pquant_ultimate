@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from lib.data import LABEL_COL, META_COLS, load_dataset, scale, temporal_split
+from lib.data import LABEL_AUX_COLS, LABEL_COL, META_COLS, load_dataset, scale, temporal_split
 
 DS_PATH = "data/datasets/20260115/dataset.parquet"
 
@@ -44,10 +44,11 @@ class TestLoadDataset:
         assert set(df[LABEL_COL].unique()).issubset({0, 1})
 
     def test_no_feature_leakage(self, full_dataset):
-        _, feature_cols = full_dataset
+        df, feature_cols = full_dataset
         for c in feature_cols:
             assert c not in META_COLS
             assert c != LABEL_COL
+            assert c not in LABEL_AUX_COLS
 
     def test_no_inf_nan_in_features(self, full_dataset):
         df, feature_cols = full_dataset
@@ -64,7 +65,37 @@ class TestLoadDataset:
 
     def test_column_count(self, full_dataset):
         df, feature_cols = full_dataset
-        assert len(df.columns) == len(META_COLS) + len(feature_cols) + 1
+        aux_cols = [c for c in LABEL_AUX_COLS if c in df.columns]
+        assert len(df.columns) == len(META_COLS) + len(feature_cols) + 1 + len(aux_cols)
+
+    def test_label_aux_cols_never_become_features(self, tmp_path):
+        path = tmp_path / "dataset.parquet"
+        df = pd.DataFrame({
+            "date": pd.bdate_range("2024-01-01", periods=3),
+            "stock_id": ["AAA", "AAA", "AAA"],
+            "open": [10.0, 11.0, 12.0],
+            "high": [10.5, 11.5, 12.5],
+            "low": [9.5, 10.5, 11.5],
+            "close": [10.0, 11.0, 12.0],
+            "volume": [100, 110, 120],
+            "feat_a": [0.1, 0.2, 0.3],
+            "feat_b": [1.0, 2.0, 3.0],
+            LABEL_COL: [0, 1, 0],
+            "PivotLow_base": [0, 1, 0],
+            "PivotLow_event_id": [0, 1, 0],
+            "PivotLow_event_offset": [np.nan, 0.0, np.nan],
+        })
+        df.to_parquet(path, index=False)
+
+        loaded, feature_cols = load_dataset(str(path))
+
+        assert set(["feat_a", "feat_b"]).issubset(feature_cols)
+        assert "PivotLow_base" in loaded.columns
+        assert "PivotLow_event_id" in loaded.columns
+        assert "PivotLow_event_offset" in loaded.columns
+        assert "PivotLow_base" not in feature_cols
+        assert "PivotLow_event_id" not in feature_cols
+        assert "PivotLow_event_offset" not in feature_cols
 
 
 # ---------------------------------------------------------------------------
@@ -103,16 +134,18 @@ class TestFeatureFiltering:
     def test_five_features(self):
         feats = ["rsi_14", "macd", "volume_z", "drawdown", "ret_1d"]
         df, fc = load_dataset(DS_PATH, stocks="AAPL", features=feats)
+        aux_cols = [c for c in LABEL_AUX_COLS if c in df.columns]
         assert len(fc) == 5
         assert set(fc) == set(feats)
-        assert len(df.columns) == len(META_COLS) + 5 + 1
+        assert len(df.columns) == len(META_COLS) + 5 + 1 + len(aux_cols)
 
     def test_ten_features(self):
         feats = ["rsi_14", "macd", "volume_z", "drawdown", "ret_1d",
                  "adx", "bb_position", "atr_14", "stoch_k", "ema_20"]
         df, fc = load_dataset(DS_PATH, stocks="AAPL", features=feats)
+        aux_cols = [c for c in LABEL_AUX_COLS if c in df.columns]
         assert len(fc) == 10
-        assert len(df.columns) == len(META_COLS) + 10 + 1
+        assert len(df.columns) == len(META_COLS) + 10 + 1 + len(aux_cols)
 
     def test_all_features_default(self, full_dataset):
         _, fc = full_dataset
