@@ -42,12 +42,11 @@ FEATURE_GROUPS = None
 
 def build_model(y_train):
     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
-    from xgboost import XGBClassifier
+    from research.model_wrappers import RankingXGBClassifier
 
-    neg = (y_train == 0).sum()
-    pos = (y_train == 1).sum()
-
-    return XGBClassifier(
+    return RankingXGBClassifier(
+        objective="rank:ndcg",
+        group_size=200,
         n_estimators=1800,
         max_depth=4,
         learning_rate=0.005,
@@ -57,11 +56,6 @@ def build_model(y_train):
         reg_alpha=0.5,
         reg_lambda=5.0,
         gamma=0.5,
-        scale_pos_weight=neg / pos,
-        tree_method="hist",
-        random_state=42,
-        n_jobs=-1,
-        verbosity=0,
     )
 
 
