@@ -52,11 +52,19 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     prev_high = df.groupby("stock_id")["high"].shift(1)
     df["close_vs_prev_high"] = (df["close"] - prev_high) / prev_high.clip(lower=1e-10)
 
+    g = df.groupby("stock_id")
+    lag_cols = []
+    for col in ["rsi_14", "drawdown"]:
+        for lag in [1, 2, 3]:
+            name = f"{col}_lag{lag}"
+            df[name] = g[col].shift(lag)
+            lag_cols.append(name)
+
     new_features = [
         "close_position", "lower_wick_ratio", "gap_return",
         "body_ratio", "volume_sma_ratio", "high_vol_reversal",
         "signed_candle", "range_ratio_10d", "close_vs_prev_high",
-    ]
+    ] + lag_cols
 
     # --- END researcher section ---
 
