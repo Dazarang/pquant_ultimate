@@ -50,7 +50,7 @@ Hard gate:
 
 ## Evaluation: Walk-Forward
 
-The pipeline uses **walk-forward evaluation** with 6 non-overlapping 6-month validation windows covering 2023-03 to 2026-03. Data is filtered to 2020+ after feature computation. The final score is the **mean of all fold scores**. All folds must pass Tier 1 or the iteration is rejected.
+The pipeline uses **walk-forward evaluation** with 4 non-overlapping 6-month validation windows covering 2024-03 to 2026-03 (2 years OOS). Data is filtered to 2020+ after feature computation. The final score is the **mean of all fold scores**. All folds must pass Tier 1 or the iteration is rejected.
 
 You cannot change the folds, dataset path, or data filter. These are fixed in the PIPELINE section.
 
@@ -139,4 +139,9 @@ You are in an automated ratchet. After each edit, `gate.sh` runs the experiment.
 5. **Keep it simple.** A small improvement with ugly complexity is not worth it. Removing something for equal or better results is a win.
 6. **If stuck, try something radical.** Different model type, very different feature set, probability calibration.
 7. **No editorial comments in code.** Don't write comments that justify or praise current choices (e.g. "balanced generalization", "replaces X -- adds diversity"). These anchor future iterations toward the status quo.
-8. **Non-capacity parameters are not hypotheses.** Parameters that do not change model capacity, feature set, or training procedure (e.g. random seed, n_jobs, verbose, random_state, seed-bagging over the same base model) produce score differences that reflect evaluation variance, not model improvement.
+8. **Non-capacity parameters are not hypotheses.** Changes that only affect randomization or runtime — not model capacity, feature set, or training procedure — produce score differences that reflect evaluation variance, not model improvement. Forbidden patterns include but are not limited to:
+   - Changing `random_seed`, `random_state`, or any seed value.
+   - Running the same architecture N times with different seeds.
+   - Changing `n_jobs`, `verbose`, `thread_count`, or other runtime/logging params.
+   - Bundling forbidden seed/runtime changes alongside legitimate capacity changes.
+   - The test: "if I removed the seed change, does any structural difference remain?" If no, it is a seed change.
