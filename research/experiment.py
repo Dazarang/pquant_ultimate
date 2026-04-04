@@ -33,56 +33,35 @@ DATASET_PATH = "data/datasets/20260331/dataset.parquet"
 STOCKS = None
 
 # Feature groups: see list_features() for options. None = all
-FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
+FEATURE_GROUPS = None
 
 # ===========================================================================
 # MODEL -- researcher edits this section
 # ===========================================================================
 
 
-class _EarlyStopCB:
-    """CatBoost with internal early stopping on a temporal holdout."""
-
-    def __init__(self, val_frac, **kwargs):
-        self._val_frac = val_frac
-        self._kwargs = kwargs
-
-    def fit(self, X, y):
-        from catboost import CatBoostClassifier, Pool
-        n = len(X)
-        cut = int(n * (1 - self._val_frac))
-        self._model = CatBoostClassifier(**self._kwargs)
-        self._model.fit(Pool(X[:cut], y[:cut]), eval_set=Pool(X[cut:], y[cut:]))
-        self.classes_ = self._model.classes_
-        return self
-
-    def predict_proba(self, X):
-        return self._model.predict_proba(X)
-
-
 def build_model(y_train):
     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
+    from xgboost import XGBClassifier
+
     neg = (y_train == 0).sum()
     pos = (y_train == 1).sum()
-    spw = np.sqrt(neg / pos)
 
-    return _EarlyStopCB(
-        val_frac=0.1,
-        iterations=3000,
-        depth=7,
-        learning_rate=0.01,
-        min_data_in_leaf=50,
-        boosting_type="Ordered",
-        rsm=0.6,
-        l2_leaf_reg=3.0,
-        posterior_sampling=True,
-        scale_pos_weight=spw,
-        random_seed=42,
-        verbose=0,
-        thread_count=-1,
-        od_type="Iter",
-        od_wait=200,
-        use_best_model=True,
+    return XGBClassifier(
+        n_estimators=500,
+        max_depth=4,
+        learning_rate=0.02,
+        min_child_weight=10,
+        subsample=0.8,
+        colsample_bytree=0.6,
+        reg_alpha=0.5,
+        reg_lambda=5.0,
+        gamma=0.5,
+        scale_pos_weight=neg / pos,
+        tree_method="hist",
+        random_state=42,
+        n_jobs=-1,
+        verbosity=0,
     )
 
 
