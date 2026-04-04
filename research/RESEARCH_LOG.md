@@ -321,3 +321,6 @@ Score: 0.6784 | class _EnsembleCB:     """CatBoost ensemble: multiple seeds with
 
 ### Iteration 1 -- KNOWLEDGE
 No code changes.
+
+### Iteration 1 -- REVERTED (-0.1664)
+Score: 0.6195 |         iterations=5000,         learning_rate=0.005, 

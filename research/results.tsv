@@ -97,3 +97,4 @@ iter	score	status	description
 22	0.4236	discard	        iterations=4000,         depth=5,         min_data_in_leaf=80,         r
 23	0.6460	discard	    ret = g["close"].pct_change()     is_down = (ret < 0).astype(float)      df[
 24	0.6784	discard	class _EnsembleCB:     """CatBoost ensemble: multiple seeds with averaged predic
+1	0.6195	discard	        iterations=5000,         learning_rate=0.005, 

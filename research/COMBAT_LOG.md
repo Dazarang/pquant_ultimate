@@ -2,25 +2,6 @@
 
 Reverted experiments with scores and diffs.
 
-### Iteration 3 -- REVERTED (-0.3066)
-Score: 0.4464 vs best 0.7530
-Change: FEATURE_GROUPS = ["base", "advanced", "percentile", "interaction"] 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 1a54d1f..a9640cc 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -33,7 +33,7 @@ DATASET_PATH = "data/datasets/20260331/dataset.parquet"
- STOCKS = None
- 
- # Feature groups: see list_features() for options. None = all
--FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
-+FEATURE_GROUPS = ["base", "advanced", "percentile", "interaction"]
- 
- # ===========================================================================
- # MODEL -- researcher edits this section
-```
-
 ### Iteration 4 -- GATE FAILED
 Reason: GATE VIOLATION: Experiment crashed (exit code 142).
 Change: class _EnsembleCB:     """Bayesian model averaging: multiple CatBoost posterior 
@@ -1196,4 +1177,26 @@ index 1a54d1f..3a16d2c 100644
          depth=7,
          learning_rate=0.01,
          min_data_in_leaf=50,
+```
+
+### Iteration 1 -- REVERTED (-0.1664)
+Score: 0.6195 vs best 0.7859
+Change:         iterations=5000,         learning_rate=0.005, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 1a54d1f..166316a 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -68,9 +68,9 @@ def build_model(y_train):
+ 
+     return _EarlyStopCB(
+         val_frac=0.1,
+-        iterations=3000,
++        iterations=5000,
+         depth=7,
+-        learning_rate=0.01,
++        learning_rate=0.005,
+         min_data_in_leaf=50,
+         boosting_type="Ordered",
+         rsm=0.6,
 ```
