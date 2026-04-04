@@ -38,6 +38,10 @@ OUT_DIR = Path(__file__).resolve().parent
 # Reference budget for visualization, benchmark, and backtest
 VIZ_BUDGET = 0.0025  # top 0.25% of predictions
 
+# Execution filter: remove low-ADR stocks from val (train on everything)
+ADR_FILTER = True
+MIN_ADR = 2.0
+
 
 def train_and_evaluate():
     """Train model on last fold, evaluate on its val set, run benchmarks."""
@@ -60,6 +64,22 @@ def train_and_evaluate():
     print(f"\nTraining on {X_train.shape[0]:,} rows, {X_train.shape[1]} features...")
     model = build_model(y_train)
     model.fit(X_train, y_train)
+
+    # --- ADR execution filter: remove low-ADR stocks from val only ---
+    if ADR_FILTER:
+        adr = val.groupby("stock_id").apply(
+            lambda s: 100 * ((s["high"] / s["low"]).rolling(20, min_periods=10).mean() - 1),
+            include_groups=False,
+        ).reset_index(level=0, drop=True).reindex(val.index)
+        # Use each stock's latest ADR in val to decide inclusion
+        latest_adr = adr.groupby(val["stock_id"]).last()
+        keep_stocks = set(latest_adr[latest_adr >= MIN_ADR].index)
+        n_before = val["stock_id"].nunique()
+        keep_mask = val["stock_id"].isin(keep_stocks)
+        val = val[keep_mask].reset_index(drop=True)
+        val_s = val_s[keep_mask.values].reset_index(drop=True)
+        n_after = val["stock_id"].nunique()
+        print(f"\nADR filter (>={MIN_ADR}%): {n_before} -> {n_after} stocks in val ({len(val):,} rows)")
 
     # --- Val evaluation ---
     print("\n" + "=" * 70)
@@ -87,6 +107,24 @@ def train_and_evaluate():
     backtest_quick(val_bt)
 
     return val, y_val_proba, val_results
+
+
+def _trade_return(stock_df, signal_date, target=0.10, stop=-0.05, max_hold=30):
+    """Simulate one trade for annotation: target/stop/max_hold exit."""
+    future = stock_df.loc[stock_df["date"] > signal_date].head(max_hold + 1)
+    if len(future) == 0:
+        return None, ""
+    entry = future.iloc[0]["open"]
+    for i in range(len(future)):
+        r = future.iloc[i]
+        if r["high"] >= entry * (1 + target):
+            return target, "T"
+        if r["low"] <= entry * (1 + stop):
+            return stop, "S"
+    exit_price = future.iloc[-1]["close"]
+    ret = (exit_price - entry) / entry
+    reason = "H" if len(future) > max_hold else "P"
+    return ret, reason
 
 
 def plot_signals(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
@@ -141,12 +179,13 @@ def plot_signals(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
         )
 
         for _, row in signals.iterrows():
-            ret = forward_open_return(stock, row["date"], horizon=10)
+            ret, reason = _trade_return(stock, row["date"])
             if ret is None:
                 continue
             color = "#2e7d32" if ret > 0 else "#c62828"
+            label_text = f"{ret:+.1%}{reason}"
             ax.annotate(
-                f"{ret:+.0%}", (row["date"], row["close"]),
+                label_text, (row["date"], row["close"]),
                 textcoords="offset points", xytext=(0, 10),
                 fontsize=7, color=color, ha="center", fontweight="bold",
             )
