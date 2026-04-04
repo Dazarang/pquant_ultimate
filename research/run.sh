@@ -181,7 +181,7 @@ After editing, STOP. The outer loop will run gate.sh.
 
 If COMBAT_LOG.md shows your idea was already tried, pick something DIFFERENT."
 
-    env -u CLAUDECODE claude -p --dangerously-skip-permissions --effort max --model opus "$prompt"
+    env -u CLAUDECODE claude -p --dangerously-skip-permissions --effort high --model opus "$prompt"
 }
 
 for ((i=1; i<=MAX_ITERS; i++)); do
