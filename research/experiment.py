@@ -48,9 +48,9 @@ def build_model(y_train):
     pos = (y_train == 1).sum()
 
     return XGBClassifier(
-        n_estimators=1200,
+        n_estimators=1800,
         max_depth=4,
-        learning_rate=0.008,
+        learning_rate=0.005,
         min_child_weight=10,
         subsample=0.8,
         colsample_bytree=0.6,
