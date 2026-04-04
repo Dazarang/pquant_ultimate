@@ -27,7 +27,7 @@ You edit **two files only**:
 
 ## The Metric
 
-**Multi-Budget Composite Score** (higher = better). The evaluation is **threshold-free** -- your model outputs probabilities, and the judge evaluates them at 6 signal budgets (top 0.05% to 2% of predictions) across 3 horizons (5d, 10d, 20d).
+**Multi-Budget Composite Score** (higher = better). The evaluation is **threshold-free** -- your model outputs probabilities, and the judge evaluates them at 5 signal budgets (top 0.10% to 2% of predictions) across 3 horizons (5d, 10d, 20d).
 
 The scorer is **event-aware**, not purely row-based:
 - Tier 1 ranking still uses the expanded `PivotLow` label.
@@ -37,14 +37,11 @@ The scorer is **event-aware**, not purely row-based:
 
 For each (budget, horizon) cell, the raw score is:
 ```
-0.50 * excess_return * 100         (alpha over equal-weight market)
-+ 0.15 * (win_rate - 0.5) * 100     (consistency edge vs coin flip)
-- 0.15 * |worst_decile| * 100       (tail risk penalty)
-- 0.10 * knife_rate * 100           (falling knife penalty, >5% loss)
-- 0.10 * |mean_mae| * 100           (path risk: avg max adverse excursion)
+raw = 0.40 * excess * 100 + 0.20 * (win-0.5) * 100 - 0.10 * |worst_decile| * 100 - 0.10 * knife * 100 - 0.05 * |tail_mae| * 100 - 0.15 * entry_slippage * 100
+W = effective_n / (effective_n + 50)
 ```
 
-Each cell is then scaled by `W = sqrt(effective_n / (effective_n + 20))` -- a soft penalty for low evidence. The final score is the **mean of all 18 W*U cells**.
+Final score = mean of W * raw across all valid cells (5 budgets x 3 horizons = 15 cells). Missing cells excluded from average.
 
 The composite score evaluates across multiple operating points and prediction frequencies.
 

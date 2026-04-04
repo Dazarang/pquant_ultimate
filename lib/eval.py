@@ -558,7 +558,17 @@ def regime_breakdown(df: pd.DataFrame, y_pred: np.ndarray, horizon: int = 10) ->
 # Multi-budget evaluation (threshold-free)
 # ---------------------------------------------------------------------------
 
-BUDGET_FRACS = (0.0005, 0.001, 0.0025, 0.005, 0.01, 0.02)
+BUDGET_FRACS = (0.001, 0.0025, 0.005, 0.01, 0.02)
+
+# _cell_score formula weights (must sum to 1.0)
+CELL_SCORE_WEIGHTS = {
+    "excess": 0.40,
+    "win_rate": 0.20,
+    "worst_decile": 0.10,
+    "knife_rate": 0.10,
+    "tail_mae": 0.05,
+    "entry_slippage": 0.15,
+}
 
 
 def _budget_signal_count(n_rows: int, frac: float) -> int:
@@ -677,16 +687,17 @@ def _cell_score(df: pd.DataFrame, y_pred: np.ndarray, horizon: int) -> dict | No
     slip = analytics["avg_entry_slippage"]
     entry_slip = abs(slip) if not np.isnan(slip) else 0.0
 
+    cw = CELL_SCORE_WEIGHTS
     raw = (
-        0.50 * excess * 100
-        + 0.15 * (win_rate - 0.5) * 100
-        - 0.15 * abs(min(0.0, worst_decile)) * 100
-        - 0.10 * knife_rate * 100
-        - 0.05 * abs(tail_mae) * 100
-        - 0.05 * entry_slip * 100
+        cw["excess"] * excess * 100
+        + cw["win_rate"] * (win_rate - 0.5) * 100
+        - cw["worst_decile"] * abs(min(0.0, worst_decile)) * 100
+        - cw["knife_rate"] * knife_rate * 100
+        - cw["tail_mae"] * abs(tail_mae) * 100
+        - cw["entry_slippage"] * entry_slip * 100
     )
 
-    w = np.sqrt(effective_n / (effective_n + 20))
+    w = effective_n / (effective_n + 50)
 
     return {
         "raw": raw, "weighted": w * raw, "w": w,
@@ -720,10 +731,11 @@ def multi_budget_composite(
     """Multi-budget, multi-horizon composite score with soft N-scaling.
 
     Evaluates model ranking at multiple signal budgets and holding horizons.
-    Final score = mean of W * U across all (budget, horizon) pairs,
-    where W = sqrt(effective_n / (effective_n + 20)).
+    Final score = mean of W * U across valid (budget, horizon) cells,
+    where W = effective_n / (effective_n + 50). Missing cells are excluded.
     """
-    all_weighted = []
+    valid_weighted = []
+    total_cells = 0
     details = {}
 
     for q in budgets:
@@ -739,14 +751,15 @@ def multi_budget_composite(
         }
 
         for h in horizons:
+            total_cells += 1
             cell = _cell_score(df, signal_weights, h)
             if cell is None:
-                all_weighted.append(0.0)  # missing cell = neutral, prevents gaming
                 continue
-            all_weighted.append(cell["weighted"])
+            valid_weighted.append(cell["weighted"])
             details[budget]["cells"][h] = cell
 
-    score = np.mean(all_weighted) if all_weighted else float("-inf")
+    score = np.mean(valid_weighted) if valid_weighted else float("-inf")
+    details["_meta"] = {"valid_cells": len(valid_weighted), "total_cells": total_cells}
     return score, details
 
 
@@ -756,7 +769,9 @@ def _print_multi_budget(details: dict, horizons: tuple[int, ...], score: float) 
     print(f"\n  {'Budget':>8} {'Mass':>6} {'Rows':>6} {'Dup':>6} | {h_str}")
     print("  " + "-" * (32 + 9 * len(horizons)))
 
-    for info in details.values():
+    for key, info in details.items():
+        if key == "_meta":
+            continue
         cells = info["cells"]
         vals = []
         dup_mass = sum(cell["duplicate_mass_discarded"] for cell in cells.values())
@@ -792,11 +807,16 @@ def _print_multi_budget(details: dict, horizons: tuple[int, ...], score: float) 
             f"Dup mass: {ref['duplicate_mass_discarded']:.2f}"
         )
 
-    if any(info["tied_rows"] > 0 for info in details.values()):
+    if any(info["tied_rows"] > 0 for k, info in details.items() if k != "_meta"):
         print("\n  Note: cutoff ties are scored with fractional weights; Rows can exceed Mass.")
 
-    n_cells = len(details) * len(horizons)
-    print(f"\n  Composite Score: {score:.4f} (mean of {n_cells} cells)")
+    meta = details.get("_meta", {})
+    valid_cells = meta.get("valid_cells", 0)
+    total_cells = meta.get("total_cells", 0)
+    if valid_cells < total_cells:
+        print(f"\n  Composite Score: {score:.4f} (mean of {valid_cells} of {total_cells} cells)")
+    else:
+        print(f"\n  Composite Score: {score:.4f} (mean of {total_cells} cells)")
 
 
 # ---------------------------------------------------------------------------
@@ -815,9 +835,9 @@ def tiered_eval(
     Tier 1: Ranking quality (AP, AUC) -- gates on AP.
     Tier 2: Multi-budget, multi-horizon composite score.
 
-    The model is evaluated at multiple signal budgets (top 0.05% to 2%)
+    The model is evaluated at multiple signal budgets (top 0.1% to 2%)
     and multiple horizons (5d, 10d, 20d). Each cell is weighted by
-    sqrt(effective_n / (effective_n + 20)) to penalize low-evidence scores.
+    effective_n / (effective_n + 50) to penalize low-evidence scores.
     """
     results = {"passed": False}
     horizons = (5, 10, 20)

@@ -4,7 +4,7 @@
 
 The single number the autoresearch loop optimizes. Higher = better.
 
-Evaluation is **threshold-free**. The model outputs probabilities; the judge selects signals at 6 budget levels and evaluates at 3 horizons.
+Evaluation is **threshold-free**. The model outputs probabilities; the judge selects signals at 5 budget levels and evaluates at 3 horizons.
 
 The evaluator is **event-aware**:
 - Tier 1 still evaluates row ranking on the expanded `PivotLow` label.
@@ -14,22 +14,22 @@ The evaluator is **event-aware**:
 
 Historical composite scores from the earlier row-based evaluator are **not directly comparable** to this one, because the scoring unit and penalties changed.
 
-**Budgets:** top 0.05%, 0.10%, 0.25%, 0.50%, 1.00%, 2.00% of predictions by probability
+**Budgets:** top 0.10%, 0.25%, 0.50%, 1.00%, 2.00% of predictions by probability
 **Horizons:** 5d, 10d, 20d
 
 Per (budget, horizon) cell:
 ```
-raw = 0.50 * excess_return * 100         (alpha over equal-weight market)
-    + 0.15 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
-    - 0.15 * |worst_decile| * 100        (tail risk penalty)
+raw = 0.40 * excess_return * 100         (alpha over equal-weight market)
+    + 0.20 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
+    - 0.10 * |worst_decile| * 100        (tail risk penalty)
     - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
     - 0.05 * |tail_mae| * 100            (tail path risk: 25th percentile MAE)
-    - 0.05 * entry_slippage * 100        (timing quality: gap to best buyable entry in event zone)
+    - 0.15 * entry_slippage * 100        (timing quality: gap to best buyable entry in event zone)
 
-W = sqrt(effective_n / (effective_n + 20))   (soft evidence scaling)
+W = effective_n / (effective_n + 50)       (linear evidence scaling)
 ```
 
-Final score = mean of W * raw across all 18 cells. Missing cells count as 0.
+Final score = mean of W * raw across all valid cells (5 budgets x 3 horizons = 15 possible). Missing cells are excluded from the average, not counted as 0.
 
 `tail_mae` = 25th percentile of per-signal MAE (worst quartile). Targets the truly bad entries without penalizing harmless path noise already captured by worst_decile and knife_rate. `entry_slippage` = gap between entry and best available price in the true bottom zone; 0 when no events are hit.
 
@@ -39,14 +39,15 @@ Higher is better. Unbounded. Derived from the formula applied to representative 
 
 | Score | Label | Typical per-cell profile |
 |-------|-------|-------------------------|
-| < -3 | no skill | ~0% excess, ~50% win, ~18% knife, ~9% worst decile |
+| < -4 | no skill | ~0% excess, ~50% win, ~18% knife, ~9% worst decile |
+| -4 to -3 | noise | Some signal but penalties dominate |
 | -3 to -2 | weak | ~0.5% excess, ~52% win, ~15% knife, ~7% worst decile |
 | -2 to -1 | moderate | ~1% excess, ~53% win, ~12% knife, ~6% worst decile |
 | -1 to 0 | good | ~2% excess, ~55% win, ~10% knife, ~5% worst decile |
 | 0 to 1 | strong | ~3% excess, ~57% win, ~8% knife, ~4% worst decile |
 | > 1 | exceptional | >= 5% excess, >= 60% win, <= 5% knife |
 
-A score of 0 means rewards and penalties are exactly balanced across all 18 cells on average. Positive scores indicate net positive risk-adjusted utility.
+A score of 0 means rewards and penalties are exactly balanced across all 15 cells on average. Positive scores indicate net positive risk-adjusted utility.
 
 **Good model threshold: > -1.** A model scoring above -1 consistently delivers positive excess return with controlled downside across most budget/horizon combinations. This corresponds to approximately 2% excess return at 55% win rate with 10% knife rate.
 
@@ -79,7 +80,7 @@ Must pass avg_precision > 0.05 or the iteration is rejected.
 
 ## Tier 2: Multi-Budget Composite
 
-The model is evaluated at 6 x 3 = 18 operating points.
+The model is evaluated at 5 x 3 = 15 operating points.
 
 For each (budget, horizon) cell:
 - select the top-budget rows by probability
@@ -92,20 +93,21 @@ The raw cell score then computes:
 
 | Component | Weight | What it rewards/penalizes |
 |-----------|--------|--------------------------|
-| **Excess return** | +50% | Alpha over equal-weight market benchmark |
-| **Win rate edge** | +15% | Consistency above 50% baseline (centered on coin flip) |
-| **Worst decile** | -15% | Penalizes blowups. 10th percentile of trade returns |
+| **Excess return** | +40% | Alpha over equal-weight market benchmark |
+| **Win rate edge** | +20% | Consistency above 50% baseline (centered on coin flip) |
+| **Worst decile** | -10% | Penalizes blowups. 10th percentile of trade returns |
 | **Knife rate** | -10% | Penalizes falling knives. % of signals where 10d return < -5% |
 | **Tail MAE** | -5% | Tail path risk. 25th percentile of max adverse excursion (worst quartile) |
-| **Entry slippage** | -5% | Timing quality. Gap between entry price and best available in the event zone |
+| **Entry slippage** | -15% | Timing quality. Gap between entry price and best available in the event zone |
 
-Each cell is then scaled by W = sqrt(effective_n / (effective_n + 20)):
-- N=1: W=0.22 (nearly zeroed)
-- N=20: W=0.71
-- N=100: W=0.91
-- N=500: W=0.98
+Each cell is then scaled by W = effective_n / (effective_n + 50):
+- N=1: W=0.02
+- N=20: W=0.29
+- N=50: W=0.50
+- N=100: W=0.67
+- N=500: W=0.91
 
-Soft evidence scaling; see W values above.
+Linear evidence scaling; see W values above.
 
 ## Forward Return Metrics (per budget, per horizon)
 

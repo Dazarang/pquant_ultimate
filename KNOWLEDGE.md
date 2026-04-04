@@ -24,20 +24,15 @@ The branch can never get worse. Each winning iteration builds on the previous wi
 
 ## Multi-Budget Composite Score
 
-Evaluation is **threshold-free**. The model outputs probabilities; the judge selects signals at 6 budget levels (top 0.05% to 2%) and evaluates at 3 horizons (5d, 10d, 20d).
+Evaluation is **threshold-free**. The model outputs probabilities; the judge selects signals at 5 budget levels (top 0.10% to 2%) and evaluates at 3 horizons (5d, 10d, 20d).
 
 Per (budget, horizon) cell:
 ```
-raw = 0.50 * excess_return * 100         (alpha over equal-weight market)
-    + 0.15 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
-    - 0.15 * |worst_decile| * 100        (tail risk penalty)
-    - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
-    - 0.10 * |mean_mae| * 100            (path risk: avg max adverse excursion)
-
-W = sqrt(effective_n / (effective_n + 20))   (soft evidence scaling)
+raw = 0.40 * excess * 100 + 0.20 * (win-0.5) * 100 - 0.10 * |worst_decile| * 100 - 0.10 * knife * 100 - 0.05 * |tail_mae| * 100 - 0.15 * entry_slippage * 100
+W = effective_n / (effective_n + 50)
 ```
 
-Final score = mean of W * raw across all 18 cells. Missing cells count as 0.
+Final score = mean of W * raw across all valid cells (5 budgets x 3 horizons = 15 cells). Missing cells excluded from average.
 
 The multi-budget approach prevents gaming: the model must rank well at both sparse (high-conviction) and dense (screening) signal rates simultaneously.
 
@@ -46,7 +41,7 @@ The multi-budget approach prevents gaming: the model must rank well at both spar
 | Tier | What | Hard gate? |
 |------|------|------------|
 | Tier 1: Ranking Quality | ROC-AUC, avg_precision | AP must be > 0.05 |
-| Tier 2: Multi-Budget Composite | 6 budgets x 3 horizons, soft N-scaling | This is the ratchet metric |
+| Tier 2: Multi-Budget Composite | 5 budgets x 3 horizons = 15 cells, linear N-scaling | This is the ratchet metric |
 
 Fail Tier 1 and the iteration is rejected.
 
@@ -127,8 +122,8 @@ Row 4:  proba=0.72  (true bottom, +2% 10d return)
 Row 300K: proba=0.01  (NOT a bottom)
 ```
 
-The multi-budget eval scores this model at 6 budget levels:
-- Top 0.05% (150 signals): mostly true bottoms, high excess return
+The multi-budget eval scores this model at 5 budget levels:
+- Top 0.10% (300 signals): mostly true bottoms, high excess return
 - Top 0.25% (750 signals): still good, some noise
 - Top 2% (6000 signals): diluted, weaker edge
 
@@ -176,7 +171,7 @@ If Option B finds that threshold=0.65 maximizes Sharpe on the validation set, yo
 Two nested optimization loops, model-agnostic (any `.fit()` + `.predict_proba()` model):
 
 - **Inner (model.fit):** Each model minimizes its own loss to learn P(bottom). XGBoost: logloss. RandomForest: Gini. Neural nets: BCE/focal loss. The model knows nothing about composite score.
-- **Outer (Optuna):** Maximizes multi-budget composite score -- evaluates probability ranking across 6 budgets x 3 horizons.
+- **Outer (Optuna):** Maximizes multi-budget composite score -- evaluates probability ranking across 5 budgets x 3 horizons = 15 cells.
 
 The tiers map directly to Optuna:
 

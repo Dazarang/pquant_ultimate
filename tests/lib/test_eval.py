@@ -6,6 +6,7 @@ import pytest
 
 from lib.data import LABEL_COL, load_dataset, scale, temporal_split
 from lib.eval import (
+    CELL_SCORE_WEIGHTS,
     _select_top_frac_weights,
     _cell_score,
     _signal_analytics,
@@ -534,19 +535,19 @@ class TestCellScore:
             assert key in result
 
     def test_w_scaling_formula(self, known_cell_df):
-        """Verify W = sqrt(eff_n / (eff_n + 20)) for known eff_n."""
+        """Verify W = eff_n / (eff_n + 50) for known eff_n."""
         df, y_pred = known_cell_df
         result = _cell_score(df, y_pred, horizon=5)
         if result is None:
             pytest.skip("No valid signals")
         eff_n = result["effective_n"]
-        expected_w = np.sqrt(eff_n / (eff_n + 20))
+        expected_w = eff_n / (eff_n + 50)
         assert abs(result["w"] - expected_w) < 1e-10
 
     def test_w_scaling_known_values(self):
         """Spot-check W formula for specific eff_n values."""
-        for eff_n, expected in [(0, 0.0), (20, np.sqrt(0.5)), (80, np.sqrt(0.8))]:
-            w = np.sqrt(eff_n / (eff_n + 20))
+        for eff_n, expected in [(0, 0.0), (50, 0.5), (100, 100 / 150)]:
+            w = eff_n / (eff_n + 50)
             assert abs(w - expected) < 1e-10
 
     def test_weighted_equals_w_times_raw(self, known_cell_df):
@@ -573,15 +574,20 @@ class TestCellScore:
         entry_slip = 0.01
 
         expected = (
-            0.50 * excess * 100
-            + 0.15 * (win_rate - 0.5) * 100
-            - 0.15 * abs(min(0.0, worst_decile)) * 100
+            0.40 * excess * 100
+            + 0.20 * (win_rate - 0.5) * 100
+            - 0.10 * abs(min(0.0, worst_decile)) * 100
             - 0.10 * knife_rate * 100
             - 0.05 * abs(tail_mae) * 100
-            - 0.05 * entry_slip * 100
+            - 0.15 * entry_slip * 100
         )
-        # 1.0 + 1.5 - 0.6 - 1.0 - 0.25 - 0.05 = 0.6
-        assert expected == pytest.approx(0.6)
+        # 0.8 + 2.0 - 0.4 - 1.0 - 0.25 - 0.15 = 1.0
+        assert expected == pytest.approx(1.0)
+
+    def test_cell_score_weights_sum_to_one(self):
+        """Formula weights must sum to 1.0 to maintain score scale."""
+        total = sum(CELL_SCORE_WEIGHTS.values())
+        assert total == pytest.approx(1.0), f"Weights sum to {total}, expected 1.0"
 
 
 # ---------------------------------------------------------------------------
@@ -590,8 +596,8 @@ class TestCellScore:
 
 
 class TestMultiBudgetComposite:
-    def test_missing_cells_count_as_zero(self, val_split):
-        """Missing cells should contribute 0, not be skipped."""
+    def test_missing_cells_excluded_from_average(self, val_split):
+        """Missing cells are excluded from average, not counted as zero."""
         val, _, _ = val_split
         # All-zero proba -> signals exist (top-frac always picks >= 1)
         # but many cells may lack valid forward returns
@@ -599,8 +605,8 @@ class TestMultiBudgetComposite:
         score, details = multi_budget_composite(val, proba, budgets=(0.001,), horizons=(5,))
         assert isinstance(score, float)
 
-    def test_all_cells_missing_returns_zero(self):
-        """If every cell is missing (all append 0.0), mean is 0.0, not -inf."""
+    def test_all_cells_missing_returns_neg_inf(self):
+        """If every cell is missing (excluded), score is -inf."""
         # Build df with too few rows for any valid signal analytics
         df = pd.DataFrame({
             "date": pd.bdate_range("2024-01-01", periods=3),
@@ -612,8 +618,7 @@ class TestMultiBudgetComposite:
         })
         proba = np.array([0.9, 0.1, 0.1])
         score, _ = multi_budget_composite(df, proba, budgets=(0.5,), horizons=(5,))
-        # Missing cells contribute 0.0, so mean is 0.0
-        assert score == pytest.approx(0.0)
+        assert score == float("-inf")
 
     def test_deterministic(self, val_split, simulated_preds):
         val, _, _ = val_split
@@ -636,7 +641,8 @@ class TestMultiBudgetComposite:
 
         _, details = multi_budget_composite(df, proba, budgets=(0.00100, 0.00104), horizons=(10,))
 
-        assert list(details) == [0.001, 0.00104]
+        budget_keys = [k for k in details if k != "_meta"]
+        assert budget_keys == [0.001, 0.00104]
         assert details[0.001]["signal_mass"] == pytest.approx(30.0)
         assert details[0.00104]["signal_mass"] == pytest.approx(31.0)
         assert details[0.001]["label"] == "0.10%"
@@ -655,23 +661,18 @@ class TestAntiGaming:
         This is the core anti-gaming mechanism: even a huge raw score gets
         crushed by W when effective_n is small.
         """
-        # eff_n=1: W = sqrt(1/21) ~ 0.218, weighted = 0.218 * 10 = 2.18
-        w1 = np.sqrt(1 / 21)
-        score_gaming = w1 * 10.0
+        # eff_n=1: W = 1/51 ~ 0.0196
+        w1 = 1 / (1 + 50)
 
-        # eff_n=50: W = sqrt(50/70) ~ 0.845, weighted = 0.845 * 2 = 1.69
-        w50 = np.sqrt(50 / 70)
-        score_decent = w50 * 2.0
+        # eff_n=50: W = 50/100 = 0.5
+        w50 = 50 / (50 + 50)
 
-        # Even with 5x raw score, the gaming model barely wins at cell level
-        # But at eff_n=1, you only get 1 valid cell -- other budget levels
-        # contribute 0.0 (missing), dragging the composite down
         assert w1 < 0.25, f"W for eff_n=1 should be tiny: {w1:.3f}"
-        assert w50 > 0.8, f"W for eff_n=50 should be near 1: {w50:.3f}"
+        assert w50 > 0.4, f"W for eff_n=50 should be substantial: {w50:.3f}"
 
-    def test_missing_cells_drag_composite_to_zero(self, val_split):
-        """A concentrated model has more missing cells (0.0 contributions),
-        reducing its composite score via averaging."""
+    def test_missing_cells_drag_composite_down(self, val_split):
+        """A concentrated model has more missing cells (excluded from average),
+        reducing the number of valid cells and exposing low-W scores."""
         val, _, _ = val_split
         n = len(val)
 
@@ -683,27 +684,29 @@ class TestAntiGaming:
             val, proba_conc, budgets=(0.0005, 0.001), horizons=(5,)
         )
 
+        budget_details = {k: v for k, v in details_conc.items() if k != "_meta"}
+
         # Count how many cells are missing (no entry in cells dict)
         missing = sum(
-            1 for info in details_conc.values()
+            1 for info in budget_details.values()
             for h in [5] if h not in info["cells"]
         )
         # Concentrated model likely has missing cells at tight budgets
         # (or all cells have eff_n=1, giving very low W)
-        total_cells = len(details_conc) * 1  # 1 horizon
+        total_cells = len(budget_details) * 1  # 1 horizon
         populated = total_cells - missing
 
         # At minimum, verify the mechanism: missing cells exist or W is tiny
-        for info in details_conc.values():
+        for info in budget_details.values():
             for cell in info["cells"].values():
                 assert cell["w"] < 0.7, (
                     f"Concentrated model should have low W, got {cell['w']:.3f}"
                 )
 
     def test_soft_n_scaling_penalizes_small_effective_n(self):
-        """W = sqrt(eff_n / (eff_n + 20)) should be < 0.5 for eff_n < 7."""
+        """W = eff_n / (eff_n + 50) should be < 0.5 for eff_n < 50."""
         for eff_n in [1, 2, 3, 5, 6]:
-            w = np.sqrt(eff_n / (eff_n + 20))
+            w = eff_n / (eff_n + 50)
             assert w < 0.5, f"W={w:.3f} for eff_n={eff_n} is not < 0.5"
 
 

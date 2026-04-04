@@ -60,7 +60,7 @@ for each iteration:
 
 ## The Metric: Multi-Budget Composite Score
 
-Evaluation is **threshold-free**. The model outputs probabilities; the judge selects signals at 6 budget levels (top 0.05% to 2%) and evaluates at 3 horizons (5d, 10d, 20d).
+Evaluation is **threshold-free**. The model outputs probabilities; the judge selects signals at 5 budget levels (top 0.10% to 2%) and evaluates at 3 horizons (5d, 10d, 20d).
 
 The scorer is event-aware:
 - row-level AP still uses the expanded `PivotLow` label
@@ -70,16 +70,11 @@ The scorer is event-aware:
 
 Per (budget, horizon) cell:
 ```
-raw = 0.50 * excess_return * 100         (alpha over equal-weight market)
-    + 0.15 * (win_rate - 0.5) * 100      (consistency edge vs coin flip)
-    - 0.15 * |worst_decile| * 100        (tail risk penalty)
-    - 0.10 * knife_rate * 100            (falling knife penalty, >5% loss)
-    - 0.10 * |mean_mae| * 100            (path risk: avg max adverse excursion)
-
-W = sqrt(effective_n / (effective_n + 20))   (soft evidence scaling)
+raw = 0.40 * excess * 100 + 0.20 * (win-0.5) * 100 - 0.10 * |worst_decile| * 100 - 0.10 * knife * 100 - 0.05 * |tail_mae| * 100 - 0.15 * entry_slippage * 100
+W = effective_n / (effective_n + 50)
 ```
 
-Final score = mean of W * raw across all 18 cells. Missing cells count as 0.
+Final score = mean of W * raw across all valid cells (5 budgets x 3 horizons = 15 cells). Missing cells excluded from average.
 
 Hard gate: avg_precision > 0.05 on expanded `PivotLow` (model better than random)
 

@@ -59,7 +59,7 @@ Autoresearch system (Karpathy-style autonomous ML research):
 ## Journal Entries
 
 ### 2026-03-30
-Replaced threshold-based composite score with threshold-free multi-budget evaluation. Previous metric was gameable (Goodhart's Law): researcher pushed threshold to 0.85, got 1 signal on val scoring 11.02 -- useless. New eval: model outputs probabilities only, judge selects signals at 6 budgets (0.05%-2%) x 3 horizons (5/10/20d), soft N-scaling via sqrt(eff_n/(eff_n+20)), missing cells=0. THRESHOLD removed from experiment.py. All logs cleared for fresh research run.
+Replaced threshold-based composite score with threshold-free multi-budget evaluation. Previous metric was gameable (Goodhart's Law): researcher pushed threshold to 0.85, got 1 signal on val scoring 11.02 -- useless. New eval: model outputs probabilities only, judge selects signals at 5 budgets (0.10%-2%) x 3 horizons (5/10/20d), linear N-scaling via eff_n/(eff_n+50), missing cells excluded from average. THRESHOLD removed from experiment.py. All logs cleared for fresh research run.
 
 Follow-up: fixed 3 correctness issues in scorer. P1: cutoff ties now use fractional weights (row-order invariant). P2: plot annotations use shared forward_open_return() helper, skip signals without full 10d window. P3: budget details keyed by raw float, not rounded label (no collision on custom budgets). Added test_and_plot.py for held-out test evaluation. Baseline reset to -2.4916. 56 eval tests, 177 total pass.
 
