@@ -46,7 +46,7 @@ def build_model(y_train):
 
     return RankingXGBClassifier(
         objective="rank:ndcg",
-        group_size=200,
+        group_size=1000,
         n_estimators=1800,
         max_depth=4,
         learning_rate=0.005,
