@@ -99,7 +99,7 @@ def build_model(y_train):
                 params, dtrain,
                 num_boost_round=5000,
                 evals=[(deval, "eval")],
-                early_stopping_rounds=100,
+                early_stopping_rounds=200,
                 verbose_eval=200,
             )
             print(f"Best iteration: {self._model.best_iteration}")
