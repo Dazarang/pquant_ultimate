@@ -111,7 +111,7 @@ def build_model(y_train):
         def predict_proba(self, X):
             cat_p = self._cat.predict_proba(X)[:, 1]
             lgb_p = self._lgb.predict(X)
-            avg = (cat_p + lgb_p) / 2
+            avg = np.sqrt(cat_p * lgb_p)
             return np.column_stack([1 - avg, avg])
 
     return _EnsembleModel()
