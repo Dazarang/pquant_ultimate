@@ -124,14 +124,23 @@ def build_model(y_train):
             )
             print(f"XGBoost best iteration: {self._xgb.best_iteration}")
 
+            from sklearn.linear_model import LogisticRegression
+            cat_oof = self._cat.predict_proba(X[ev_idx])[:, 1]
+            lgb_oof = self._lgb.predict(X[ev_idx])
+            xgb_oof = self._xgb.predict_proba(X[ev_idx])[:, 1]
+            meta_X = np.column_stack([cat_oof, lgb_oof, xgb_oof])
+            self._meta = LogisticRegression(C=0.1, max_iter=300)
+            self._meta.fit(meta_X, y[ev_idx])
+            print(f"Meta weights: {self._meta.coef_[0]}, intercept: {self._meta.intercept_[0]:.4f}")
+
             return self
 
         def predict_proba(self, X):
             cat_p = self._cat.predict_proba(X)[:, 1]
             lgb_p = self._lgb.predict(X)
             xgb_p = self._xgb.predict_proba(X)[:, 1]
-            avg = (cat_p + lgb_p + xgb_p) / 3
-            return np.column_stack([1 - avg, avg])
+            meta_X = np.column_stack([cat_p, lgb_p, xgb_p])
+            return self._meta.predict_proba(meta_X)
 
     return _EnsembleModel()
 
