@@ -78,7 +78,7 @@ def build_model(y_train):
                 "objective": "rank:ndcg",
                 "eval_metric": "ndcg",
                 "tree_method": "hist",
-                "max_depth": 4,
+                "max_depth": 5,
                 "learning_rate": 0.005,
                 "min_child_weight": 5,
                 "subsample": 0.8,
