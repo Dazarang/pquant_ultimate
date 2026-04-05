@@ -251,3 +251,6 @@ Score: -1.6183 |             lr_schedule = xgb.callback.LearningRateScheduler(  
 
 ### Iteration 47 -- KNOWLEDGE
 No code changes.
+
+### Iteration 48 -- EVAL RESET (dataset + eval changes)
+Score: -1.1806 | Rebuilt dataset: dropped 142 penny stocks (close < $1), 1210 stocks remain. Eval changes: winsorize returns at 1st/99th pctile, formula weights 0.40/0.20/0.10/0.10/0.05/0.15, W=n/(n+50), 5 budgets (dropped 0.05%), missing cells excluded. Previous best 1.5275 was inflated by WYLD.ST +41900% outlier. New baseline: -1.1806.

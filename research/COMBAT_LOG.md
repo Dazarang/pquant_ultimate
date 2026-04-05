@@ -2,6 +2,9 @@
 
 Reverted experiments with scores and diffs.
 
+### Iteration 48 -- EVAL RESET
+Previous best 1.5275 invalidated: WYLD.ST ($0.004 stock) produced +41,900% returns inflating score. Fixed: dataset rebuilt dropping 142 penny stocks, eval winsorized at 1st/99th pctile, formula reweighted. New baseline: -1.1806.
+
 ### Iteration 13 -- REVERTED (-2.2175)
 Score: -2.2103 vs best 0.0072
 Change:     from catboost import CatBoostClassifier, Pool     class _CatBoostPivot:     

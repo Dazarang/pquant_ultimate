@@ -75,3 +75,4 @@ iter	score	status	description
 44	-1.5179	discard	FEATURE_GROUPS = ["base", "advanced", "lag", "roc", "percentile", "interaction"]
 45	-1.6355	discard	                "objective": "rank:map",                 "eval_metric": "map", 
 46	-1.6183	discard	            lr_schedule = xgb.callback.LearningRateScheduler(                 la
+48	-1.1806	keep	EVAL RESET: dataset rebuilt (142 penny stocks removed), eval winsorized, formula/W/budgets updated. New baseline.
