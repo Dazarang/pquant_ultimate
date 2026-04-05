@@ -109,22 +109,30 @@ def train_and_evaluate():
     return val, y_val_proba, val_results
 
 
-def _trade_return(stock_df, signal_date, target=0.10, stop=-0.05, max_hold=30):
-    """Simulate one trade for annotation: target/stop/max_hold exit."""
+def _trade_return(stock_df, signal_date, stop_pct=0.07, max_hold=30):
+    """Simulate trade with decaying trailing stop from new highs.
+
+    stop_pct halves every 5 days, forcing exits on stale trades.
+    Trail always resets from highest high since entry.
+    """
     future = stock_df.loc[stock_df["date"] > signal_date].head(max_hold + 1)
     if len(future) == 0:
         return None, ""
     entry = future.iloc[0]["open"]
+    peak = entry
+
     for i in range(len(future)):
-        r = future.iloc[i]
-        if r["high"] >= entry * (1 + target):
-            return target, "T"
-        if r["low"] <= entry * (1 + stop):
-            return stop, "S"
+        row = future.iloc[i]
+        peak = max(peak, row["high"])
+        current_stop = stop_pct / (2 ** (i // 5))
+        stop_price = peak * (1 - current_stop)
+        if row["low"] <= stop_price:
+            ret = (stop_price - entry) / entry
+            return ret, "S"
+
     exit_price = future.iloc[-1]["close"]
     ret = (exit_price - entry) / entry
-    reason = "H" if len(future) > max_hold else "P"
-    return ret, reason
+    return ret, "H" if len(future) > max_hold else "E"
 
 
 def _plot_signal_grid(val, y_pred, top_stocks, out_name, label, budget):
@@ -141,6 +149,9 @@ def _plot_signal_grid(val, y_pred, top_stocks, out_name, label, budget):
     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows), squeeze=False)
     total_invested = 0.0
     total_result = 0.0
+    selected = val[val["pred"] == 1]
+    p_min, p_max = selected["proba"].min(), selected["proba"].max()
+    p_range = p_max - p_min if p_max > p_min else 1.0
 
     for i, stock_id in enumerate(top_stocks):
         ax = axes[i // cols][i % cols]
@@ -160,16 +171,18 @@ def _plot_signal_grid(val, y_pred, top_stocks, out_name, label, budget):
         true_pivots = stock[stock[LABEL_COL] == 1]
         ax.scatter(
             true_pivots["date"], true_pivots["close"],
-            color="#1976d2", s=30, zorder=5, marker="o", alpha=0.7,
+            color="#1976d2", s=30, zorder=5, marker="o", alpha=0.8,
             label=f"{len(true_pivots)} true",
         )
 
-        trade_rets = []
+        trades = []
         for _, row in signals.iterrows():
-            ret, reason = _trade_return(stock, row["date"])
+            units = 1 + 4 * (row["proba"] - p_min) / p_range
+            stop = 0.05 + 0.05 * (row["proba"] - p_min) / p_range
+            ret, reason = _trade_return(stock, row["date"], stop_pct=stop)
             if ret is None:
                 continue
-            trade_rets.append(ret)
+            trades.append((ret, units))
             color = "#2e7d32" if ret > 0 else "#c62828"
             label_text = f"{ret:+.1%}{reason}"
             ax.annotate(
@@ -178,12 +191,12 @@ def _plot_signal_grid(val, y_pred, top_stocks, out_name, label, budget):
                 fontsize=7, color=color, ha="center", fontweight="bold",
             )
 
-        if trade_rets:
-            inv = len(trade_rets) * 100
-            res = sum(100 * (1 + r) for r in trade_rets)
+        if trades:
+            inv = sum(u for _, u in trades)
+            res = sum(u * (1 + r) for r, u in trades)
             total_invested += inv
             total_result += res
-            ax.set_title(f"{stock_id}  |  ${inv:.0f} -> ${res:.0f} ({(res / inv - 1):+.1%})", fontsize=9)
+            ax.set_title(f"{stock_id}  |  ${inv:.1f} -> ${res:.1f} ({(res / inv - 1):+.1%})", fontsize=9)
         else:
             ax.set_title(f"{stock_id}", fontsize=10)
         ax.legend(loc="upper left", fontsize=7, framealpha=0.7)
@@ -196,7 +209,7 @@ def _plot_signal_grid(val, y_pred, top_stocks, out_name, label, budget):
     for i in range(n, rows * cols):
         axes[i // cols][i % cols].set_visible(False)
 
-    roi_str = f"  |  ${total_invested:.0f} -> ${total_result:.0f} ({(total_result / total_invested - 1):+.1%})" if total_invested > 0 else ""
+    roi_str = f"  |  ${total_invested:.1f} -> ${total_result:.1f} ({(total_result / total_invested - 1):+.1%})" if total_invested > 0 else ""
     fig.suptitle(
         f"{label} ({date_range})  |  budget={budget*100:.2f}%  |  "
         f"{n_total_signals} signals across {n_signal_stocks} stocks{roi_str}",
@@ -234,16 +247,23 @@ def plot_top_returners(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
     val["pred"] = y_pred
     val["proba"] = y_proba
 
+    selected = val[val["pred"] == 1]
+    p_min, p_max = selected["proba"].min(), selected["proba"].max()
+    p_range = p_max - p_min if p_max > p_min else 1.0
+
     stock_roi = {}
-    for stock_id, group in val[val["pred"] == 1].groupby("stock_id"):
+    for stock_id, group in selected.groupby("stock_id"):
         stock = val[val["stock_id"] == stock_id].sort_values("date")
-        rets = []
+        total_inv, total_res = 0.0, 0.0
         for _, row in group.iterrows():
-            ret, _ = _trade_return(stock, row["date"])
+            units = 1 + 4 * (row["proba"] - p_min) / p_range
+            stop = 0.05 + 0.05 * (row["proba"] - p_min) / p_range
+            ret, _ = _trade_return(stock, row["date"], stop_pct=stop)
             if ret is not None:
-                rets.append(ret)
-        if rets:
-            stock_roi[stock_id] = sum(rets) / len(rets)
+                total_inv += units
+                total_res += units * (1 + ret)
+        if total_inv > 0:
+            stock_roi[stock_id] = (total_res - total_inv) / total_inv
     if not stock_roi:
         print("No returners!")
         return
