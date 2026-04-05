@@ -45,7 +45,7 @@ tail -f research/results.tsv
 open research/plots/progress.png
 
 # Check what's been tried
-cat research/COMBAT_LOG.md
+cat research/logs/COMBAT_LOG.md
 ```
 
 ## After Research
@@ -53,7 +53,7 @@ cat research/COMBAT_LOG.md
 ### 1. View results
 ```bash
 # Generate/refresh plot
-uv run python research/plot.py
+uv run python research/utils/plot.py
 open research/plots/progress.png
 
 # Check final score
@@ -79,7 +79,7 @@ git merge autoresearch/YYYYMMDD_HHMMSS
 |---------|-----|
 | `XGBoostError: libomp.dylib not found` | `brew install libomp` |
 | Gate timeout (>15 min) | Use fewer stocks or simpler model |
-| All iterations fail | Check `research/run.log` for errors |
+| All iterations fail | Check `research/logs/run.log` for errors |
 | Score stuck | Read `COMBAT_LOG.md`, try radical changes |
 | 5 consecutive knowledge-only | Search space exhausted, review program.md |
 | 10 consecutive gate failures | Circuit breaker, check experiment.py for bugs |
@@ -96,7 +96,7 @@ git merge autoresearch/YYYYMMDD_HHMMSS
 | `research/utils/baseline.py` | No | Reference point |
 | `research/results.tsv` | Auto | Score data for plot |
 | `research/plots/progress.png` | Auto | Visual progress chart |
-| `research/RESEARCH_LOG.md` | Auto | Iteration history |
-| `research/COMBAT_LOG.md` | Auto + agent | Failure analysis |
+| `research/logs/RESEARCH_LOG.md` | Auto | Iteration history |
+| `research/logs/COMBAT_LOG.md` | Auto + agent | Failure analysis |
 | `research/.best_score` | Auto | Current best score |
-| `research/run.log` | Auto | Last experiment stdout |
+| `research/logs/run.log` | Auto | Last experiment stdout |

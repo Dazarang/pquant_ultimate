@@ -8,20 +8,22 @@ Autonomous ML research loop inspired by [Karpathy's autoresearch](https://github
 research/
 ├── experiment.py       # MUTABLE -- model, hyperparams, features, stocks
 ├── features_lab.py     # MUTABLE -- custom feature engineering (accumulates on wins)
+├── logs/
+│   ├── COMBAT_LOG.md   # What failed and why (knowledge preservation)
+│   ├── RESEARCH_LOG.md # Human-readable iteration log
+│   └── run.log         # Last experiment stdout
 ├── utils/
-│   ├── baseline.py     # IMMUTABLE -- logistic regression reference point
-│   ├── model_wrappers.py
 │   ├── backtest_and_plot.py
-│   └── diagnostics.py
+│   ├── baseline.py     # IMMUTABLE -- logistic regression reference point
+│   ├── diagnostics.py
+│   ├── metrics.md      # Metric definitions reference
+│   ├── model_wrappers.py
+│   └── plot.py         # Generates plots/progress.png from results.tsv
+├── plots/              # Generated plot images (progress.png, etc.)
 ├── program.md          # Agent instructions, constraints, dead ends
 ├── gate.sh             # Verification gate (immutability, timeout, sanity)
 ├── run.sh              # Outer loop orchestrator
 ├── results.tsv         # Score log for plotting (iter, score, status, description)
-├── RESEARCH_LOG.md     # Human-readable iteration log
-├── COMBAT_LOG.md       # What failed and why (knowledge preservation)
-├── metrics.md          # Metric definitions reference
-├── plot.py             # Generates plots/progress.png from results.tsv
-├── plots/              # Generated plot images (progress.png, etc.)
 └── .best_score         # Current best composite score
 ```
 
@@ -133,5 +135,5 @@ PHASE 6: Re-run periodically
 | Tracking | `results.tsv` (untracked) | `results.tsv` + `RESEARCH_LOG.md` |
 | Knowledge preservation | None for failures | `COMBAT_LOG.md` (diffs + analysis) |
 | Anti-gaming | Fixed eval function | Immutable lib/ + gate diff checks |
-| Visualization | `analysis.ipynb` → `progress.png` | `plot.py` → `plots/progress.png` |
+| Visualization | `analysis.ipynb` → `progress.png` | `utils/plot.py` → `plots/progress.png` |
 | Time budget | 5 min/experiment | 15 min/experiment |

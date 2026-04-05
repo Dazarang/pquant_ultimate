@@ -2,7 +2,7 @@
 """Plot autoresearch progress from results.tsv.
 
 Usage:
-    uv run python research/plot.py
+    uv run python research/utils/plot.py
 """
 
 import sys
@@ -11,8 +11,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
-RESULTS_FILE = Path(__file__).parent / "results.tsv"
-OUTPUT_FILE = Path(__file__).parent / "plots" / "progress.png"
+_RESEARCH_DIR = Path(__file__).resolve().parent.parent
+RESULTS_FILE = _RESEARCH_DIR / "results.tsv"
+OUTPUT_FILE = _RESEARCH_DIR / "plots" / "progress.png"
 
 
 def plot():

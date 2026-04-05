@@ -35,8 +35,8 @@ else
     BRANCH="$STARTING_BRANCH"
 fi
 
-RESEARCH_LOG="research/RESEARCH_LOG.md"
-COMBAT_LOG="research/COMBAT_LOG.md"
+RESEARCH_LOG="research/logs/RESEARCH_LOG.md"
+COMBAT_LOG="research/logs/COMBAT_LOG.md"
 RESULTS_TSV="research/results.tsv"
 BEST_SCORE_FILE="research/.best_score"
 # Count trailing non-keep entries in results.tsv (for advisor)
@@ -165,7 +165,7 @@ $advisor_report
 
 ## INSTRUCTIONS
 READ FIRST:
-- @research/COMBAT_LOG.md (what has been tried, what failed, what worked)
+- @research/logs/COMBAT_LOG.md (what has been tried, what failed, what worked)
 - @research/experiment.py (current best experiment)
 - @research/features_lab.py (current custom features)
 - @research/program.md (full instructions and constraints)
@@ -350,7 +350,7 @@ EOF
     fi
 
     # --- Update plot ---
-    uv run python research/plot.py 2>/dev/null || true
+    uv run python research/utils/plot.py 2>/dev/null || true
 done
 
 echo ""
@@ -369,4 +369,4 @@ if [ "$BRANCH" != "$STARTING_BRANCH" ]; then
 fi
 
 # Final plot
-uv run python research/plot.py 2>/dev/null || true
+uv run python research/utils/plot.py 2>/dev/null || true

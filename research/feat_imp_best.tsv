@@ -1,0 +1,53 @@
+## MODELS
+extracted: Booster, CatBoostClassifier, XGBClassifier
+no_importance: LogisticRegression
+
+## TOP 20 BY GAIN (averaged across folds)
+rank	feature	mean_gain	std_gain
+1	days_since_last_low	0.4560	0.0011
+2	ret_1d_rolling_mean_5	0.1814	0.0003
+3	ret_1d	0.1185	0.0011
+4	bb_position	0.0682	0.0009
+5	ret_5d	0.0510	0.0002
+6	rsi_change_5d	0.0179	0.0010
+7	selling_acceleration	0.0156	0.0004
+8	multi_divergence_score	0.0139	0.0004
+9	ret_1d_rolling_max_5	0.0112	0.0010
+10	day_of_week	0.0097	0.0020
+11	ret_1d_rolling_mean_10	0.0066	0.0002
+12	macd_change_5d	0.0050	0.0003
+13	consecutive_down_days	0.0045	0.0007
+14	rsi_percentile_60	0.0037	0.0003
+15	adr_z	0.0031	0.0004
+16	ret_1d_rolling_max_10	0.0028	0.0004
+17	ret_1d_rolling_std_5	0.0017	0.0002
+18	is_monday	0.0017	0.0010
+19	rsi_14_rolling_min_10	0.0015	0.0003
+20	stoch_k	0.0013	0.0001
+
+## BOTTOM 20 BY GAIN (averaged across folds)
+rank	feature	mean_gain	std_gain
+139	volume_z_rolling_std_60	0.000010	0.000006
+140	ht_leadsine	0.000009	0.000006
+141	volume_z_rolling_max_60	0.000008	0.000008
+142	obv_ratio	0.000008	0.000007
+143	bb_squeeze	0.000007	0.000006
+144	bb_upper	0.000006	0.000005
+145	exhaustion_signal	0.000003	0.000005
+146	bb_width	0.000000	0.000000
+147	at_zscore_extreme	0.000000	0.000000
+148	macd_cross	0.000000	0.000000
+149	bb_lower	0.000000	0.000000
+150	statistical_bottom	0.000000	0.000000
+151	volume_exhaustion	0.000000	0.000000
+152	drawdown_panic_interaction	0.000000	0.000000
+153	panic_severity	0.000000	0.000000
+154	panic_selling	0.000000	0.000000
+155	hammer	0.000000	0.000000
+156	rsi_bearish_div	0.000000	0.000000
+157	below_lower_band	0.000000	0.000000
+158	squeeze_breakdown	0.000000	0.000000
+
+## SUMMARY
+total_features: 158
+top20_cumulative_share: 0.98

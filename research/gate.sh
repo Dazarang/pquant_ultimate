@@ -16,7 +16,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
 TIMEOUT_SECONDS=2700  # 45 minutes max
-LOG_FILE="research/run.log"
+LOG_FILE="research/logs/run.log"
 
 # ------------------------------------------------------------------
 # 1. Immutability checks -- lib/ and gate.sh must not be modified
@@ -29,6 +29,7 @@ PROTECTED_FILES=(
     "research/gate.sh"
     "research/utils/baseline.py"
     "research/utils/model_wrappers.py"
+    "research/utils/diagnostics.py"
 )
 
 for f in "${PROTECTED_FILES[@]}"; do
