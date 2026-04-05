@@ -130,7 +130,7 @@ ADVISOR_EOF
         echo ""
         echo "## Results History"
         cat "$RESULTS_TSV"
-    } | env -u CLAUDECODE claude -p --model sonnet 2>/dev/null || echo "Advisor unavailable. Use your own judgment."
+    } | env -u CLAUDECODE claude -p --effort medium --model sonnet 2>/dev/null || echo "Advisor unavailable. Use your own judgment."
 }
 
 echo "============================================================"
@@ -165,14 +165,14 @@ $advisor_report
 
 ## INSTRUCTIONS
 READ FIRST:
-- research/COMBAT_LOG.md (what has been tried, what failed, what worked)
-- research/experiment.py (current best experiment)
-- research/features_lab.py (current custom features)
-- research/program.md (full instructions and constraints)
+- @research/COMBAT_LOG.md (what has been tried, what failed, what worked)
+- @research/experiment.py (current best experiment)
+- @research/features_lab.py (current custom features)
+- @research/program.md (full instructions and constraints)
 
 You may ONLY edit:
-- research/experiment.py (model, hyperparams, features, stocks, thresholds)
-- research/features_lab.py (add new backward-looking features)
+- @research/experiment.py (model, hyperparams, features, stocks, thresholds)
+- @research/features_lab.py (add new backward-looking features)
 
 Do NOT edit anything in lib/, research/gate.sh, or research/baseline.py.
 
