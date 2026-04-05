@@ -19,6 +19,9 @@ You edit **two files only**:
 - **add_custom_features(df)**: add new features to the DataFrame. Must be backward-looking only (no future data). Return `(df, list_of_new_feature_names)`.
 - New features must be computed per-stock (use `groupby("stock_id")`) to avoid cross-stock contamination.
 
+### 3. Python packages
+Install any library you need: `uv add --group research <package>`. No cleanup required.
+
 ## What You Cannot Change
 
 - `lib/` -- data loading, splitting, scaling, evaluation. Do not modify.
