@@ -13,6 +13,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+RETURN_WINSORIZE_QUANTILE = 0.01  # Clip returns at 1st/99th percentile
+
 from lib.pivot_events import (
     LABEL_COL,
     PIVOT_LOW_BASE_COL,
@@ -185,8 +187,21 @@ def _valid_event_panel(df: pd.DataFrame, horizon: int) -> pd.DataFrame:
     )
     mae = min_low / entry - 1
 
+    # Market benchmark from RAW returns (before winsorization)
     market_by_date = fwd.groupby(df["date"]).mean()
     market = df["date"].map(market_by_date)
+
+    # Winsorize forward returns and MAE at 1st/99th percentile
+    fwd_valid = fwd.dropna()
+    if len(fwd_valid) > 0:
+        p_lo = fwd_valid.quantile(RETURN_WINSORIZE_QUANTILE)
+        p_hi = fwd_valid.quantile(1 - RETURN_WINSORIZE_QUANTILE)
+        fwd = fwd.clip(lower=p_lo, upper=p_hi)
+
+    mae_valid = mae.dropna()
+    if len(mae_valid) > 0:
+        mae_p_lo = mae_valid.quantile(RETURN_WINSORIZE_QUANTILE)
+        mae = mae.clip(lower=mae_p_lo)
     valid = fwd.notna() & mae.notna() & market.notna()
 
     panel = df[[

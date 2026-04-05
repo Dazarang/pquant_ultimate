@@ -7,7 +7,9 @@ import pytest
 from lib.data import LABEL_COL, load_dataset, scale, temporal_split
 from lib.eval import (
     CELL_SCORE_WEIGHTS,
+    RETURN_WINSORIZE_QUANTILE,
     _select_top_frac_weights,
+    _valid_event_panel,
     _cell_score,
     _signal_analytics,
     backtest_quick,
@@ -792,4 +794,125 @@ class TestScoreCalibration:
         skilled_score, _ = multi_budget_composite(val, skilled_proba)
         assert skilled_score > random_score, (
             f"Skilled ({skilled_score:.4f}) should beat random ({random_score:.4f})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Winsorization of forward returns
+# ---------------------------------------------------------------------------
+
+
+def _make_normal_stock(n_days: int = 120, base_price: float = 100.0) -> pd.DataFrame:
+    """Single-stock DataFrame with small daily moves around base_price."""
+    np.random.seed(7)
+    dates = pd.bdate_range("2024-01-01", periods=n_days)
+    opens = base_price + np.cumsum(np.random.randn(n_days) * 0.3)
+    highs = opens + np.abs(np.random.randn(n_days) * 0.5)
+    lows = opens - np.abs(np.random.randn(n_days) * 0.5)
+    closes = opens + np.random.randn(n_days) * 0.2
+    return pd.DataFrame({
+        "date": dates,
+        "stock_id": "SYN",
+        "open": opens,
+        "high": highs,
+        "low": lows,
+        "close": closes,
+    })
+
+
+class TestWinsorization:
+    def test_extreme_return_is_capped(self):
+        """An extreme forward return should be clipped by winsorization."""
+        df = _make_normal_stock(120)
+        # Inject extreme price jump: open[50]=1.0, open[60]=500.0
+        # fwd[49] = open[60]/open[50] - 1 = 499 (extreme)
+        df.loc[df.index[50], "open"] = 1.0
+        df.loc[df.index[60], "open"] = 500.0
+
+        panel = _valid_event_panel(df, horizon=10)
+        valid = panel[panel["_valid"]]
+        ret_at_49 = valid.loc[df.index[49], "_return"]
+
+        # Raw return would be 499; winsorization should cap it far below
+        assert ret_at_49 < 1.0, (
+            f"Extreme return {ret_at_49:.2f} should be clipped well below 499"
+        )
+
+    def test_winsorization_preserves_normal_returns(self):
+        """When all returns are mild, winsorization should be a near no-op."""
+        df = _make_normal_stock(120)
+
+        # Compute raw (un-winsorized) returns manually
+        sorted_df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
+        entry_raw = sorted_df.groupby("stock_id")["open"].shift(-1)
+        exit_raw = sorted_df.groupby("stock_id")["open"].shift(-11)
+        raw_fwd = exit_raw / entry_raw - 1
+
+        # Get winsorized returns from the panel
+        panel = _valid_event_panel(df, horizon=10)
+        valid = panel[panel["_valid"]]
+        rets = valid["_return"].dropna()
+        raw_valid = raw_fwd.loc[rets.index]
+
+        # All raw returns should be small for this benign synthetic data
+        assert raw_valid.abs().max() < 0.15, "Synthetic data has unexpectedly large returns"
+
+        # Interior values (strictly between 1st/99th pctile) must be unchanged
+        p_lo = raw_valid.quantile(RETURN_WINSORIZE_QUANTILE)
+        p_hi = raw_valid.quantile(1 - RETURN_WINSORIZE_QUANTILE)
+        interior = (raw_valid > p_lo) & (raw_valid < p_hi)
+        pd.testing.assert_series_equal(rets[interior], raw_valid[interior], check_names=False)
+
+    def test_winsorization_clips_symmetrically(self):
+        """Both extreme positive and negative returns get clipped."""
+        df = _make_normal_stock(120)
+        # Inject +500% return (entry at row 30+1, exit at row 30+11)
+        df.loc[df.index[31], "open"] = 20.0
+        df.loc[df.index[41], "open"] = 120.0
+        # Inject -90% return (entry at row 60+1, exit at row 60+11)
+        df.loc[df.index[61], "open"] = 200.0
+        df.loc[df.index[71], "open"] = 20.0
+
+        # Compute raw (un-winsorized) returns manually
+        sorted_df = df.sort_values(["stock_id", "date"])
+        entry_raw = sorted_df.groupby("stock_id")["open"].shift(-1)
+        exit_raw = sorted_df.groupby("stock_id")["open"].shift(-11)
+        raw_fwd = (exit_raw / entry_raw - 1).dropna()
+
+        # Raw data has extreme outliers
+        assert raw_fwd.max() > 1.0, "Expected extreme positive return"
+        assert raw_fwd.min() < -0.5, "Expected extreme negative return"
+
+        # After winsorization, extremes are capped
+        panel = _valid_event_panel(df, horizon=10)
+        valid = panel[panel["_valid"]]
+        rets = valid["_return"].dropna()
+
+        assert rets.max() < raw_fwd.max(), "Positive extreme should be clipped"
+        assert rets.min() > raw_fwd.min(), "Negative extreme should be clipped"
+
+    def test_mae_winsorization_only_clips_left_tail(self):
+        """MAE is always <= 0; only left tail (1st percentile) is clipped."""
+        df = _make_normal_stock(120)
+        # Inject a deep drawdown so there's an extreme negative MAE
+        df.loc[df.index[50]:df.index[59], "low"] = 10.0
+
+        # Compute raw (un-winsorized) MAE manually
+        sorted_df = df.sort_values(["stock_id", "date"])
+        entry_raw = sorted_df.groupby("stock_id")["open"].shift(-1)
+        min_low_raw = sorted_df.groupby("stock_id")["low"].transform(
+            lambda x: x.rolling(10).min().shift(-10)
+        )
+        raw_mae = (min_low_raw / entry_raw - 1).dropna()
+
+        panel = _valid_event_panel(df, horizon=10)
+        valid = panel[panel["_valid"]]
+        mae = valid["_mae"].dropna()
+
+        # Left tail was clipped (extreme negative MAE removed)
+        assert mae.min() > raw_mae.min(), "Extreme negative MAE should be clipped"
+
+        # Right side NOT clipped -- the max MAE (closest to 0) is unchanged
+        assert mae.max() == pytest.approx(raw_mae.max()), (
+            "MAE right tail should not be clipped"
         )

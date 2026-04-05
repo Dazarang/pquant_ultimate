@@ -133,6 +133,12 @@ def clean_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
         df = df[(df[["open", "high", "low", "close"]] > 0).all(axis=1)]
         print(f"  Dropped {neg_prices:,} rows with non-positive prices")
 
+    # Drop penny stocks (entire stock if any close < $1)
+    penny_stocks = df.loc[df["close"] < 1.0, "stock_id"].unique()
+    if len(penny_stocks) > 0:
+        df = df[~df["stock_id"].isin(set(penny_stocks))]
+        print(f"  Dropped {len(penny_stocks)} stocks with any close < $1.00")
+
     after = len(df)
     print(f"  Total: {before:,} -> {after:,} ({before - after:,} dropped)")
 

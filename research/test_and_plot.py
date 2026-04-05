@@ -39,7 +39,7 @@ OUT_DIR = Path(__file__).resolve().parent
 VIZ_BUDGET = 0.0025  # top 0.25% of predictions
 
 # Execution filter: remove low-ADR stocks from val (train on everything)
-ADR_FILTER = False
+ADR_FILTER = True
 MIN_ADR = 2.0
 
 
