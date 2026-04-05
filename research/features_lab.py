@@ -24,7 +24,7 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
     new_features = [
         "price_efficiency_10", "return_accel_10", "returns_skew_20",
-        "returns_kurtosis_20", "volume_climax_ratio",
+        "returns_kurtosis_20", "volume_climax_ratio", "return_autocorr_10",
     ]
     g = df.groupby("stock_id")
 
@@ -56,6 +56,12 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     df["returns_skew_20"] = g["close"].transform(_skew)
     df["returns_kurtosis_20"] = g["close"].transform(_kurtosis)
     df["volume_climax_ratio"] = g["volume"].transform(_volume_climax)
+
+    def _return_autocorr(close):
+        ret = close.pct_change()
+        return ret.rolling(10, min_periods=8).corr(ret.shift(1))
+
+    df["return_autocorr_10"] = g["close"].transform(_return_autocorr)
 
     # --- END researcher section ---
 
