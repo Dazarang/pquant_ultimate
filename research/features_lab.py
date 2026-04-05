@@ -22,7 +22,10 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
     # --- RESEARCHER: add features below ---
 
-    new_features = ["price_efficiency_10", "return_accel_10", "returns_skew_20"]
+    new_features = [
+        "price_efficiency_10", "return_accel_10", "returns_skew_20",
+        "returns_kurtosis_20", "volume_climax_ratio",
+    ]
     g = df.groupby("stock_id")
 
     def _efficiency(close):
@@ -40,9 +43,19 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     def _skew(close):
         return close.pct_change().rolling(20, min_periods=15).skew()
 
+    def _kurtosis(close):
+        return close.pct_change().rolling(20, min_periods=15).kurt()
+
+    def _volume_climax(volume):
+        peak = volume.rolling(5, min_periods=5).max()
+        avg = volume.rolling(20, min_periods=10).mean()
+        return peak / (avg + 1e-10)
+
     df["price_efficiency_10"] = g["close"].transform(_efficiency)
     df["return_accel_10"] = g["close"].transform(_accel)
     df["returns_skew_20"] = g["close"].transform(_skew)
+    df["returns_kurtosis_20"] = g["close"].transform(_kurtosis)
+    df["volume_climax_ratio"] = g["volume"].transform(_volume_climax)
 
     # --- END researcher section ---
 
