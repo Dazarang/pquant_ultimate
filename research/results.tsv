@@ -76,3 +76,32 @@ iter	score	status	description
 45	-1.6355	discard	                "objective": "rank:map",                 "eval_metric": "map", 
 46	-1.6183	discard	            lr_schedule = xgb.callback.LearningRateScheduler(                 la
 48	-1.1806	keep	EVAL RESET: dataset rebuilt (142 penny stocks removed), eval winsorized, formula/W/budgets updated. New baseline.
+1	-1.2089	discard	            gs = 500 
+2	-1.4947	discard	            ev_mask = np.arange(n) % 5 == 0                 "min_child_weight": 
+3	-1.4337	discard	unknown change
+4	-1.0501	keep	    from catboost import CatBoostClassifier     class _CatBoostModel:           
+5	-1.1354	discard	                depth=5, 
+6	-1.1197	discard	                iterations=5000,                 learning_rate=0.01, 
+7	-1.1085	discard	                depth=7, 
+8	-1.0893	discard	    import lightgbm as lgb     class _LGBMModel:             params = {         
+9	-0.9995	keep	    import lightgbm as lgb      class _EnsembleModel:         """CatBoost  Light
+10	-1.0053	discard	                    'learning_rate': 0.01,                 num_boost_round=5000,
+11	-0.9966	keep	            avg = np.sqrt(cat_p * lgb_p) 
+12	-0.9376	keep	    import xgboost as xgb             self._xgb = xgb.XGBClassifier(            
+13	-0.9165	keep	            avg = (cat_p  lgb_p  xgb_p) / 3 
+14	-0.9626	discard	            from scipy.stats import rankdata             n = len(cat_p)         
+15	-0.9829	discard	    from sklearn.ensemble import HistGradientBoostingClassifier             w = 
+16	-0.9242	discard	                    'lambda_l1': 0.5, 
+17	-0.9119	keep	            from sklearn.linear_model import LogisticRegression             cat_
+18	-1.0345	discard	            split = int(n * 0.9)             tr_idx = np.arange(split)          
+19	-0.9009	keep	                scale_pos_weight=3,                 scale_pos_weight=8, 
+20	-0.9224	discard	                    'num_leaves': 45, 
+21	-0.9723	discard	            self._meta = LogisticRegression(C=0.5, max_iter=300) 
+22	-0.9551	discard	                scale_pos_weight=5, 
+23	-1.0731	discard	            from sklearn.ensemble import GradientBoostingClassifier             
+24	-0.9277	discard	            idx = np.arange(n)             ev_es_mask = idx % 10 == 0           
+25	-1.0038	discard	            from scipy.special import expit             gs = 1000             n_
+26	NA	crash	            from research.model_wrappers import FocalTorchClassifier, TorchMLP  
+27	-1.4923	discard	            # --- Feature selection: quick LGB to find top features by gain --- 
+28	-1.5258	discard	            # Time-decay sample weights: upweight recent data (rows are chronolo
+30	-1.6805	keep	EVAL RESET: dataset rebuilt (adr_z, adr_change_20d, adr lags added), embargo 13->14, inf fix. New baseline.

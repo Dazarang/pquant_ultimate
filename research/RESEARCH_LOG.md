@@ -254,3 +254,101 @@ No code changes.
 
 ### Iteration 48 -- EVAL RESET (dataset + eval changes)
 Score: -1.1806 | Rebuilt dataset: dropped 142 penny stocks (close < $1), 1210 stocks remain. Eval changes: winsorize returns at 1st/99th pctile, formula weights 0.40/0.20/0.10/0.10/0.05/0.15, W=n/(n+50), 5 budgets (dropped 0.05%), missing cells excluded. Previous best 1.5275 was inflated by WYLD.ST +41900% outlier. New baseline: -1.1806.
+
+### Iteration 1 -- REVERTED (-0.0283)
+Score: -1.2089 |             gs = 500 
+
+### Iteration 2 -- REVERTED (-0.3141)
+Score: -1.4947 |             ev_mask = np.arange(n) % 5 == 0                 "min_child_weight": 
+
+### Iteration 3 -- REVERTED (-0.2531)
+Score: -1.4337 | unknown change
+
+### Iteration 4 -- IMPROVED (+0.1305)
+Score: -1.0501 |     from catboost import CatBoostClassifier     class _CatBoostModel:           
+Commit: b45f253
+
+### Iteration 5 -- REVERTED (-0.0853)
+Score: -1.1354 |                 depth=5, 
+
+### Iteration 6 -- REVERTED (-0.0696)
+Score: -1.1197 |                 iterations=5000,                 learning_rate=0.01, 
+
+### Iteration 7 -- REVERTED (-0.0584)
+Score: -1.1085 |                 depth=7, 
+
+### Iteration 8 -- REVERTED (-0.0392)
+Score: -1.0893 |     import lightgbm as lgb     class _LGBMModel:             params = {         
+
+### Iteration 9 -- IMPROVED (+0.0506)
+Score: -0.9995 |     import lightgbm as lgb      class _EnsembleModel:         """CatBoost  Light
+Commit: 4f83f4e
+
+### Iteration 10 -- REVERTED (-0.0058)
+Score: -1.0053 |                     'learning_rate': 0.01,                 num_boost_round=5000,
+
+### Iteration 11 -- IMPROVED (+0.0029)
+Score: -0.9966 |             avg = np.sqrt(cat_p * lgb_p) 
+Commit: dea0d8c
+
+### Iteration 12 -- IMPROVED (+0.0590)
+Score: -0.9376 |     import xgboost as xgb             self._xgb = xgb.XGBClassifier(            
+Commit: bcdf0a0
+
+### Iteration 13 -- IMPROVED (+0.0211)
+Score: -0.9165 |             avg = (cat_p  lgb_p  xgb_p) / 3 
+Commit: fa73436
+
+### Iteration 14 -- REVERTED (-0.0461)
+Score: -0.9626 |             from scipy.stats import rankdata             n = len(cat_p)         
+
+### Iteration 15 -- REVERTED (-0.0664)
+Score: -0.9829 |     from sklearn.ensemble import HistGradientBoostingClassifier             w = 
+
+### Iteration 16 -- REVERTED (-0.0077)
+Score: -0.9242 |                     'lambda_l1': 0.5, 
+
+### Iteration 17 -- IMPROVED (+0.0046)
+Score: -0.9119 |             from sklearn.linear_model import LogisticRegression             cat_
+Commit: fe46062
+
+### Iteration 18 -- REVERTED (-0.1226)
+Score: -1.0345 |             split = int(n * 0.9)             tr_idx = np.arange(split)          
+
+### Iteration 19 -- IMPROVED (+0.0110)
+Score: -0.9009 |                 scale_pos_weight=3,                 scale_pos_weight=8, 
+Commit: f46b25c
+
+### Iteration 20 -- REVERTED (-0.0215)
+Score: -0.9224 |                     'num_leaves': 45, 
+
+### Iteration 21 -- REVERTED (-0.0714)
+Score: -0.9723 |             self._meta = LogisticRegression(C=0.5, max_iter=300) 
+
+### Iteration 22 -- REVERTED (-0.0542)
+Score: -0.9551 |                 scale_pos_weight=5, 
+
+### Iteration 23 -- REVERTED (-0.1722)
+Score: -1.0731 |             from sklearn.ensemble import GradientBoostingClassifier             
+
+### Iteration 24 -- REVERTED (-0.0268)
+Score: -0.9277 |             idx = np.arange(n)             ev_es_mask = idx % 10 == 0           
+
+### Iteration 25 -- REVERTED (-0.1029)
+Score: -1.0038 |             from scipy.special import expit             gs = 1000             n_
+
+### Iteration 26 -- GATE FAILED
+Reason: GATE VIOLATION: Experiment crashed (exit code 137).
+Change:             from research.model_wrappers import FocalTorchClassifier, TorchMLP  
+
+### Iteration 27 -- REVERTED (-0.5914)
+Score: -1.4923 |             # --- Feature selection: quick LGB to find top features by gain --- 
+
+### Iteration 28 -- REVERTED (-0.6249)
+Score: -1.5258 |             # Time-decay sample weights: upweight recent data (rows are chronolo
+
+### Iteration 29 -- KNOWLEDGE
+No code changes.
+
+### Iteration 30 -- EVAL RESET (dataset rebuild + embargo fix)
+Score: -1.6805 | Dataset rebuilt: added adr_z, adr_change_20d, adr lags to lib/features.py; fixed inf in adr_change_20d. embargo_sessions 13->14 (label leakage fix for window_variations). 1210 stocks, 2,787,712 rows. Previous best -0.9009. New baseline: -1.6805.

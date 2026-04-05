@@ -2,983 +2,6 @@
 
 Reverted experiments with scores and diffs.
 
-### Iteration 48 -- EVAL RESET
-Previous best 1.5275 invalidated: WYLD.ST ($0.004 stock) produced +41,900% returns inflating score. Fixed: dataset rebuilt dropping 142 penny stocks, eval winsorized at 1st/99th pctile, formula reweighted. New baseline: -1.1806.
-
-### Iteration 13 -- REVERTED (-2.2175)
-Score: -2.2103 vs best 0.0072
-Change:     from catboost import CatBoostClassifier, Pool     class _CatBoostPivot:     
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..fdf906d 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -42,71 +42,42 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
- 
- def build_model(y_train):
-     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
--    import xgboost as xgb
--    from scipy.special import expit
-+    from catboost import CatBoostClassifier, Pool
- 
--    class _AdaptiveRanking:
-+    class _CatBoostPivot:
-         def __init__(self):
-             self.classes_ = np.array([0, 1])
- 
--        @staticmethod
--        def _group_sizes(qid):
--            sizes, cur, cnt = [], qid[0], 1
--            for i in range(1, len(qid)):
--                if qid[i] == cur:
--                    cnt += 1
--                else:
--                    sizes.append(cnt)
--                    cur, cnt = qid[i], 1
--            sizes.append(cnt)
--            return sizes
--
-         def fit(self, X, y):
--            gs = 1000
-             n = len(y)
-             split = int(n * 0.9)
- 
--            qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
--            qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
--
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
--            dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
--            deval.set_group(self._group_sizes(qid_ev))
--
--            params = {
--                "objective": "rank:ndcg",
--                "eval_metric": "ndcg",
--                "tree_method": "hist",
--                "max_depth": 4,
--                "learning_rate": 0.005,
--                "min_child_weight": 5,
--                "subsample": 0.8,
--                "colsample_bytree": 0.6,
--                "reg_alpha": 0.5,
--                "reg_lambda": 5.0,
--                "gamma": 0.5,
--            }
--
--            self._model = xgb.train(
--                params, dtrain,
--                num_boost_round=5000,
--                evals=[(deval, "eval")],
-```
-
-### Iteration 14 -- REVERTED (-1.6823)
-Score: -1.6751 vs best 0.0072
-Change:         def _date_groups(d):             if len(d) <= 1:                 return 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..8c7ff4e 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -50,29 +50,27 @@ def build_model(y_train):
-             self.classes_ = np.array([0, 1])
- 
-         @staticmethod
--        def _group_sizes(qid):
--            sizes, cur, cnt = [], qid[0], 1
--            for i in range(1, len(qid)):
--                if qid[i] == cur:
--                    cnt += 1
--                else:
--                    sizes.append(cnt)
--                    cur, cnt = qid[i], 1
--            sizes.append(cnt)
--            return sizes
-+        def _date_groups(d):
-+            if len(d) <= 1:
-+                return [len(d)]
-+            breaks = np.where(np.abs(np.diff(d)) > 1e-6)[0] + 1
-+            return np.diff(np.concatenate([[0], breaks, [len(d)]])).tolist()
- 
-         def fit(self, X, y):
--            gs = 1000
-+            date_col = X[:, -1]
-+            X_feat = X[:, :-1]
-+
-             n = len(y)
-             split = int(n * 0.9)
- 
--            qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
--            qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
-+            dtrain = xgb.DMatrix(X_feat[:split], label=y[:split])
-+            dtrain.set_group(self._date_groups(date_col[:split]))
-+            deval = xgb.DMatrix(X_feat[split:], label=y[split:])
-+            deval.set_group(self._date_groups(date_col[split:]))
- 
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
--            dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
--            deval.set_group(self._group_sizes(qid_ev))
-+            tr_groups = len(self._date_groups(date_col[:split]))
-+            ev_groups = len(self._date_groups(date_col[split:]))
-+            print(f"Date-aligned groups: train={tr_groups}, eval={ev_groups}")
- 
-             params = {
-                 "objective": "rank:ndcg",
-@@ -99,7 +97,7 @@ def build_model(y_train):
-             return self
- 
-         def predict_proba(self, X):
--            dtest = xgb.DMatrix(X)
-+            dtest = xgb.DMatrix(X[:, :-1])
-             scores = self._model.predict(
-                 dtest, iteration_range=(0, self._model.best_iteration + 1)
-             )
-diff --git a/research/features_lab.py b/research/features_lab.py
-index 2eff964..22c7527 100644
-```
-
-### Iteration 15 -- GATE FAILED
-Reason: GATE VIOLATION: Experiment crashed (exit code 1).
-Change:             dtrain = xgb.DMatrix(X[:split], label=y[:split])             dtrain.
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..26021a8 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -69,11 +69,6 @@ def build_model(y_train):
-             qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
-             qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
- 
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
--            dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
--            deval.set_group(self._group_sizes(qid_ev))
--
-             params = {
-                 "objective": "rank:ndcg",
-                 "eval_metric": "ndcg",
-@@ -88,8 +83,29 @@ def build_model(y_train):
-                 "gamma": 0.5,
-             }
- 
--            self._model = xgb.train(
-+            dtrain = xgb.DMatrix(X[:split], label=y[:split])
-+            dtrain.set_group(self._group_sizes(qid_tr))
-+            deval = xgb.DMatrix(X[split:], label=y[split:])
-+            deval.set_group(self._group_sizes(qid_ev))
-+
-+            scout = xgb.train(
-                 params, dtrain,
-+                num_boost_round=2000,
-+                evals=[(deval, "eval")],
-+                early_stopping_rounds=50,
-+                verbose_eval=False,
-+            )
-+            scores = scout.predict(dtrain, iteration_range=(0, scout.best_iteration + 1))
-+            hard_neg = (scores >= np.percentile(scores, 98)) & (y[:split] == 0)
-+            print(f"Scout iter: {scout.best_iteration}, hard negatives: {hard_neg.sum()}")
-+
-+            weights = np.ones(split, dtype=np.float32)
-+            weights[hard_neg] = 3.0
-+            dtrain_w = xgb.DMatrix(X[:split], label=y[:split], weight=weights)
-+            dtrain_w.set_group(self._group_sizes(qid_tr))
-+
-+            self._model = xgb.train(
-+                params, dtrain_w,
-                 num_boost_round=5000,
-                 evals=[(deval, "eval")],
-                 early_stopping_rounds=100,
-```
-Traceback:
-```
-  [bt] (4) 5   libffi.dylib                        0x0000000195646050 ffi_call_SYSV + 80
-  [bt] (5) 6   libffi.dylib                        0x000000019564f5b8 ffi_call_int + 1220
-  [bt] (6) 7   _ctypes.cpython-314-darwin.so       0x0000000103544828 _ctypes_callproc + 1304
-  [bt] (7) 8   _ctypes.cpython-314-darwin.so       0x000000010354125c PyCFuncPtr_call + 800
-  [bt] (8) 9   libpython3.14.dylib                 0x00000001035c9d58 _PyObject_MakeTpCall + 304
-```
-
-### Iteration 16 -- REVERTED (-2.2635)
-Score: -2.2563 vs best 0.0072
-Change:     import lightgbm as lgb     class _LGBMLambdaRank:         def _make_groups(t
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..ec2a8c1 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -42,71 +42,68 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
- 
- def build_model(y_train):
-     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
--    import xgboost as xgb
-+    import lightgbm as lgb
-     from scipy.special import expit
- 
--    class _AdaptiveRanking:
-+    class _LGBMLambdaRank:
-         def __init__(self):
-             self.classes_ = np.array([0, 1])
- 
-         @staticmethod
--        def _group_sizes(qid):
--            sizes, cur, cnt = [], qid[0], 1
--            for i in range(1, len(qid)):
--                if qid[i] == cur:
--                    cnt += 1
--                else:
--                    sizes.append(cnt)
--                    cur, cnt = qid[i], 1
--            sizes.append(cnt)
--            return sizes
-+        def _make_groups(total, gs):
-+            groups = []
-+            remaining = total
-+            while remaining > 0:
-+                groups.append(min(gs, remaining))
-+                remaining -= gs
-+            return groups
- 
-         def fit(self, X, y):
-             gs = 1000
-             n = len(y)
-             split = int(n * 0.9)
- 
--            qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
--            qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
-+            group_tr = self._make_groups(split, gs)
-+            group_ev = self._make_groups(n - split, gs)
- 
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
--            dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
--            deval.set_group(self._group_sizes(qid_ev))
-+            dtrain = lgb.Dataset(X[:split], label=y[:split], group=group_tr)
-+            deval = lgb.Dataset(X[split:], label=y[split:], group=group_ev, reference=dtrain)
- 
-             params = {
--                "objective": "rank:ndcg",
--                "eval_metric": "ndcg",
--                "tree_method": "hist",
--                "max_depth": 4,
-+                "objective": "lambdarank",
-+                "metric": "ndcg",
-```
-
-### Iteration 17 -- REVERTED (-2.2358)
-Score: -2.2286 vs best 0.0072
-Change:             from xgboost import XGBClassifier              neg, pos = int((y == 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..412cd06 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -62,16 +62,34 @@ def build_model(y_train):
-             return sizes
- 
-         def fit(self, X, y):
-+            from xgboost import XGBClassifier
-+
-+            neg, pos = int((y == 0).sum()), int((y == 1).sum())
-+            scout = XGBClassifier(
-+                n_estimators=200, max_depth=2, learning_rate=0.1,
-+                scale_pos_weight=neg / pos, tree_method="hist",
-+                verbosity=0,
-+            )
-+            scout.fit(X, y)
-+            proba = scout.predict_proba(X)[:, 1]
-+
-+            neg_mask = y == 0
-+            neg_threshold = np.percentile(proba[neg_mask], 50)
-+            mask = (y == 1) | (proba >= neg_threshold)
-+
-+            X_f, y_f = X[mask], y[mask]
-+            print(f"Hard-neg filter: {len(X)} -> {len(X_f)} ({100*y_f.mean():.1f}% pos)")
-+
-             gs = 1000
--            n = len(y)
-+            n = len(y_f)
-             split = int(n * 0.9)
- 
-             qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
-             qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
- 
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
-+            dtrain = xgb.DMatrix(X_f[:split], label=y_f[:split])
-             dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
-+            deval = xgb.DMatrix(X_f[split:], label=y_f[split:])
-             deval.set_group(self._group_sizes(qid_ev))
- 
-             params = {
-```
-
-### Iteration 18 -- GATE FAILED
-Reason: GATE VIOLATION: Experiment crashed (exit code 1).
-Change:             weights = np.linspace(0.5, 1.0, split)             dtrain = xgb.DMat
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..09ce3d4 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -69,7 +69,8 @@ def build_model(y_train):
-             qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
-             qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
- 
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
-+            weights = np.linspace(0.5, 1.0, split)
-+            dtrain = xgb.DMatrix(X[:split], label=y[:split], weight=weights)
-             dtrain.set_group(self._group_sizes(qid_tr))
-             deval = xgb.DMatrix(X[split:], label=y[split:])
-             deval.set_group(self._group_sizes(qid_ev))
-```
-Traceback:
-```
-  [bt] (4) 5   libffi.dylib                        0x0000000195646050 ffi_call_SYSV + 80
-  [bt] (5) 6   libffi.dylib                        0x000000019564f5b8 ffi_call_int + 1220
-  [bt] (6) 7   _ctypes.cpython-314-darwin.so       0x000000010993c828 _ctypes_callproc + 1304
-  [bt] (7) 8   _ctypes.cpython-314-darwin.so       0x000000010993925c PyCFuncPtr_call + 800
-  [bt] (8) 9   libpython3.14.dylib                 0x0000000104b59d58 _PyObject_MakeTpCall + 304
-```
-
-### Iteration 19 -- REVERTED (-1.2034)
-Score: -1.1962 vs best 0.0072
-Change:             base_params = {             configs = [                 {"max_depth"
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..310cfeb 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -74,36 +74,49 @@ def build_model(y_train):
-             deval = xgb.DMatrix(X[split:], label=y[split:])
-             deval.set_group(self._group_sizes(qid_ev))
- 
--            params = {
-+            base_params = {
-                 "objective": "rank:ndcg",
-                 "eval_metric": "ndcg",
-                 "tree_method": "hist",
--                "max_depth": 4,
--                "learning_rate": 0.005,
-                 "min_child_weight": 5,
--                "subsample": 0.8,
--                "colsample_bytree": 0.6,
-                 "reg_alpha": 0.5,
-                 "reg_lambda": 5.0,
-                 "gamma": 0.5,
-             }
- 
--            self._model = xgb.train(
--                params, dtrain,
--                num_boost_round=5000,
--                evals=[(deval, "eval")],
--                early_stopping_rounds=100,
--                verbose_eval=200,
--            )
--            print(f"Best iteration: {self._model.best_iteration}")
-+            configs = [
-+                {"max_depth": 4, "learning_rate": 0.005, "subsample": 0.8, "colsample_bytree": 0.6},
-+                {"max_depth": 3, "learning_rate": 0.01, "subsample": 0.6, "colsample_bytree": 0.9},
-+                {"max_depth": 6, "learning_rate": 0.003, "subsample": 0.9, "colsample_bytree": 0.3},
-+            ]
-+
-+            self._models = []
-+            for i, cfg in enumerate(configs):
-+                params = {**base_params, **cfg}
-+                model = xgb.train(
-+                    params, dtrain,
-+                    num_boost_round=2000,
-+                    evals=[(deval, "eval")],
-+                    early_stopping_rounds=50,
-+                    verbose_eval=200,
-+                )
-+                print(f"Sub-model {i}: best_iteration={model.best_iteration}")
-+                self._models.append(model)
-+
-             return self
- 
-         def predict_proba(self, X):
-             dtest = xgb.DMatrix(X)
--            scores = self._model.predict(
--                dtest, iteration_range=(0, self._model.best_iteration + 1)
--            )
--            proba_1 = expit(scores)
-+            all_scores = []
-+            for model in self._models:
-```
-
-### Iteration 20 -- REVERTED (-2.2725)
-Score: -2.2653 vs best 0.0072
-Change:     class _GlobalClassifier:                 "objective": "binary:logistic",    
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..0a39ba0 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -43,40 +43,20 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
- def build_model(y_train):
-     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
-     import xgboost as xgb
--    from scipy.special import expit
--
--    class _AdaptiveRanking:
-+    class _GlobalClassifier:
-         def __init__(self):
-             self.classes_ = np.array([0, 1])
- 
--        @staticmethod
--        def _group_sizes(qid):
--            sizes, cur, cnt = [], qid[0], 1
--            for i in range(1, len(qid)):
--                if qid[i] == cur:
--                    cnt += 1
--                else:
--                    sizes.append(cnt)
--                    cur, cnt = qid[i], 1
--            sizes.append(cnt)
--            return sizes
--
-         def fit(self, X, y):
--            gs = 1000
-             n = len(y)
-             split = int(n * 0.9)
- 
--            qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
--            qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
--
-             dtrain = xgb.DMatrix(X[:split], label=y[:split])
--            dtrain.set_group(self._group_sizes(qid_tr))
-             deval = xgb.DMatrix(X[split:], label=y[split:])
--            deval.set_group(self._group_sizes(qid_ev))
- 
-             params = {
--                "objective": "rank:ndcg",
--                "eval_metric": "ndcg",
-+                "objective": "binary:logistic",
-+                "eval_metric": "aucpr",
-                 "tree_method": "hist",
-                 "max_depth": 4,
-                 "learning_rate": 0.005,
-@@ -100,13 +80,12 @@ def build_model(y_train):
- 
-         def predict_proba(self, X):
-             dtest = xgb.DMatrix(X)
--            scores = self._model.predict(
-+            proba_1 = self._model.predict(
-                 dtest, iteration_range=(0, self._model.best_iteration + 1)
-             )
--            proba_1 = expit(scores)
-             return np.column_stack([1 - proba_1, proba_1])
- 
--    return _AdaptiveRanking()
-```
-
-### Iteration 21 -- REVERTED (-1.8306)
-Score: -1.8234 vs best 0.0072
-Change:     new_features = ["price_efficiency_10", "return_accel_10", "returns_skew_20",
-```diff
-diff --git a/research/features_lab.py b/research/features_lab.py
-index 2eff964..44d37ed 100644
---- a/research/features_lab.py
-+++ b/research/features_lab.py
-@@ -22,7 +22,8 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
- 
-     # --- RESEARCHER: add features below ---
- 
--    new_features = ["price_efficiency_10", "return_accel_10", "returns_skew_20"]
-+    new_features = ["price_efficiency_10", "return_accel_10", "returns_skew_20",
-+                    "xs_ret5_rank", "xs_ret20_rank"]
-     g = df.groupby("stock_id")
- 
-     def _efficiency(close):
-@@ -44,6 +45,11 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-     df["return_accel_10"] = g["close"].transform(_accel)
-     df["returns_skew_20"] = g["close"].transform(_skew)
- 
-+    ret5 = g["close"].pct_change(5)
-+    ret20 = g["close"].pct_change(20)
-+    df["xs_ret5_rank"] = ret5.groupby(df["date"]).rank(pct=True)
-+    df["xs_ret20_rank"] = ret20.groupby(df["date"]).rank(pct=True)
-+
-     # --- END researcher section ---
- 
-     return df, new_features
-```
-
-### Iteration 22 -- REVERTED (-2.0291)
-Score: -2.0219 vs best 0.0072
-Change:     from research.model_wrappers import FocalTorchClassifier, TorchMLP     class
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..024213a 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -42,71 +42,29 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
- 
- def build_model(y_train):
-     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
--    import xgboost as xgb
--    from scipy.special import expit
-+    from research.model_wrappers import FocalTorchClassifier, TorchMLP
- 
--    class _AdaptiveRanking:
-+    class _FocalMLP:
-         def __init__(self):
-             self.classes_ = np.array([0, 1])
- 
--        @staticmethod
--        def _group_sizes(qid):
--            sizes, cur, cnt = [], qid[0], 1
--            for i in range(1, len(qid)):
--                if qid[i] == cur:
--                    cnt += 1
--                else:
--                    sizes.append(cnt)
--                    cur, cnt = qid[i], 1
--            sizes.append(cnt)
--            return sizes
--
-         def fit(self, X, y):
--            gs = 1000
--            n = len(y)
--            split = int(n * 0.9)
--
--            qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
--            qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
--
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
--            dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
--            deval.set_group(self._group_sizes(qid_ev))
--
--            params = {
--                "objective": "rank:ndcg",
--                "eval_metric": "ndcg",
--                "tree_method": "hist",
--                "max_depth": 4,
--                "learning_rate": 0.005,
--                "min_child_weight": 5,
--                "subsample": 0.8,
--                "colsample_bytree": 0.6,
--                "reg_alpha": 0.5,
--                "reg_lambda": 5.0,
--                "gamma": 0.5,
--            }
--
--            self._model = xgb.train(
--                params, dtrain,
--                num_boost_round=5000,
--                evals=[(deval, "eval")],
-```
-
-### Iteration 23 -- REVERTED (-1.3781)
-Score: -1.3709 vs best 0.0072
-Change:                 "grow_policy": "lossguide",                 "max_leaves": 31,   
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..5e1d54b 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -78,7 +78,9 @@ def build_model(y_train):
-                 "objective": "rank:ndcg",
-                 "eval_metric": "ndcg",
-                 "tree_method": "hist",
--                "max_depth": 4,
-+                "grow_policy": "lossguide",
-+                "max_leaves": 31,
-+                "max_depth": 0,
-                 "learning_rate": 0.005,
-                 "min_child_weight": 5,
-                 "subsample": 0.8,
-```
-
-### Iteration 24 -- REVERTED (-1.4864)
-Score: -1.4792 vs best 0.0072
-Change:                 "objective": "rank:pairwise", 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..9070b8a 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -75,7 +75,7 @@ def build_model(y_train):
-             deval.set_group(self._group_sizes(qid_ev))
- 
-             params = {
--                "objective": "rank:ndcg",
-+                "objective": "rank:pairwise",
-                 "eval_metric": "ndcg",
-                 "tree_method": "hist",
-                 "max_depth": 4,
-```
-
-### Iteration 25 -- REVERTED (-0.4254)
-Score: -0.4182 vs best 0.0072
-Change:             deval.set_group([n - split]) 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..8c567f3 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -67,12 +67,11 @@ def build_model(y_train):
-             split = int(n * 0.9)
- 
-             qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
--            qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
- 
-             dtrain = xgb.DMatrix(X[:split], label=y[:split])
-             dtrain.set_group(self._group_sizes(qid_tr))
-             deval = xgb.DMatrix(X[split:], label=y[split:])
--            deval.set_group(self._group_sizes(qid_ev))
-+            deval.set_group([n - split])
- 
-             params = {
-                 "objective": "rank:ndcg",
-```
-
-### Iteration 26 -- REVERTED (-2.2535)
-Score: -2.2463 vs best 0.0072
-Change:     from sklearn.ensemble import ExtraTreesClassifier      return ExtraTreesClas
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..e3da10e 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -42,71 +42,16 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
- 
- def build_model(y_train):
-     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
--    import xgboost as xgb
--    from scipy.special import expit
--
--    class _AdaptiveRanking:
--        def __init__(self):
--            self.classes_ = np.array([0, 1])
--
--        @staticmethod
--        def _group_sizes(qid):
--            sizes, cur, cnt = [], qid[0], 1
--            for i in range(1, len(qid)):
--                if qid[i] == cur:
--                    cnt += 1
--                else:
--                    sizes.append(cnt)
--                    cur, cnt = qid[i], 1
--            sizes.append(cnt)
--            return sizes
--
--        def fit(self, X, y):
--            gs = 1000
--            n = len(y)
--            split = int(n * 0.9)
--
--            qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
--            qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
--
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
--            dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
--            deval.set_group(self._group_sizes(qid_ev))
--
--            params = {
--                "objective": "rank:ndcg",
--                "eval_metric": "ndcg",
--                "tree_method": "hist",
--                "max_depth": 4,
--                "learning_rate": 0.005,
--                "min_child_weight": 5,
--                "subsample": 0.8,
--                "colsample_bytree": 0.6,
--                "reg_alpha": 0.5,
--                "reg_lambda": 5.0,
--                "gamma": 0.5,
--            }
--
--            self._model = xgb.train(
--                params, dtrain,
--                num_boost_round=5000,
--                evals=[(deval, "eval")],
--                early_stopping_rounds=100,
--                verbose_eval=200,
-```
-
-### Iteration 27 -- REVERTED (+0.0000)
-Score: 0.0072 vs best 0.0072
-Change:             base_params = {             scout = xgb.train(                 {**ba
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..44cdb28 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -74,12 +74,11 @@ def build_model(y_train):
-             deval = xgb.DMatrix(X[split:], label=y[split:])
-             deval.set_group(self._group_sizes(qid_ev))
- 
--            params = {
-+            base_params = {
-                 "objective": "rank:ndcg",
-                 "eval_metric": "ndcg",
-                 "tree_method": "hist",
-                 "max_depth": 4,
--                "learning_rate": 0.005,
-                 "min_child_weight": 5,
-                 "subsample": 0.8,
-                 "colsample_bytree": 0.6,
-@@ -88,10 +87,37 @@ def build_model(y_train):
-                 "gamma": 0.5,
-             }
- 
-+            scout = xgb.train(
-+                {**base_params, "learning_rate": 0.02},
-+                dtrain,
-+                num_boost_round=500,
-+                evals=[(deval, "eval")],
-+                early_stopping_rounds=30,
-+                verbose_eval=False,
-+            )
-+
-+            importance = scout.get_score(importance_type="gain")
-+            n_feat = X.shape[1]
-+            gains = np.zeros(n_feat)
-+            for k, v in importance.items():
-+                gains[int(k[1:])] = v
-+
-+            max_gain = gains.max()
-+            self._feat_idx = np.where(gains >= max_gain * 0.1)[0]
-+            if len(self._feat_idx) < 20:
-+                self._feat_idx = np.arange(n_feat)
-+            print(f"Feature selection: {n_feat} -> {len(self._feat_idx)}")
-+
-+            dtrain2 = xgb.DMatrix(X[:split][:, self._feat_idx], label=y[:split])
-+            dtrain2.set_group(self._group_sizes(qid_tr))
-+            deval2 = xgb.DMatrix(X[split:][:, self._feat_idx], label=y[split:])
-+            deval2.set_group(self._group_sizes(qid_ev))
-+
-             self._model = xgb.train(
--                params, dtrain,
-+                {**base_params, "learning_rate": 0.005},
-+                dtrain2,
-                 num_boost_round=5000,
--                evals=[(deval, "eval")],
-+                evals=[(deval2, "eval")],
-                 early_stopping_rounds=100,
-                 verbose_eval=200,
-             )
-@@ -99,7 +125,7 @@ def build_model(y_train):
-             return self
-```
-
-### Iteration 28 -- REVERTED (-2.4795)
-Score: -2.4723 vs best 0.0072
-Change:             gs = 5000 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..7601ad6 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -62,7 +62,7 @@ def build_model(y_train):
-             return sizes
- 
-         def fit(self, X, y):
--            gs = 1000
-+            gs = 5000
-             n = len(y)
-             split = int(n * 0.9)
- 
-```
-
-### Iteration 29 -- REVERTED (-2.1638)
-Score: -2.1566 vs best 0.0072
-Change: FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction", "rolli
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..5ed3a7d 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -33,7 +33,7 @@ DATASET_PATH = "data/datasets/20260331/dataset.parquet"
- STOCKS = None
- 
- # Feature groups: see list_features() for options. None = all
--FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
-+FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction", "rolling"]
- 
- # ===========================================================================
- # MODEL -- researcher edits this section
-```
-
-### Iteration 30 -- GATE FAILED
-Reason: GATE VIOLATION: Experiment crashed (exit code 1).
-Change:             from scipy.stats import rankdata              # Extract grading sign
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..96aa7a1 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -62,16 +62,29 @@ def build_model(y_train):
-             return sizes
- 
-         def fit(self, X, y):
-+            from scipy.stats import rankdata
-+
-+            # Extract grading signal (last col = _pivot_grade) and strip from features
-+            grade = X[:, -1].copy()
-+            X = X[:, :-1]
-+
-+            # Graded relevance: pivots scored [1.0, 1.5] by drawdown depth rank
-+            y_graded = y.copy().astype(float)
-+            pos_mask = y == 1
-+            if pos_mask.sum() > 1:
-+                pos_ranks = rankdata(grade[pos_mask]) / pos_mask.sum()
-+                y_graded[pos_mask] = 1.0 + pos_ranks * 0.5
-+
-             gs = 1000
--            n = len(y)
-+            n = len(y_graded)
-             split = int(n * 0.9)
- 
-             qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
-             qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
- 
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
-+            dtrain = xgb.DMatrix(X[:split], label=y_graded[:split])
-             dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
-+            deval = xgb.DMatrix(X[split:], label=y_graded[split:])
-             deval.set_group(self._group_sizes(qid_ev))
- 
-             params = {
-@@ -99,6 +112,7 @@ def build_model(y_train):
-             return self
- 
-         def predict_proba(self, X):
-+            X = X[:, :-1]  # Strip _pivot_grade column
-             dtest = xgb.DMatrix(X)
-             scores = self._model.predict(
-                 dtest, iteration_range=(0, self._model.best_iteration + 1)
-diff --git a/research/features_lab.py b/research/features_lab.py
-index 2eff964..1aaa086 100644
---- a/research/features_lab.py
-+++ b/research/features_lab.py
-@@ -44,6 +44,15 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-     df["return_accel_10"] = g["close"].transform(_accel)
-     df["returns_skew_20"] = g["close"].transform(_skew)
- 
-+    # Drawdown depth from rolling 20-day max — used for graded relevance labels.
-+    # Deeper drawdown at pivot = higher quality bottom. Backward-looking only.
-+    def _drawdown_depth(close):
-+        rolling_max = close.rolling(20, min_periods=10).max()
-+        return (rolling_max - close) / (rolling_max + 1e-10)
-+
-+    df["_pivot_grade"] = g["close"].transform(_drawdown_depth)
-```
-Traceback:
-```
-  [bt] (4) 5   libxgboost.dylib                    0x0000000121b11ccc xgboost::obj::FitIntercept::InitEstimation(xgboost::MetaInfo const&, xgboost::linalg::Tensor<float, 1>*) const + 440
-  [bt] (5) 6   libxgboost.dylib                    0x0000000121aa56f0 xgboost::LearnerImpl::UpdateOneIter(int, std::__1::shared_ptr<xgboost::DMatrix>) + 644
-  [bt] (6) 7   libxgboost.dylib                    0x00000001218594f8 XGBoosterUpdateOneIter + 144
-  [bt] (7) 8   libffi.dylib                        0x0000000195646050 ffi_call_SYSV + 80
-  [bt] (8) 9   libffi.dylib                        0x000000019564f5b8 ffi_call_int + 1220
-```
-
-### Iteration 31 -- REVERTED (-1.7807)
-Score: -1.7735 vs best 0.0072
-Change:         @staticmethod         def _grade_labels(X, y):             from sklearn.
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..a488d64 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -61,17 +61,36 @@ def build_model(y_train):
-             sizes.append(cnt)
-             return sizes
- 
-+        @staticmethod
-+        def _grade_labels(X, y):
-+            from sklearn.linear_model import LogisticRegression
-+            graded = y.copy().astype(np.int32)
-+            pos_mask = y == 1
-+            n_pos = int(pos_mask.sum())
-+            if n_pos < 20:
-+                return graded
-+            lr = LogisticRegression(max_iter=300, C=0.1, solver='lbfgs')
-+            lr.fit(X, y)
-+            probs = lr.predict_proba(X)[:, 1]
-+            threshold = np.median(probs[pos_mask])
-+            upgrade_mask = pos_mask & (probs >= threshold)
-+            graded[upgrade_mask] = 2
-+            print(f"Graded labels: {n_pos} pos -> {int(upgrade_mask.sum())} grade-2, {n_pos - int(upgrade_mask.sum())} grade-1")
-+            return graded
-+
-         def fit(self, X, y):
-             gs = 1000
-             n = len(y)
-             split = int(n * 0.9)
- 
-+            graded = self._grade_labels(X, y)
-+
-             qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
-             qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
- 
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
-+            dtrain = xgb.DMatrix(X[:split], label=graded[:split])
-             dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
-+            deval = xgb.DMatrix(X[split:], label=graded[split:])
-             deval.set_group(self._group_sizes(qid_ev))
- 
-             params = {
-```
-
-### Iteration 32 -- GATE FAILED
-Reason: GATE VIOLATION: Experiment crashed (exit code 1).
-Change:             w_tr = np.where(y[:split] == 1, 3.0, 1.0)             w_ev = np.wher
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3fa0f52..681aeb0 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -69,9 +69,12 @@ def build_model(y_train):
-             qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
-             qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
- 
--            dtrain = xgb.DMatrix(X[:split], label=y[:split])
-+            w_tr = np.where(y[:split] == 1, 3.0, 1.0)
-+            w_ev = np.where(y[split:] == 1, 3.0, 1.0)
-+
-+            dtrain = xgb.DMatrix(X[:split], label=y[:split], weight=w_tr)
-             dtrain.set_group(self._group_sizes(qid_tr))
--            deval = xgb.DMatrix(X[split:], label=y[split:])
-+            deval = xgb.DMatrix(X[split:], label=y[split:], weight=w_ev)
-             deval.set_group(self._group_sizes(qid_ev))
- 
-             params = {
-```
-Traceback:
-```
-  [bt] (4) 5   libffi.dylib                        0x0000000195646050 ffi_call_SYSV + 80
-  [bt] (5) 6   libffi.dylib                        0x000000019564f5b8 ffi_call_int + 1220
-  [bt] (6) 7   _ctypes.cpython-314-darwin.so       0x000000010581c828 _ctypes_callproc + 1304
-  [bt] (7) 8   _ctypes.cpython-314-darwin.so       0x000000010581925c PyCFuncPtr_call + 800
-  [bt] (8) 9   libpython3.14.dylib                 0x00000001058cdd58 _PyObject_MakeTpCall + 304
-```
-
-### Iteration 34 -- REVERTED (-1.3479)
-Score: -1.2720 vs best 0.0759
-Change:                 "max_depth": 6, 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index e27207f..6edec16 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -78,7 +78,7 @@ def build_model(y_train):
-                 "objective": "rank:ndcg",
-                 "eval_metric": "ndcg",
-                 "tree_method": "hist",
--                "max_depth": 5,
-+                "max_depth": 6,
-                 "learning_rate": 0.005,
-                 "min_child_weight": 5,
-                 "subsample": 0.8,
-```
-
 ### Iteration 36 -- REVERTED (-0.5221)
 Score: -0.2384 vs best 0.2837
 Change:                 "subsample": 0.7, 
@@ -1191,5 +214,766 @@ index 17c20e6..d901782 100644
 +                callbacks=[lr_schedule],
              )
              print(f"Best iteration: {self._model.best_iteration}")
+             return self
+```
+
+### Iteration 1 -- REVERTED (-0.0283)
+Score: -1.2089 vs best -1.1806
+Change:             gs = 500 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 17c20e6..ac20eb2 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -62,7 +62,7 @@ def build_model(y_train):
+             return sizes
+ 
+         def fit(self, X, y):
+-            gs = 1000
++            gs = 500
+             n = len(y)
+ 
+             ev_mask = np.arange(n) % 10 == 0
+```
+
+### Iteration 2 -- REVERTED (-0.3141)
+Score: -1.4947 vs best -1.1806
+Change:             ev_mask = np.arange(n) % 5 == 0                 "min_child_weight": 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 17c20e6..139c1bc 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -65,7 +65,7 @@ def build_model(y_train):
+             gs = 1000
+             n = len(y)
+ 
+-            ev_mask = np.arange(n) % 10 == 0
++            ev_mask = np.arange(n) % 5 == 0
+             tr_idx = np.where(~ev_mask)[0]
+             ev_idx = np.where(ev_mask)[0]
+ 
+@@ -87,7 +87,7 @@ def build_model(y_train):
+                 "tree_method": "hist",
+                 "max_depth": 5,
+                 "learning_rate": 0.003,
+-                "min_child_weight": 5,
++                "min_child_weight": 30,
+                 "subsample": 0.8,
+                 "colsample_bytree": 0.6,
+                 "reg_alpha": 0.5,
+```
+
+### Iteration 3 -- REVERTED (-0.2531)
+Score: -1.4337 vs best -1.1806
+Change: unknown change
+```diff
+diff --git a/research/features_lab.py b/research/features_lab.py
+index 2eff964..ed1a6a8 100644
+--- a/research/features_lab.py
++++ b/research/features_lab.py
+@@ -22,28 +22,6 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+ 
+     # --- RESEARCHER: add features below ---
+ 
+-    new_features = ["price_efficiency_10", "return_accel_10", "returns_skew_20"]
+-    g = df.groupby("stock_id")
+-
+-    def _efficiency(close):
+-        ret = close.pct_change()
+-        net = ret.rolling(10, min_periods=10).sum().abs()
+-        total = ret.abs().rolling(10, min_periods=10).sum()
+-        return net / (total + 1e-10)
+-
+-    def _accel(close):
+-        ret = close.pct_change()
+-        recent = ret.rolling(5, min_periods=5).sum()
+-        prior = ret.shift(5).rolling(5, min_periods=5).sum()
+-        return recent - prior
+-
+-    def _skew(close):
+-        return close.pct_change().rolling(20, min_periods=15).skew()
+-
+-    df["price_efficiency_10"] = g["close"].transform(_efficiency)
+-    df["return_accel_10"] = g["close"].transform(_accel)
+-    df["returns_skew_20"] = g["close"].transform(_skew)
+-
+     # --- END researcher section ---
+ 
+     return df, new_features
+```
+
+### Iteration 5 -- REVERTED (-0.0853)
+Score: -1.1354 vs best -1.0501
+Change:                 depth=5, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 0b862a9..0fd52b2 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -56,7 +56,7 @@ def build_model(y_train):
+ 
+             self._model = CatBoostClassifier(
+                 iterations=3000,
+-                depth=6,
++                depth=5,
+                 learning_rate=0.02,
+                 l2_leaf_reg=5.0,
+                 random_strength=1.0,
+```
+
+### Iteration 6 -- REVERTED (-0.0696)
+Score: -1.1197 vs best -1.0501
+Change:                 iterations=5000,                 learning_rate=0.01, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 0b862a9..bf0c571 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -55,9 +55,9 @@ def build_model(y_train):
+             ev_idx = np.where(ev_mask)[0]
+ 
+             self._model = CatBoostClassifier(
+-                iterations=3000,
++                iterations=5000,
+                 depth=6,
+-                learning_rate=0.02,
++                learning_rate=0.01,
+                 l2_leaf_reg=5.0,
+                 random_strength=1.0,
+                 bagging_temperature=0.8,
+```
+
+### Iteration 7 -- REVERTED (-0.0584)
+Score: -1.1085 vs best -1.0501
+Change:                 depth=7, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 0b862a9..10fc345 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -56,7 +56,7 @@ def build_model(y_train):
+ 
+             self._model = CatBoostClassifier(
+                 iterations=3000,
+-                depth=6,
++                depth=7,
+                 learning_rate=0.02,
+                 l2_leaf_reg=5.0,
+                 random_strength=1.0,
+```
+
+### Iteration 8 -- REVERTED (-0.0392)
+Score: -1.0893 vs best -1.0501
+Change:     import lightgbm as lgb     class _LGBMModel:             params = {         
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 0b862a9..d91c357 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -42,9 +42,9 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
+ 
+ def build_model(y_train):
+     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
+-    from catboost import CatBoostClassifier
++    import lightgbm as lgb
+ 
+-    class _CatBoostModel:
++    class _LGBMModel:
+         def __init__(self):
+             self.classes_ = np.array([0, 1])
+ 
+@@ -54,33 +54,44 @@ def build_model(y_train):
+             tr_idx = np.where(~ev_mask)[0]
+             ev_idx = np.where(ev_mask)[0]
+ 
+-            self._model = CatBoostClassifier(
+-                iterations=3000,
+-                depth=6,
+-                learning_rate=0.02,
+-                l2_leaf_reg=5.0,
+-                random_strength=1.0,
+-                bagging_temperature=0.8,
+-                border_count=128,
+-                scale_pos_weight=5,
+-                use_best_model=True,
+-                early_stopping_rounds=150,
+-                verbose=200,
+-                task_type='CPU',
+-                thread_count=-1,
++            params = {
++                'objective': 'binary',
++                'metric': 'binary_logloss',
++                'boosting_type': 'gbdt',
++                'num_leaves': 63,
++                'max_depth': -1,
++                'learning_rate': 0.02,
++                'feature_fraction': 0.7,
++                'bagging_fraction': 0.8,
++                'bagging_freq': 5,
++                'min_child_samples': 50,
++                'lambda_l2': 5.0,
++                'scale_pos_weight': 5,
++                'verbose': -1,
++                'num_threads': -1,
++            }
++
++            train_set = lgb.Dataset(X[tr_idx], y[tr_idx])
++            eval_set = lgb.Dataset(X[ev_idx], y[ev_idx], reference=train_set)
++
++            self._model = lgb.train(
++                params,
++                train_set,
++                num_boost_round=3000,
++                valid_sets=[eval_set],
++                callbacks=[
+```
+
+### Iteration 10 -- REVERTED (-0.0058)
+Score: -1.0053 vs best -0.9995
+Change:                     'learning_rate': 0.01,                 num_boost_round=5000,
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 182eeb6..f3a214b 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -87,7 +87,7 @@ def build_model(y_train):
+                     'objective': 'binary',
+                     'metric': 'binary_logloss',
+                     'num_leaves': 63,
+-                    'learning_rate': 0.02,
++                    'learning_rate': 0.01,
+                     'feature_fraction': 0.6,
+                     'bagging_fraction': 0.8,
+                     'bagging_freq': 1,
+@@ -97,7 +97,7 @@ def build_model(y_train):
+                     'verbose': -1,
+                 },
+                 dtrain,
+-                num_boost_round=3000,
++                num_boost_round=5000,
+                 valid_sets=[deval],
+                 callbacks=[
+                     lgb.early_stopping(150),
+```
+
+### Iteration 14 -- REVERTED (-0.0461)
+Score: -0.9626 vs best -0.9165
+Change:             from scipy.stats import rankdata             n = len(cat_p)         
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 8d82cd2..1cadd3c 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -127,10 +127,15 @@ def build_model(y_train):
+             return self
+ 
+         def predict_proba(self, X):
++            from scipy.stats import rankdata
+             cat_p = self._cat.predict_proba(X)[:, 1]
+             lgb_p = self._lgb.predict(X)
+             xgb_p = self._xgb.predict_proba(X)[:, 1]
+-            avg = (cat_p + lgb_p + xgb_p) / 3
++            n = len(cat_p)
++            cat_r = rankdata(cat_p) / n
++            lgb_r = rankdata(lgb_p) / n
++            xgb_r = rankdata(xgb_p) / n
++            avg = (cat_r + lgb_r + xgb_r) / 3
+             return np.column_stack([1 - avg, avg])
+ 
+     return _EnsembleModel()
+```
+
+### Iteration 15 -- REVERTED (-0.0664)
+Score: -0.9829 vs best -0.9165
+Change:     from sklearn.ensemble import HistGradientBoostingClassifier             w = 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 8d82cd2..6d491ed 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -45,6 +45,7 @@ def build_model(y_train):
+     from catboost import CatBoostClassifier
+     import lightgbm as lgb
+     import xgboost as xgb
++    from sklearn.ensemble import HistGradientBoostingClassifier
+ 
+     class _EnsembleModel:
+         def __init__(self):
+@@ -124,13 +125,30 @@ def build_model(y_train):
+             )
+             print(f"XGBoost best iteration: {self._xgb.best_iteration}")
+ 
++            w = np.where(y[tr_idx] == 1, 5.0, 1.0)
++            self._hgb = HistGradientBoostingClassifier(
++                max_iter=2000,
++                max_leaf_nodes=63,
++                learning_rate=0.02,
++                min_samples_leaf=20,
++                l2_regularization=5.0,
++                early_stopping=True,
++                validation_fraction=0.1,
++                n_iter_no_change=150,
++                scoring='neg_log_loss',
++                verbose=1,
++            )
++            self._hgb.fit(X[tr_idx], y[tr_idx], sample_weight=w)
++            print(f"HistGBM n_iter: {self._hgb.n_iter_}")
++
+             return self
+ 
+         def predict_proba(self, X):
+             cat_p = self._cat.predict_proba(X)[:, 1]
+             lgb_p = self._lgb.predict(X)
+             xgb_p = self._xgb.predict_proba(X)[:, 1]
+-            avg = (cat_p + lgb_p + xgb_p) / 3
++            hgb_p = self._hgb.predict_proba(X)[:, 1]
++            avg = (cat_p + lgb_p + xgb_p + hgb_p) / 4
+             return np.column_stack([1 - avg, avg])
+ 
+     return _EnsembleModel()
+```
+
+### Iteration 16 -- REVERTED (-0.0077)
+Score: -0.9242 vs best -0.9165
+Change:                     'lambda_l1': 0.5, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 8d82cd2..9cde96b 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -89,6 +89,7 @@ def build_model(y_train):
+                     'bagging_fraction': 0.8,
+                     'bagging_freq': 1,
+                     'scale_pos_weight': 5,
++                    'lambda_l1': 0.5,
+                     'lambda_l2': 5.0,
+                     'min_child_samples': 20,
+                     'verbose': -1,
+```
+
+### Iteration 18 -- REVERTED (-0.1226)
+Score: -1.0345 vs best -0.9119
+Change:             split = int(n * 0.9)             tr_idx = np.arange(split)          
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 178fc56..7720f4f 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -52,9 +52,9 @@ def build_model(y_train):
+ 
+         def fit(self, X, y):
+             n = len(y)
+-            ev_mask = np.arange(n) % 10 == 0
+-            tr_idx = np.where(~ev_mask)[0]
+-            ev_idx = np.where(ev_mask)[0]
++            split = int(n * 0.9)
++            tr_idx = np.arange(split)
++            ev_idx = np.arange(split, n)
+ 
+             self._cat = CatBoostClassifier(
+                 iterations=3000,
+```
+
+### Iteration 20 -- REVERTED (-0.0215)
+Score: -0.9224 vs best -0.9009
+Change:                     'num_leaves': 45, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 792379c..6edfeb8 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -83,7 +83,7 @@ def build_model(y_train):
+                 {
+                     'objective': 'binary',
+                     'metric': 'binary_logloss',
+-                    'num_leaves': 63,
++                    'num_leaves': 45,
+                     'learning_rate': 0.02,
+                     'feature_fraction': 0.6,
+                     'bagging_fraction': 0.8,
+```
+
+### Iteration 21 -- REVERTED (-0.0714)
+Score: -0.9723 vs best -0.9009
+Change:             self._meta = LogisticRegression(C=0.5, max_iter=300) 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 792379c..2762f8b 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -129,7 +129,7 @@ def build_model(y_train):
+             lgb_oof = self._lgb.predict(X[ev_idx])
+             xgb_oof = self._xgb.predict_proba(X[ev_idx])[:, 1]
+             meta_X = np.column_stack([cat_oof, lgb_oof, xgb_oof])
+-            self._meta = LogisticRegression(C=0.1, max_iter=300)
++            self._meta = LogisticRegression(C=0.5, max_iter=300)
+             self._meta.fit(meta_X, y[ev_idx])
+             print(f"Meta weights: {self._meta.coef_[0]}, intercept: {self._meta.intercept_[0]:.4f}")
+ 
+```
+
+### Iteration 22 -- REVERTED (-0.0542)
+Score: -0.9551 vs best -0.9009
+Change:                 scale_pos_weight=5, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 792379c..338d37a 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -64,7 +64,7 @@ def build_model(y_train):
+                 random_strength=1.0,
+                 bagging_temperature=0.8,
+                 border_count=128,
+-                scale_pos_weight=3,
++                scale_pos_weight=5,
+                 use_best_model=True,
+                 early_stopping_rounds=150,
+                 verbose=200,
+```
+
+### Iteration 23 -- REVERTED (-0.1722)
+Score: -1.0731 vs best -0.9009
+Change:             from sklearn.ensemble import GradientBoostingClassifier             
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 792379c..2dee59e 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -124,14 +124,20 @@ def build_model(y_train):
+             )
+             print(f"XGBoost best iteration: {self._xgb.best_iteration}")
+ 
+-            from sklearn.linear_model import LogisticRegression
++            from sklearn.ensemble import GradientBoostingClassifier
+             cat_oof = self._cat.predict_proba(X[ev_idx])[:, 1]
+             lgb_oof = self._lgb.predict(X[ev_idx])
+             xgb_oof = self._xgb.predict_proba(X[ev_idx])[:, 1]
+             meta_X = np.column_stack([cat_oof, lgb_oof, xgb_oof])
+-            self._meta = LogisticRegression(C=0.1, max_iter=300)
++            self._meta = GradientBoostingClassifier(
++                n_estimators=50,
++                max_depth=2,
++                learning_rate=0.1,
++                subsample=0.8,
++                min_samples_leaf=100,
++            )
+             self._meta.fit(meta_X, y[ev_idx])
+-            print(f"Meta weights: {self._meta.coef_[0]}, intercept: {self._meta.intercept_[0]:.4f}")
++            print(f"Meta feature importances: {self._meta.feature_importances_}")
+ 
+             return self
+ 
+```
+
+### Iteration 24 -- REVERTED (-0.0268)
+Score: -0.9277 vs best -0.9009
+Change:             idx = np.arange(n)             ev_es_mask = idx % 10 == 0           
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 792379c..d5455ce 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -52,9 +52,12 @@ def build_model(y_train):
+ 
+         def fit(self, X, y):
+             n = len(y)
+-            ev_mask = np.arange(n) % 10 == 0
+-            tr_idx = np.where(~ev_mask)[0]
+-            ev_idx = np.where(ev_mask)[0]
++            idx = np.arange(n)
++            ev_es_mask = idx % 10 == 0
++            ev_meta_mask = idx % 10 == 1
++            tr_idx = np.where(~ev_es_mask & ~ev_meta_mask)[0]
++            ev_es_idx = np.where(ev_es_mask)[0]
++            ev_meta_idx = np.where(ev_meta_mask)[0]
+ 
+             self._cat = CatBoostClassifier(
+                 iterations=3000,
+@@ -73,12 +76,12 @@ def build_model(y_train):
+             )
+             self._cat.fit(
+                 X[tr_idx], y[tr_idx],
+-                eval_set=(X[ev_idx], y[ev_idx]),
++                eval_set=(X[ev_es_idx], y[ev_es_idx]),
+             )
+             print(f"CatBoost best iteration: {self._cat.best_iteration_}")
+ 
+             dtrain = lgb.Dataset(X[tr_idx], y[tr_idx])
+-            deval = lgb.Dataset(X[ev_idx], y[ev_idx], reference=dtrain)
++            deval = lgb.Dataset(X[ev_es_idx], y[ev_es_idx], reference=dtrain)
+             self._lgb = lgb.train(
+                 {
+                     'objective': 'binary',
+@@ -119,18 +122,18 @@ def build_model(y_train):
+             )
+             self._xgb.fit(
+                 X[tr_idx], y[tr_idx],
+-                eval_set=[(X[ev_idx], y[ev_idx])],
++                eval_set=[(X[ev_es_idx], y[ev_es_idx])],
+                 verbose=200,
+             )
+             print(f"XGBoost best iteration: {self._xgb.best_iteration}")
+ 
+             from sklearn.linear_model import LogisticRegression
+-            cat_oof = self._cat.predict_proba(X[ev_idx])[:, 1]
+-            lgb_oof = self._lgb.predict(X[ev_idx])
+-            xgb_oof = self._xgb.predict_proba(X[ev_idx])[:, 1]
++            cat_oof = self._cat.predict_proba(X[ev_meta_idx])[:, 1]
++            lgb_oof = self._lgb.predict(X[ev_meta_idx])
++            xgb_oof = self._xgb.predict_proba(X[ev_meta_idx])[:, 1]
+             meta_X = np.column_stack([cat_oof, lgb_oof, xgb_oof])
+             self._meta = LogisticRegression(C=0.1, max_iter=300)
+-            self._meta.fit(meta_X, y[ev_idx])
++            self._meta.fit(meta_X, y[ev_meta_idx])
+             print(f"Meta weights: {self._meta.coef_[0]}, intercept: {self._meta.intercept_[0]:.4f}")
+ 
+             return self
+```
+
+### Iteration 25 -- REVERTED (-0.1029)
+Score: -1.0038 vs best -0.9009
+Change:             from scipy.special import expit             gs = 1000             n_
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 792379c..89719b9 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -103,31 +103,40 @@ def build_model(y_train):
+             )
+             print(f"LightGBM best iteration: {self._lgb.best_iteration}")
+ 
+-            self._xgb = xgb.XGBClassifier(
+-                n_estimators=3000,
+-                max_depth=6,
+-                learning_rate=0.02,
+-                subsample=0.8,
+-                colsample_bytree=0.6,
+-                scale_pos_weight=8,
+-                reg_lambda=5.0,
+-                min_child_weight=5,
+-                tree_method='hist',
++            from scipy.special import expit
++            gs = 1000
++            n_tr, n_ev = len(tr_idx), len(ev_idx)
++            qid_tr = np.repeat(np.arange(n_tr // gs + 1), gs)[:n_tr]
++            qid_ev = np.repeat(np.arange(n_ev // gs + 1), gs)[:n_ev]
++            dtrain_r = xgb.DMatrix(X[tr_idx], label=y[tr_idx])
++            dtrain_r.set_group(np.bincount(qid_tr).tolist())
++            deval_r = xgb.DMatrix(X[ev_idx], label=y[ev_idx])
++            deval_r.set_group(np.bincount(qid_ev).tolist())
++            self._xgb = xgb.train(
++                {
++                    "objective": "rank:ndcg",
++                    "eval_metric": "ndcg",
++                    "tree_method": "hist",
++                    "max_depth": 5,
++                    "learning_rate": 0.02,
++                    "min_child_weight": 5,
++                    "subsample": 0.8,
++                    "colsample_bytree": 0.6,
++                    "reg_lambda": 5.0,
++                    "gamma": 0.5,
++                },
++                dtrain_r,
++                num_boost_round=3000,
++                evals=[(deval_r, "eval")],
+                 early_stopping_rounds=150,
+-                eval_metric='logloss',
+-                verbosity=1,
+-            )
+-            self._xgb.fit(
+-                X[tr_idx], y[tr_idx],
+-                eval_set=[(X[ev_idx], y[ev_idx])],
+-                verbose=200,
++                verbose_eval=200,
+             )
+-            print(f"XGBoost best iteration: {self._xgb.best_iteration}")
++            print(f"XGBoost ranking best iteration: {self._xgb.best_iteration}")
+ 
+             from sklearn.linear_model import LogisticRegression
+             cat_oof = self._cat.predict_proba(X[ev_idx])[:, 1]
+             lgb_oof = self._lgb.predict(X[ev_idx])
+-            xgb_oof = self._xgb.predict_proba(X[ev_idx])[:, 1]
+```
+
+### Iteration 26 -- GATE FAILED
+Reason: GATE VIOLATION: Experiment crashed (exit code 137).
+Change:             from research.model_wrappers import FocalTorchClassifier, TorchMLP  
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 792379c..b33466d 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -44,7 +44,6 @@ def build_model(y_train):
+     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
+     from catboost import CatBoostClassifier
+     import lightgbm as lgb
+-    import xgboost as xgb
+ 
+     class _EnsembleModel:
+         def __init__(self):
+@@ -103,32 +102,25 @@ def build_model(y_train):
+             )
+             print(f"LightGBM best iteration: {self._lgb.best_iteration}")
+ 
+-            self._xgb = xgb.XGBClassifier(
+-                n_estimators=3000,
+-                max_depth=6,
+-                learning_rate=0.02,
+-                subsample=0.8,
+-                colsample_bytree=0.6,
+-                scale_pos_weight=8,
+-                reg_lambda=5.0,
+-                min_child_weight=5,
+-                tree_method='hist',
+-                early_stopping_rounds=150,
+-                eval_metric='logloss',
+-                verbosity=1,
+-            )
+-            self._xgb.fit(
+-                X[tr_idx], y[tr_idx],
+-                eval_set=[(X[ev_idx], y[ev_idx])],
+-                verbose=200,
++            from research.model_wrappers import FocalTorchClassifier, TorchMLP
++            input_dim = X.shape[1]
++            module = TorchMLP(input_dim, hidden_dims=(256, 128, 64), dropout=0.3)
++            self._focal = FocalTorchClassifier(
++                module=module,
++                epochs=30,
++                lr=1e-3,
++                batch_size=1024,
++                alpha=0.75,
++                focal_gamma=2.0,
+             )
+-            print(f"XGBoost best iteration: {self._xgb.best_iteration}")
++            self._focal.fit(X[tr_idx], y[tr_idx])
++            print("FocalMLP training complete")
+ 
+             from sklearn.linear_model import LogisticRegression
+             cat_oof = self._cat.predict_proba(X[ev_idx])[:, 1]
+             lgb_oof = self._lgb.predict(X[ev_idx])
+-            xgb_oof = self._xgb.predict_proba(X[ev_idx])[:, 1]
+-            meta_X = np.column_stack([cat_oof, lgb_oof, xgb_oof])
++            focal_oof = self._focal.predict_proba(X[ev_idx])[:, 1]
++            meta_X = np.column_stack([cat_oof, lgb_oof, focal_oof])
+             self._meta = LogisticRegression(C=0.1, max_iter=300)
+             self._meta.fit(meta_X, y[ev_idx])
+             print(f"Meta weights: {self._meta.coef_[0]}, intercept: {self._meta.intercept_[0]:.4f}")
+@@ -138,8 +130,8 @@ def build_model(y_train):
+```
+Traceback:
+```
+Immutability check: PASSED
+Running experiment (timeout: 2700s)...
+research/gate.sh: line 61:  8543 Killed: 9                  perl -e "alarm $TIMEOUT_SECONDS; exec @ARGV" uv run python research/experiment.py > "$LOG_FILE" 2>&1
+GATE VIOLATION: Experiment crashed (exit code 137).
+--- Last 30 lines of log ---
+```
+
+### Iteration 27 -- REVERTED (-0.5914)
+Score: -1.4923 vs best -0.9009
+Change:             # --- Feature selection: quick LGB to find top features by gain --- 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 792379c..99531bb 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -56,6 +56,35 @@ def build_model(y_train):
+             tr_idx = np.where(~ev_mask)[0]
+             ev_idx = np.where(ev_mask)[0]
+ 
++            # --- Feature selection: quick LGB to find top features by gain ---
++            _TOP_K = 120
++            dtrain_fs = lgb.Dataset(X[tr_idx], y[tr_idx])
++            deval_fs = lgb.Dataset(X[ev_idx], y[ev_idx], reference=dtrain_fs)
++            _fs_model = lgb.train(
++                {
++                    'objective': 'binary',
++                    'metric': 'binary_logloss',
++                    'num_leaves': 31,
++                    'learning_rate': 0.05,
++                    'feature_fraction': 0.7,
++                    'bagging_fraction': 0.8,
++                    'bagging_freq': 1,
++                    'scale_pos_weight': 5,
++                    'verbose': -1,
++                },
++                dtrain_fs,
++                num_boost_round=500,
++                valid_sets=[deval_fs],
++                callbacks=[lgb.early_stopping(50), lgb.log_evaluation(0)],
++            )
++            importances = _fs_model.feature_importance(importance_type='gain')
++            k = min(_TOP_K, X.shape[1])
++            self._sel_idx = np.argsort(importances)[-k:]
++            self._sel_idx.sort()
++            print(f"Feature selection: kept {k}/{X.shape[1]} features (top by gain)")
++            X = X[:, self._sel_idx]
++            # --- End feature selection ---
++
+             self._cat = CatBoostClassifier(
+                 iterations=3000,
+                 depth=6,
+@@ -136,6 +165,7 @@ def build_model(y_train):
+             return self
+ 
+         def predict_proba(self, X):
++            X = X[:, self._sel_idx]
+             cat_p = self._cat.predict_proba(X)[:, 1]
+             lgb_p = self._lgb.predict(X)
+             xgb_p = self._xgb.predict_proba(X)[:, 1]
+```
+
+### Iteration 28 -- REVERTED (-0.6249)
+Score: -1.5258 vs best -0.9009
+Change:             # Time-decay sample weights: upweight recent data (rows are chronolo
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 792379c..dbfbee0 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -56,6 +56,10 @@ def build_model(y_train):
+             tr_idx = np.where(~ev_mask)[0]
+             ev_idx = np.where(ev_mask)[0]
+ 
++            # Time-decay sample weights: upweight recent data (rows are chronological)
++            # Oldest training samples get 0.3x, newest get 1.0x
++            w = np.linspace(0.3, 1.0, n)
++
+             self._cat = CatBoostClassifier(
+                 iterations=3000,
+                 depth=6,
+@@ -74,11 +78,12 @@ def build_model(y_train):
+             self._cat.fit(
+                 X[tr_idx], y[tr_idx],
+                 eval_set=(X[ev_idx], y[ev_idx]),
++                sample_weight=w[tr_idx],
+             )
+             print(f"CatBoost best iteration: {self._cat.best_iteration_}")
+ 
+-            dtrain = lgb.Dataset(X[tr_idx], y[tr_idx])
+-            deval = lgb.Dataset(X[ev_idx], y[ev_idx], reference=dtrain)
++            dtrain = lgb.Dataset(X[tr_idx], y[tr_idx], weight=w[tr_idx])
++            deval = lgb.Dataset(X[ev_idx], y[ev_idx], weight=w[ev_idx], reference=dtrain)
+             self._lgb = lgb.train(
+                 {
+                     'objective': 'binary',
+@@ -120,6 +125,7 @@ def build_model(y_train):
+             self._xgb.fit(
+                 X[tr_idx], y[tr_idx],
+                 eval_set=[(X[ev_idx], y[ev_idx])],
++                sample_weight=w[tr_idx],
+                 verbose=200,
+             )
+             print(f"XGBoost best iteration: {self._xgb.best_iteration}")
+@@ -130,7 +136,7 @@ def build_model(y_train):
+             xgb_oof = self._xgb.predict_proba(X[ev_idx])[:, 1]
+             meta_X = np.column_stack([cat_oof, lgb_oof, xgb_oof])
+             self._meta = LogisticRegression(C=0.1, max_iter=300)
+-            self._meta.fit(meta_X, y[ev_idx])
++            self._meta.fit(meta_X, y[ev_idx], sample_weight=w[ev_idx])
+             print(f"Meta weights: {self._meta.coef_[0]}, intercept: {self._meta.intercept_[0]:.4f}")
+ 
              return self
 ```

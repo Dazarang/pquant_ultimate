@@ -290,7 +290,8 @@ def _add_rolling_features(stock_df: pd.DataFrame) -> pd.DataFrame:
         new_cols["atr_change_20d"] = stock_df["atr_14"].pct_change(20).values
 
     if "adr" in stock_df.columns:
-        new_cols["adr_change_20d"] = stock_df["adr"].pct_change(20).values
+        adr_change = stock_df["adr"].pct_change(20).replace([np.inf, -np.inf], np.nan)
+        new_cols["adr_change_20d"] = adr_change.values
 
     if "macd_hist" in stock_df.columns:
         new_cols["macd_change_5d"] = stock_df["macd_hist"].diff(5).values
