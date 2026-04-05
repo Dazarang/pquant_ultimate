@@ -118,13 +118,14 @@ def temporal_split(
     df: pd.DataFrame,
     train_end: str = "2022-12-31",
     val_end: str = "2023-12-31",
-    embargo_sessions: int = 13,
+    embargo_sessions: int = 14,
     include_test: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Split dataset by date with embargo gap at boundaries.
 
     Embargo purges `embargo_sessions` trading days from the end of each earlier
-    split to prevent label leakage from centered pivot windows (rb=13).
+    split to prevent label leakage from centered pivot windows (rb=13 + 1 for
+    window_variations expansion).
     """
     dates = sorted(df["date"].unique())
 
