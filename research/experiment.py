@@ -145,6 +145,9 @@ def build_model(y_train):
                 preds.min(axis=1, keepdims=True),
                 preds.max(axis=1, keepdims=True),
                 preds.std(axis=1, keepdims=True),
+                (preds[:, 0] * preds[:, 1]).reshape(-1, 1),
+                (preds[:, 0] * preds[:, 2]).reshape(-1, 1),
+                (preds[:, 1] * preds[:, 2]).reshape(-1, 1),
             ])
 
         def predict_proba(self, X):
