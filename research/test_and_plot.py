@@ -179,12 +179,12 @@ def _plot_signal_grid(val, y_pred, top_stocks, out_name, label, budget):
         for _, row in signals.iterrows():
             units = 1 + 4 * (row["proba"] - p_min) / p_range
             stop = 0.05 + 0.05 * (row["proba"] - p_min) / p_range
-            ret, reason = _trade_return(stock, row["date"], stop_pct=stop)
+            ret, _ = _trade_return(stock, row["date"], stop_pct=stop)
             if ret is None:
                 continue
             trades.append((ret, units))
             color = "#2e7d32" if ret > 0 else "#c62828"
-            label_text = f"{ret:+.1%}{reason}"
+            label_text = f"{ret:+.1%}"
             ax.annotate(
                 label_text, (row["date"], row["close"]),
                 textcoords="offset points", xytext=(0, 10),

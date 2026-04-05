@@ -68,42 +68,43 @@ def plot_confusion(y_true: np.ndarray, y_pred: np.ndarray, title: str = "Confusi
 
 
 @numba.njit(cache=True, fastmath=True)
-def _backtest_single_trade(highs, lows, closes, entry_price, target_pct, stop_pct, max_hold, start_idx):
-    """Find exit for a single trade. Returns (exit_idx, exit_price, exit_type).
+def _backtest_single_trade(highs, lows, closes, entry_price, stop_pct, max_hold, start_idx):
+    """Find exit with decaying trailing stop from new highs.
 
-    exit_type: 1=target, -1=stop, 0=max_hold.
+    Trailing stop starts at stop_pct, halves every 5 days.
+    exit_type: -1=stop, 0=hold/end.
     """
-    target_price = entry_price * (1 + target_pct)
-    stop_price = entry_price * (1 - stop_pct)
     end_idx = min(start_idx + max_hold, len(highs))
+    peak = entry_price
+
     for i in range(start_idx, end_idx):
-        if highs[i] >= target_price:
-            return i, target_price, 1
+        if highs[i] > peak:
+            peak = highs[i]
+        days_held = i - start_idx
+        current_stop = stop_pct / (2 ** (days_held // 5))
+        stop_price = peak * (1 - current_stop)
         if lows[i] <= stop_price:
             return i, stop_price, -1
+
     last_idx = end_idx - 1
     if last_idx < start_idx:
         last_idx = start_idx
     return last_idx, closes[last_idx], 0
 
 
-_EXIT_REASONS = {1: "target", -1: "stop", 0: "max_hold"}
+_EXIT_REASONS = {-1: "stop", 0: "hold/end"}
 
 
 def backtest_quick(
     df: pd.DataFrame,
     pred_col: str = "prediction",
-    target_pct: float = 0.10,
-    stop_pct: float = 0.05,
+    stop_pct: float = 0.07,
     max_hold_days: int = 30,
 ) -> pd.DataFrame:
-    """Simple vectorized backtest on predicted pivot bottoms.
+    """Backtest predicted pivot bottoms with decaying trailing stop.
 
-    For each predicted bottom (pred_col == 1), simulates buying at next-day open
-    and exiting at target, stop, or max hold. Operates per stock.
-
-    Returns DataFrame with one row per trade: stock_id, entry_date, exit_date,
-    return_pct, exit_reason.
+    Trailing stop starts at stop_pct, halves every 5 days.
+    Operates per stock.
     """
     trades = []
     df = ensure_pivot_low_event_columns(df).copy()
@@ -135,7 +136,7 @@ def backtest_quick(
 
             entry_price = opens[entry_idx]
             exit_idx, exit_price, exit_type = _backtest_single_trade(
-                highs, lows, closes, entry_price, target_pct, stop_pct, max_hold_days, entry_idx,
+                highs, lows, closes, entry_price, stop_pct, max_hold_days, entry_idx,
             )
 
             trades.append({
@@ -160,12 +161,15 @@ def backtest_quick(
 def _print_backtest_summary(trades: pd.DataFrame) -> None:
     """Print summary stats for backtest trades."""
     n = len(trades)
-    wins = trades[trades["return_pct"] > 0]
+    pos = trades[trades["return_pct"] > 0]
+    neg = trades[trades["return_pct"] <= 0]
+    pos_avg = pos["return_pct"].mean() if len(pos) > 0 else 0
+    neg_avg = neg["return_pct"].mean() if len(neg) > 0 else 0
     print(f"\nBacktest: {n} trades")
-    print(f"  Win rate:    {len(wins) / n:.1%}")
+    print(f"  Win rate:    {len(pos) / n:.1%}")
     print(f"  Avg return:  {trades['return_pct'].mean():.2%}")
     print(f"  Med return:  {trades['return_pct'].median():.2%}")
-    print(f"  Exit reasons: {trades['exit_reason'].value_counts().to_dict()}")
+    print(f"  Positive: {len(pos)} (avg {pos_avg:+.2%})  |  Negative: {len(neg)} (avg {neg_avg:+.2%})")
 
 
 # ---------------------------------------------------------------------------

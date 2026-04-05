@@ -343,7 +343,7 @@ class TestBacktestQuick:
         df["prediction"] = y_pred
         trades = backtest_quick(df)
         if len(trades) > 0:
-            assert set(trades["exit_reason"].unique()).issubset({"target", "stop", "max_hold"})
+            assert set(trades["exit_reason"].unique()).issubset({"stop", "hold/end"})
 
     def test_no_signals_empty(self, val_split):
         val, _, _ = val_split
@@ -357,7 +357,7 @@ class TestBacktestQuick:
         _, y_pred, _ = simulated_preds
         df = val.copy()
         df["prediction"] = y_pred
-        trades = backtest_quick(df, target_pct=0.05, stop_pct=0.03, max_hold_days=10)
+        trades = backtest_quick(df, stop_pct=0.03, max_hold_days=10)
         assert isinstance(trades, pd.DataFrame)
 
 
