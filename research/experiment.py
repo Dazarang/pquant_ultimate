@@ -42,78 +42,45 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
 
 def build_model(y_train):
     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
-    import xgboost as xgb
-    from scipy.special import expit
+    from catboost import CatBoostClassifier
 
-    class _AdaptiveRanking:
+    class _CatBoostModel:
         def __init__(self):
             self.classes_ = np.array([0, 1])
 
-        @staticmethod
-        def _group_sizes(qid):
-            sizes, cur, cnt = [], qid[0], 1
-            for i in range(1, len(qid)):
-                if qid[i] == cur:
-                    cnt += 1
-                else:
-                    sizes.append(cnt)
-                    cur, cnt = qid[i], 1
-            sizes.append(cnt)
-            return sizes
-
         def fit(self, X, y):
-            gs = 1000
             n = len(y)
-
             ev_mask = np.arange(n) % 10 == 0
             tr_idx = np.where(~ev_mask)[0]
             ev_idx = np.where(ev_mask)[0]
 
-            X_tr, y_tr = X[tr_idx], y[tr_idx]
-            X_ev, y_ev = X[ev_idx], y[ev_idx]
-
-            n_tr, n_ev = len(y_tr), len(y_ev)
-            qid_tr = np.repeat(np.arange(n_tr // gs + 1), gs)[:n_tr]
-            qid_ev = np.repeat(np.arange(n_ev // gs + 1), gs)[:n_ev]
-
-            dtrain = xgb.DMatrix(X_tr, label=y_tr)
-            dtrain.set_group(self._group_sizes(qid_tr))
-            deval = xgb.DMatrix(X_ev, label=y_ev)
-            deval.set_group(self._group_sizes(qid_ev))
-
-            params = {
-                "objective": "rank:ndcg",
-                "eval_metric": "ndcg",
-                "tree_method": "hist",
-                "max_depth": 5,
-                "learning_rate": 0.003,
-                "min_child_weight": 5,
-                "subsample": 0.8,
-                "colsample_bytree": 0.6,
-                "reg_alpha": 0.5,
-                "reg_lambda": 5.0,
-                "gamma": 0.5,
-            }
-
-            self._model = xgb.train(
-                params, dtrain,
-                num_boost_round=5000,
-                evals=[(deval, "eval")],
-                early_stopping_rounds=200,
-                verbose_eval=200,
+            self._model = CatBoostClassifier(
+                iterations=3000,
+                depth=6,
+                learning_rate=0.02,
+                l2_leaf_reg=5.0,
+                random_strength=1.0,
+                bagging_temperature=0.8,
+                border_count=128,
+                scale_pos_weight=5,
+                use_best_model=True,
+                early_stopping_rounds=150,
+                verbose=200,
+                task_type='CPU',
+                thread_count=-1,
             )
-            print(f"Best iteration: {self._model.best_iteration}")
+
+            self._model.fit(
+                X[tr_idx], y[tr_idx],
+                eval_set=(X[ev_idx], y[ev_idx]),
+            )
+            print(f"Best iteration: {self._model.best_iteration_}")
             return self
 
         def predict_proba(self, X):
-            dtest = xgb.DMatrix(X)
-            scores = self._model.predict(
-                dtest, iteration_range=(0, self._model.best_iteration + 1)
-            )
-            proba_1 = expit(scores)
-            return np.column_stack([1 - proba_1, proba_1])
+            return self._model.predict_proba(X)
 
-    return _AdaptiveRanking()
+    return _CatBoostModel()
 
 
 # ===========================================================================
