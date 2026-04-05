@@ -127,34 +127,20 @@ def _trade_return(stock_df, signal_date, target=0.10, stop=-0.05, max_hold=30):
     return ret, reason
 
 
-def plot_signals(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
-    """Plot price timeline with buy signals for top stocks by signal count."""
-
-    val = val_df.copy()
-    y_pred = select_top_frac(y_proba, budget)
-    val["pred"] = y_pred
-    val["proba"] = y_proba
-
-    signal_stocks = val[val["pred"] == 1].groupby("stock_id").size().sort_values(ascending=False)
-    if len(signal_stocks) == 0:
-        print("No signals!")
-        return
-
-    top_stocks = signal_stocks.head(max_stocks).index.tolist()
+def _plot_signal_grid(val, y_pred, top_stocks, out_name, label, budget):
+    """Plot price timeline with buy signals for given stock list."""
     n = len(top_stocks)
+    if n == 0:
+        return
     cols = min(4, n)
     rows = (n + cols - 1) // cols
 
     date_range = f"{val['date'].min().date()} to {val['date'].max().date()}"
     n_total_signals = int(y_pred.sum())
+    n_signal_stocks = val[val["pred"] == 1]["stock_id"].nunique()
     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows), squeeze=False)
-    fig.suptitle(
-        f"Buy Signals ({date_range})  |  budget={budget*100:.2f}%  |  "
-        f"{n_total_signals} total signals across {len(signal_stocks)} stocks",
-        fontsize=14,
-        fontweight="bold",
-        y=1.01,
-    )
+    total_invested = 0.0
+    total_result = 0.0
 
     for i, stock_id in enumerate(top_stocks):
         ax = axes[i // cols][i % cols]
@@ -164,24 +150,26 @@ def plot_signals(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
 
         ax.plot(dates, close, color="#555", linewidth=0.7, alpha=0.9)
 
-        true_pivots = stock[stock[LABEL_COL] == 1]
-        ax.scatter(
-            true_pivots["date"], true_pivots["close"],
-            color="#1976d2", s=30, zorder=4, marker="o", alpha=0.5,
-            label=f"{len(true_pivots)} true",
-        )
-
         signals = stock[stock["pred"] == 1]
         ax.scatter(
             signals["date"], signals["close"],
-            color="crimson", s=50, zorder=5, marker="^", edgecolors="black", linewidths=0.3,
+            color="crimson", s=50, zorder=4, marker="^", edgecolors="black", linewidths=0.3,
             label=f"{len(signals)} pred",
         )
 
+        true_pivots = stock[stock[LABEL_COL] == 1]
+        ax.scatter(
+            true_pivots["date"], true_pivots["close"],
+            color="#1976d2", s=30, zorder=5, marker="o", alpha=0.7,
+            label=f"{len(true_pivots)} true",
+        )
+
+        trade_rets = []
         for _, row in signals.iterrows():
             ret, reason = _trade_return(stock, row["date"])
             if ret is None:
                 continue
+            trade_rets.append(ret)
             color = "#2e7d32" if ret > 0 else "#c62828"
             label_text = f"{ret:+.1%}{reason}"
             ax.annotate(
@@ -190,7 +178,14 @@ def plot_signals(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
                 fontsize=7, color=color, ha="center", fontweight="bold",
             )
 
-        ax.set_title(f"{stock_id}", fontsize=10)
+        if trade_rets:
+            inv = len(trade_rets) * 100
+            res = sum(100 * (1 + r) for r in trade_rets)
+            total_invested += inv
+            total_result += res
+            ax.set_title(f"{stock_id}  |  ${inv:.0f} -> ${res:.0f} ({(res / inv - 1):+.1%})", fontsize=9)
+        else:
+            ax.set_title(f"{stock_id}", fontsize=10)
         ax.legend(loc="upper left", fontsize=7, framealpha=0.7)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %y"))
         ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
@@ -201,11 +196,59 @@ def plot_signals(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
     for i in range(n, rows * cols):
         axes[i // cols][i % cols].set_visible(False)
 
+    roi_str = f"  |  ${total_invested:.0f} -> ${total_result:.0f} ({(total_result / total_invested - 1):+.1%})" if total_invested > 0 else ""
+    fig.suptitle(
+        f"{label} ({date_range})  |  budget={budget*100:.2f}%  |  "
+        f"{n_total_signals} signals across {n_signal_stocks} stocks{roi_str}",
+        fontsize=13,
+        fontweight="bold",
+        y=1.01,
+    )
+
     fig.tight_layout()
-    out = OUT_DIR / "test_signals.png"
+    out = OUT_DIR / out_name
     fig.savefig(out, dpi=150, bbox_inches="tight")
     print(f"\nSaved: {out}")
     plt.close(fig)
+
+
+def plot_signals(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
+    """Plot top stocks by signal count."""
+    val = val_df.copy()
+    y_pred = select_top_frac(y_proba, budget)
+    val["pred"] = y_pred
+    val["proba"] = y_proba
+
+    counts = val[val["pred"] == 1].groupby("stock_id").size().sort_values(ascending=False)
+    if len(counts) == 0:
+        print("No signals!")
+        return
+    top = counts.head(max_stocks).index.tolist()
+    _plot_signal_grid(val, y_pred, top, "test_signals.png", "Top Signals", budget)
+
+
+def plot_top_returners(val_df, y_proba, budget=VIZ_BUDGET, max_stocks=16):
+    """Plot top stocks by avg trade return."""
+    val = val_df.copy()
+    y_pred = select_top_frac(y_proba, budget)
+    val["pred"] = y_pred
+    val["proba"] = y_proba
+
+    stock_roi = {}
+    for stock_id, group in val[val["pred"] == 1].groupby("stock_id"):
+        stock = val[val["stock_id"] == stock_id].sort_values("date")
+        rets = []
+        for _, row in group.iterrows():
+            ret, _ = _trade_return(stock, row["date"])
+            if ret is not None:
+                rets.append(ret)
+        if rets:
+            stock_roi[stock_id] = sum(rets) / len(rets)
+    if not stock_roi:
+        print("No returners!")
+        return
+    top = sorted(stock_roi, key=stock_roi.get, reverse=True)[:max_stocks]
+    _plot_signal_grid(val, y_pred, top, "test_top_returners.png", "Top Returners", budget)
 
 
 def plot_returns_distribution(val_df, y_proba, budget=VIZ_BUDGET):
@@ -261,4 +304,5 @@ def plot_returns_distribution(val_df, y_proba, budget=VIZ_BUDGET):
 if __name__ == "__main__":
     val, y_proba, results = train_and_evaluate()
     plot_signals(val, y_proba)
+    plot_top_returners(val, y_proba)
     plot_returns_distribution(val, y_proba)
