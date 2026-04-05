@@ -56,7 +56,7 @@ _BASE_FEATURES = [
     "macd", "macd_signal", "macd_hist", "macd_cross",
     "adx", "roc", "mom_10", "mom_20", "stoch_k", "stoch_d",
     "bb_upper", "bb_middle", "bb_lower", "bb_position", "bb_width",
-    "atr_14", "adr", "sar", "apz_upper", "apz_lower",
+    "atr_14", "adr", "adr_z", "sar", "apz_upper", "apz_lower",
     "volatility_20d", "vol_z",
     "obv", "obv_ema", "obv_ratio", "adosc",
     "volume_ma20", "volume_ratio", "volume_z",
@@ -68,7 +68,7 @@ _BASE_FEATURES = [
 # Features from _add_lagged_features
 _LAG_BASE_FEATURES = [
     "close", "ret_1d", "rsi_14", "macd_hist", "adx", "stoch_k",
-    "volatility_20d", "bb_position", "atr_14", "volume_ratio",
+    "volatility_20d", "bb_position", "atr_14", "adr", "volume_ratio",
     "obv_ratio", "drawdown", "price_to_sma20", "price_to_sma50",
 ]
 _LAG_PERIODS = [1, 2, 3, 5, 10]
@@ -80,7 +80,7 @@ _ROLLING_WINDOWS = [5, 10, 20, 60]
 
 _ROC_FEATURES = [
     "rsi_change_5d", "rsi_change_10d", "volume_change_10d",
-    "atr_change_20d", "macd_change_5d",
+    "atr_change_20d", "adr_change_20d", "macd_change_5d",
 ]
 _PERCENTILE_FEATURES = ["close_percentile_252", "rsi_percentile_60"]
 _INTERACTION_FEATURES = [
@@ -172,6 +172,7 @@ def _calculate_base_indicators(stock_df: pd.DataFrame) -> pd.DataFrame:
 
     stock_df["atr_14"] = calculate_atr(stock_df, period=14)
     stock_df["adr"] = calculate_adr(stock_df, length=20)
+    stock_df["adr_z"] = (stock_df["adr"] - stock_df["adr"].rolling(60).mean()) / stock_df["adr"].rolling(60).std()
     stock_df["sar"] = calculate_sar(stock_df, acceleration=0.02, maximum=0.2)
 
     apz_result = calculate_apz(stock_df, period=21, band_pct=2.0)
@@ -239,6 +240,7 @@ def _add_lagged_features(stock_df: pd.DataFrame) -> pd.DataFrame:
         "volatility_20d",
         "bb_position",
         "atr_14",
+        "adr",
         "volume_ratio",
         "obv_ratio",
         "drawdown",
@@ -286,6 +288,9 @@ def _add_rolling_features(stock_df: pd.DataFrame) -> pd.DataFrame:
 
     if "atr_14" in stock_df.columns:
         new_cols["atr_change_20d"] = stock_df["atr_14"].pct_change(20).values
+
+    if "adr" in stock_df.columns:
+        new_cols["adr_change_20d"] = stock_df["adr"].pct_change(20).values
 
     if "macd_hist" in stock_df.columns:
         new_cols["macd_change_5d"] = stock_df["macd_hist"].diff(5).values
