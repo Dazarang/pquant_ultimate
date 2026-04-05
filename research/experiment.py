@@ -80,7 +80,7 @@ def build_model(y_train):
                 "tree_method": "hist",
                 "max_depth": 4,
                 "learning_rate": 0.005,
-                "min_child_weight": 10,
+                "min_child_weight": 5,
                 "subsample": 0.8,
                 "colsample_bytree": 0.6,
                 "reg_alpha": 0.5,
