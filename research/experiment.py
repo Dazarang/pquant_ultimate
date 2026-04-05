@@ -128,31 +128,30 @@ def build_model(y_train):
             cat_oof = self._cat.predict_proba(X[ev_idx])[:, 1]
             lgb_oof = self._lgb.predict(X[ev_idx])
             xgb_oof = self._xgb.predict_proba(X[ev_idx])[:, 1]
-            preds = np.column_stack([cat_oof, lgb_oof, xgb_oof])
-            meta_X = np.column_stack([
-                preds,
-                preds.min(axis=1, keepdims=True),
-                preds.max(axis=1, keepdims=True),
-                preds.std(axis=1, keepdims=True),
-            ])
+            meta_X = self._build_meta(cat_oof, lgb_oof, xgb_oof)
             self._meta = LogisticRegression(C=0.1, max_iter=300)
             self._meta.fit(meta_X, y[ev_idx])
             print(f"Meta weights: {self._meta.coef_[0]}, intercept: {self._meta.intercept_[0]:.4f}")
 
             return self
 
-        def predict_proba(self, X):
-            cat_p = self._cat.predict_proba(X)[:, 1]
-            lgb_p = self._lgb.predict(X)
-            xgb_p = self._xgb.predict_proba(X)[:, 1]
-            preds = np.column_stack([cat_p, lgb_p, xgb_p])
-            meta_X = np.column_stack([
+        @staticmethod
+        def _build_meta(cat_p, lgb_p, xgb_p):
+            from scipy.special import logit
+            lo = lambda p: logit(np.clip(p, 1e-4, 1 - 1e-4))
+            preds = np.column_stack([lo(cat_p), lo(lgb_p), lo(xgb_p)])
+            return np.column_stack([
                 preds,
                 preds.min(axis=1, keepdims=True),
                 preds.max(axis=1, keepdims=True),
                 preds.std(axis=1, keepdims=True),
             ])
-            return self._meta.predict_proba(meta_X)
+
+        def predict_proba(self, X):
+            cat_p = self._cat.predict_proba(X)[:, 1]
+            lgb_p = self._lgb.predict(X)
+            xgb_p = self._xgb.predict_proba(X)[:, 1]
+            return self._meta.predict_proba(self._build_meta(cat_p, lgb_p, xgb_p))
 
     return _EnsembleModel()
 
