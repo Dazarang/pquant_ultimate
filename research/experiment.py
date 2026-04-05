@@ -64,14 +64,21 @@ def build_model(y_train):
         def fit(self, X, y):
             gs = 1000
             n = len(y)
-            split = int(n * 0.9)
 
-            qid_tr = np.repeat(np.arange(split // gs + 1), gs)[:split]
-            qid_ev = np.repeat(np.arange((n - split) // gs + 1), gs)[:(n - split)]
+            ev_mask = np.arange(n) % 10 == 0
+            tr_idx = np.where(~ev_mask)[0]
+            ev_idx = np.where(ev_mask)[0]
 
-            dtrain = xgb.DMatrix(X[:split], label=y[:split])
+            X_tr, y_tr = X[tr_idx], y[tr_idx]
+            X_ev, y_ev = X[ev_idx], y[ev_idx]
+
+            n_tr, n_ev = len(y_tr), len(y_ev)
+            qid_tr = np.repeat(np.arange(n_tr // gs + 1), gs)[:n_tr]
+            qid_ev = np.repeat(np.arange(n_ev // gs + 1), gs)[:n_ev]
+
+            dtrain = xgb.DMatrix(X_tr, label=y_tr)
             dtrain.set_group(self._group_sizes(qid_tr))
-            deval = xgb.DMatrix(X[split:], label=y[split:])
+            deval = xgb.DMatrix(X_ev, label=y_ev)
             deval.set_group(self._group_sizes(qid_ev))
 
             params = {
