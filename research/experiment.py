@@ -44,10 +44,9 @@ def build_model(y_train):
     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
     from catboost import CatBoostClassifier
     import lightgbm as lgb
+    import xgboost as xgb
 
     class _EnsembleModel:
-        """CatBoost + LightGBM ensemble: averaged probability outputs."""
-
         def __init__(self):
             self.classes_ = np.array([0, 1])
 
@@ -57,7 +56,6 @@ def build_model(y_train):
             tr_idx = np.where(~ev_mask)[0]
             ev_idx = np.where(ev_mask)[0]
 
-            # --- CatBoost (same as current best) ---
             self._cat = CatBoostClassifier(
                 iterations=3000,
                 depth=6,
@@ -79,7 +77,6 @@ def build_model(y_train):
             )
             print(f"CatBoost best iteration: {self._cat.best_iteration_}")
 
-            # --- LightGBM ---
             dtrain = lgb.Dataset(X[tr_idx], y[tr_idx])
             deval = lgb.Dataset(X[ev_idx], y[ev_idx], reference=dtrain)
             self._lgb = lgb.train(
@@ -106,12 +103,34 @@ def build_model(y_train):
             )
             print(f"LightGBM best iteration: {self._lgb.best_iteration}")
 
+            self._xgb = xgb.XGBClassifier(
+                n_estimators=3000,
+                max_depth=6,
+                learning_rate=0.02,
+                subsample=0.8,
+                colsample_bytree=0.6,
+                scale_pos_weight=5,
+                reg_lambda=5.0,
+                min_child_weight=5,
+                tree_method='hist',
+                early_stopping_rounds=150,
+                eval_metric='logloss',
+                verbosity=1,
+            )
+            self._xgb.fit(
+                X[tr_idx], y[tr_idx],
+                eval_set=[(X[ev_idx], y[ev_idx])],
+                verbose=200,
+            )
+            print(f"XGBoost best iteration: {self._xgb.best_iteration}")
+
             return self
 
         def predict_proba(self, X):
             cat_p = self._cat.predict_proba(X)[:, 1]
             lgb_p = self._lgb.predict(X)
-            avg = np.sqrt(cat_p * lgb_p)
+            xgb_p = self._xgb.predict_proba(X)[:, 1]
+            avg = np.cbrt(cat_p * lgb_p * xgb_p)
             return np.column_stack([1 - avg, avg])
 
     return _EnsembleModel()
