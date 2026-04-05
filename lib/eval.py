@@ -74,7 +74,7 @@ def _backtest_single_trade(highs, lows, closes, entry_price, stop_pct, max_hold,
     Trailing stop starts at stop_pct, halves every 5 days.
     exit_type: -1=stop, 0=hold/end.
     """
-    end_idx = min(start_idx + max_hold, len(highs))
+    end_idx = min(start_idx + max_hold + 1, len(highs))
     peak = entry_price
 
     for i in range(start_idx, end_idx):
