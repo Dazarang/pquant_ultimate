@@ -43,8 +43,11 @@ FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
 def build_model(y_train):
     """Return a fitted-ready model. Researcher chooses model type and hyperparams."""
     from catboost import CatBoostClassifier
+    import lightgbm as lgb
 
-    class _CatBoostModel:
+    class _EnsembleModel:
+        """CatBoost + LightGBM ensemble: averaged probability outputs."""
+
         def __init__(self):
             self.classes_ = np.array([0, 1])
 
@@ -54,7 +57,8 @@ def build_model(y_train):
             tr_idx = np.where(~ev_mask)[0]
             ev_idx = np.where(ev_mask)[0]
 
-            self._model = CatBoostClassifier(
+            # --- CatBoost (same as current best) ---
+            self._cat = CatBoostClassifier(
                 iterations=3000,
                 depth=6,
                 learning_rate=0.02,
@@ -69,18 +73,48 @@ def build_model(y_train):
                 task_type='CPU',
                 thread_count=-1,
             )
-
-            self._model.fit(
+            self._cat.fit(
                 X[tr_idx], y[tr_idx],
                 eval_set=(X[ev_idx], y[ev_idx]),
             )
-            print(f"Best iteration: {self._model.best_iteration_}")
+            print(f"CatBoost best iteration: {self._cat.best_iteration_}")
+
+            # --- LightGBM ---
+            dtrain = lgb.Dataset(X[tr_idx], y[tr_idx])
+            deval = lgb.Dataset(X[ev_idx], y[ev_idx], reference=dtrain)
+            self._lgb = lgb.train(
+                {
+                    'objective': 'binary',
+                    'metric': 'binary_logloss',
+                    'num_leaves': 63,
+                    'learning_rate': 0.02,
+                    'feature_fraction': 0.6,
+                    'bagging_fraction': 0.8,
+                    'bagging_freq': 1,
+                    'scale_pos_weight': 5,
+                    'lambda_l2': 5.0,
+                    'min_child_samples': 20,
+                    'verbose': -1,
+                },
+                dtrain,
+                num_boost_round=3000,
+                valid_sets=[deval],
+                callbacks=[
+                    lgb.early_stopping(150),
+                    lgb.log_evaluation(200),
+                ],
+            )
+            print(f"LightGBM best iteration: {self._lgb.best_iteration}")
+
             return self
 
         def predict_proba(self, X):
-            return self._model.predict_proba(X)
+            cat_p = self._cat.predict_proba(X)[:, 1]
+            lgb_p = self._lgb.predict(X)
+            avg = (cat_p + lgb_p) / 2
+            return np.column_stack([1 - avg, avg])
 
-    return _CatBoostModel()
+    return _EnsembleModel()
 
 
 # ===========================================================================
