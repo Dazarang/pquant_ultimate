@@ -79,7 +79,7 @@ def build_model(y_train):
                 "eval_metric": "ndcg",
                 "tree_method": "hist",
                 "max_depth": 5,
-                "learning_rate": 0.005,
+                "learning_rate": 0.003,
                 "min_child_weight": 5,
                 "subsample": 0.8,
                 "colsample_bytree": 0.6,
