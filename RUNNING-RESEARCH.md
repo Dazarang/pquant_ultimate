@@ -42,7 +42,7 @@ While running:
 tail -f research/results.tsv
 
 # View the plot (updates after each iteration)
-open research/progress.png
+open research/plots/progress.png
 
 # Check what's been tried
 cat research/COMBAT_LOG.md
@@ -54,7 +54,7 @@ cat research/COMBAT_LOG.md
 ```bash
 # Generate/refresh plot
 uv run python research/plot.py
-open research/progress.png
+open research/plots/progress.png
 
 # Check final score
 cat research/.best_score
@@ -64,7 +64,7 @@ cat research/.best_score
 ```bash
 # Use the dedicated test script (trains model, evaluates on held-out test set,
 # runs benchmark and backtest, generates signal plots)
-uv run python research/test_and_plot.py
+uv run python research/utils/backtest_and_plot.py
 ```
 
 ### 3. If on a branch, merge
@@ -93,9 +93,9 @@ git merge autoresearch/YYYYMMDD_HHMMSS
 | `research/program.md` | By you | Agent instructions |
 | `research/gate.sh` | No | Verification gate |
 | `research/run.sh` | No | Outer loop |
-| `research/baseline.py` | No | Reference point |
+| `research/utils/baseline.py` | No | Reference point |
 | `research/results.tsv` | Auto | Score data for plot |
-| `research/progress.png` | Auto | Visual progress chart |
+| `research/plots/progress.png` | Auto | Visual progress chart |
 | `research/RESEARCH_LOG.md` | Auto | Iteration history |
 | `research/COMBAT_LOG.md` | Auto + agent | Failure analysis |
 | `research/.best_score` | Auto | Current best score |

@@ -10,7 +10,7 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -33,7 +33,7 @@ from research.experiment import (
 )
 from research.features_lab import add_custom_features
 
-OUT_DIR = Path(__file__).resolve().parent
+OUT_DIR = Path(__file__).resolve().parent.parent / "plots"
 
 # Reference budget for visualization, benchmark, and backtest
 VIZ_BUDGET = 0.0025  # top 0.25% of predictions

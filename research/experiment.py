@@ -17,7 +17,7 @@ import numpy as np  # noqa: F401,E402 -- available for researcher
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
 from lib.eval import tiered_eval  # noqa: E402
-from research.diagnostics import extract_importances, write_eval_detail, write_feat_importance  # noqa: E402
+from research.utils.diagnostics import extract_importances, write_eval_detail, write_feat_importance  # noqa: E402
 from research.features_lab import add_custom_features  # noqa: E402
 
 # ===========================================================================

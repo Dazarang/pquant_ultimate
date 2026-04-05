@@ -27,8 +27,8 @@ PROTECTED_FILES=(
     "lib/features.py"
     "lib/__init__.py"
     "research/gate.sh"
-    "research/baseline.py"
-    "research/model_wrappers.py"
+    "research/utils/baseline.py"
+    "research/utils/model_wrappers.py"
 )
 
 for f in "${PROTECTED_FILES[@]}"; do

@@ -161,7 +161,7 @@ If Option B finds that threshold=0.65 maximizes Sharpe on the validation set, yo
 
 ### After research: concrete steps
 
-1. **Validate**: `uv run python research/test_and_plot.py` -- evaluate on test set (2024+), run benchmark_random_entry (p < 0.05?), visually inspect signal plots
+1. **Validate**: `uv run python research/utils/backtest_and_plot.py` -- evaluate on test set (2024+), run benchmark_random_entry (p < 0.05?), visually inspect signal plots
 2. **Tune deployment**: sweep threshold / budget / stop-loss on validation set to find the best trading rule for this specific model. Use Optuna or grid search.
 3. **Freeze and test**: apply the frozen deployment config to the test set. This is the final out-of-sample check.
 4. **Productionize**: hardcode model config + deployment threshold into `training/train.py` + `prediction/predict.py`
@@ -188,7 +188,7 @@ For neural nets, Optuna can also tune the loss function itself (e.g., focal loss
 
 The autoresearch gate prevents the agent from "cheating" by:
 - Making `lib/` immutable (can't change how metrics are computed)
-- Making `gate.sh` and `baseline.py` immutable
+- Making `gate.sh` and `utils/baseline.py` immutable
 - Checking git diff before running (revert if protected files changed)
 - Using a fixed evaluation on a fixed validation set
 

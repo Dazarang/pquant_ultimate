@@ -69,7 +69,7 @@ class TestXGBoost:
 
 class TestRankingXGB:
     def test_pipeline(self, pipeline_data):
-        from research.model_wrappers import RankingXGBClassifier
+        from research.utils.model_wrappers import RankingXGBClassifier
 
         X_train, y_train, X_val, y_val, *_ = pipeline_data
         model = RankingXGBClassifier(
@@ -79,7 +79,7 @@ class TestRankingXGB:
         _check_model(model, X_train, y_train, X_val, y_val)
 
     def test_rank_ndcg(self, pipeline_data):
-        from research.model_wrappers import RankingXGBClassifier
+        from research.utils.model_wrappers import RankingXGBClassifier
 
         X_train, y_train, X_val, y_val, *_ = pipeline_data
         model = RankingXGBClassifier(
@@ -89,7 +89,7 @@ class TestRankingXGB:
         _check_model(model, X_train, y_train, X_val, y_val)
 
     def test_custom_groups(self, pipeline_data):
-        from research.model_wrappers import RankingXGBClassifier
+        from research.utils.model_wrappers import RankingXGBClassifier
 
         X_train, y_train, X_val, y_val, *_ = pipeline_data
         groups = np.repeat(np.arange(len(y_train) // 50 + 1), 50)[:len(y_train)]
@@ -103,7 +103,7 @@ class TestRankingXGB:
 
     def test_non_contiguous_groups(self, pipeline_data):
         """Non-contiguous group IDs (e.g. stock IDs interleaved) must not mis-group."""
-        from research.model_wrappers import RankingXGBClassifier
+        from research.utils.model_wrappers import RankingXGBClassifier
 
         X_train, y_train, X_val, y_val, *_ = pipeline_data
         # Simulate interleaved stock IDs: [0,1,2,0,1,2,...]
@@ -119,7 +119,7 @@ class TestRankingXGB:
     def test_sklearn_clone(self, pipeline_data):
         from sklearn.base import clone
 
-        from research.model_wrappers import RankingXGBClassifier
+        from research.utils.model_wrappers import RankingXGBClassifier
 
         original = RankingXGBClassifier(
             objective="rank:map", group_size=100, n_estimators=30, max_depth=3,
@@ -157,7 +157,7 @@ class TestCatBoost:
 
 class TestCatBoostWrapper:
     def test_pipeline(self, pipeline_data):
-        from research.model_wrappers import CatBoostWrapper
+        from research.utils.model_wrappers import CatBoostWrapper
 
         X_train, y_train, X_val, y_val, *_ = pipeline_data
         neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
@@ -172,7 +172,7 @@ class TestCatBoostWrapper:
         """Verify clone() works -- the exact failure from iter 1."""
         from sklearn.base import clone
 
-        from research.model_wrappers import CatBoostWrapper
+        from research.utils.model_wrappers import CatBoostWrapper
 
         *_, y_val, _, _, _ = pipeline_data
         neg, pos = (y_val == 0).sum(), (y_val == 1).sum()
@@ -187,7 +187,7 @@ class TestCatBoostWrapper:
         from sklearn.ensemble import VotingClassifier
         from xgboost import XGBClassifier
 
-        from research.model_wrappers import CatBoostWrapper
+        from research.utils.model_wrappers import CatBoostWrapper
 
         X_train, y_train, X_val, y_val, *_ = pipeline_data
         neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
@@ -205,7 +205,7 @@ class TestCatBoostWrapper:
         from sklearn.linear_model import LogisticRegression
         from xgboost import XGBClassifier
 
-        from research.model_wrappers import CatBoostWrapper
+        from research.utils.model_wrappers import CatBoostWrapper
 
         X_train, y_train, X_val, y_val, *_ = pipeline_data
         neg, pos = (y_train == 0).sum(), (y_train == 1).sum()
@@ -344,7 +344,7 @@ class TestTorchMLP:
     def test_pipeline(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import TorchClassifier, TorchMLP
+        from research.utils.model_wrappers import TorchClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
         model = TorchClassifier(
@@ -362,7 +362,7 @@ class TestSequenceEdgeCases:
         """Window larger than all groups should return all-0.5, not crash."""
         import torch
 
-        from research.model_wrappers import LSTMNet, SequenceClassifier
+        from research.utils.model_wrappers import LSTMNet, SequenceClassifier
 
         X_train, y_train, X_val, y_val, n_features, groups_train, groups_val = pipeline_data
         model = SequenceClassifier(
@@ -380,7 +380,7 @@ class TestLSTM:
     def test_pipeline(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import LSTMNet, SequenceClassifier
+        from research.utils.model_wrappers import LSTMNet, SequenceClassifier
 
         X_train, y_train, X_val, y_val, n_features, groups_train, groups_val = pipeline_data
         model = SequenceClassifier(
@@ -401,7 +401,7 @@ class TestGRU:
     def test_pipeline(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import GRUNet, SequenceClassifier
+        from research.utils.model_wrappers import GRUNet, SequenceClassifier
 
         X_train, y_train, X_val, y_val, n_features, groups_train, groups_val = pipeline_data
         model = SequenceClassifier(
@@ -421,7 +421,7 @@ class TestTransformer:
     def test_pipeline(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import SequenceClassifier, TransformerNet
+        from research.utils.model_wrappers import SequenceClassifier, TransformerNet
 
         X_train, y_train, X_val, y_val, n_features, groups_train, groups_val = pipeline_data
         model = SequenceClassifier(
@@ -444,7 +444,7 @@ class TestPolicyGradient:
     def test_binary_rewards(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+        from research.utils.model_wrappers import PolicyGradientClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
         model = PolicyGradientClassifier(
@@ -463,7 +463,7 @@ class TestPolicyGradient:
     def test_custom_rewards(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+        from research.utils.model_wrappers import PolicyGradientClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
         rewards = np.random.randn(len(y_train)).astype(np.float32)
@@ -480,7 +480,7 @@ class TestPolicyGradient:
     def test_predict(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+        from research.utils.model_wrappers import PolicyGradientClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
         model = PolicyGradientClassifier(
@@ -497,7 +497,7 @@ class TestPolicyGradient:
         """Verify positive and negative rewards produce different policies."""
         import torch
 
-        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+        from research.utils.model_wrappers import PolicyGradientClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
 
@@ -528,7 +528,7 @@ class TestPolicyGradient:
         """Calling fit() twice must not stack extra heads."""
         import torch
 
-        from research.model_wrappers import PolicyGradientClassifier, TorchMLP
+        from research.utils.model_wrappers import PolicyGradientClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
         model = PolicyGradientClassifier(
@@ -550,7 +550,7 @@ class TestPolicyGradient:
         import torch
         from torch import nn
 
-        from research.model_wrappers import PolicyGradientClassifier
+        from research.utils.model_wrappers import PolicyGradientClassifier
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
 
@@ -573,7 +573,7 @@ class TestPolicyGradient:
         import torch
         from torch import nn
 
-        from research.model_wrappers import PolicyGradientClassifier
+        from research.utils.model_wrappers import PolicyGradientClassifier
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
 
@@ -592,7 +592,7 @@ class TestFocalTorchClassifier:
     def test_pipeline(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import FocalTorchClassifier, TorchMLP
+        from research.utils.model_wrappers import FocalTorchClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
         model = FocalTorchClassifier(
@@ -607,7 +607,7 @@ class TestFocalTorchClassifier:
         """With focal_gamma=0, focal loss reduces to alpha-weighted BCE."""
         import torch
 
-        from research.model_wrappers import FocalTorchClassifier, TorchMLP
+        from research.utils.model_wrappers import FocalTorchClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
         model = FocalTorchClassifier(
@@ -626,7 +626,7 @@ class TestFocalSequenceClassifier:
     def test_pipeline(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import FocalSequenceClassifier, GRUNet
+        from research.utils.model_wrappers import FocalSequenceClassifier, GRUNet
 
         X_train, y_train, X_val, y_val, n_features, groups_train, groups_val = pipeline_data
         model = FocalSequenceClassifier(
@@ -646,7 +646,7 @@ class TestDirectUtility:
     def test_with_rewards(self, pipeline_data):
         import torch
 
-        from research.model_wrappers import DirectUtilityClassifier, TorchMLP
+        from research.utils.model_wrappers import DirectUtilityClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
         rewards = np.random.randn(len(y_train)).astype(np.float32)
@@ -665,7 +665,7 @@ class TestDirectUtility:
         """Without rewards, falls back to weighted BCE."""
         import torch
 
-        from research.model_wrappers import DirectUtilityClassifier, TorchMLP
+        from research.utils.model_wrappers import DirectUtilityClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
         model = DirectUtilityClassifier(
@@ -680,7 +680,7 @@ class TestDirectUtility:
         """Positive rewards should produce higher P(buy) than negative."""
         import torch
 
-        from research.model_wrappers import DirectUtilityClassifier, TorchMLP
+        from research.utils.model_wrappers import DirectUtilityClassifier, TorchMLP
 
         X_train, y_train, X_val, y_val, n_features, *_ = pipeline_data
 

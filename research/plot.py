@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 RESULTS_FILE = Path(__file__).parent / "results.tsv"
-OUTPUT_FILE = Path(__file__).parent / "progress.png"
+OUTPUT_FILE = Path(__file__).parent / "plots" / "progress.png"
 
 
 def plot():

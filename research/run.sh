@@ -110,7 +110,7 @@ STRICT OUTPUT RULES:
 - Do NOT say what the researcher should or should not do, try, abandon, or consider.
 - Do NOT editorialize. If a sentence contains an opinion or recommendation, delete it.
 
-Available models (immutable model_wrappers.py): CatBoostWrapper, RankingXGBClassifier, TorchClassifier, FocalTorchClassifier, SequenceClassifier (LSTM/GRU/Transformer), FocalSequenceClassifier, DirectUtilityClassifier, PolicyGradientClassifier.
+Available models (immutable @utils/model_wrappers.py): CatBoostWrapper, RankingXGBClassifier, TorchClassifier, FocalTorchClassifier, SequenceClassifier (LSTM/GRU/Transformer), FocalSequenceClassifier, DirectUtilityClassifier, PolicyGradientClassifier.
 Neural modules: TorchMLP, LSTMNet, GRUNet, TransformerNet.
 Levers: model type, hyperparams, feature groups (base/advanced/lag/rolling/roc/percentile/interaction), custom features (features_lab.py), stock universe (STOCKS), ensemble structure, meta-learner.
 
@@ -178,7 +178,7 @@ You may ONLY edit:
 - @research/experiment.py (model, hyperparams, features, stocks, thresholds)
 - @research/features_lab.py (add new backward-looking features)
 
-Do NOT edit anything in lib/, research/gate.sh, or research/baseline.py.
+Do NOT edit anything in lib/, research/gate.sh, or research/utils/baseline.py.
 
 Test ONE hypothesis. Multiple changes are fine if they serve a single testable idea. Commit nothing -- gate.sh handles that.
 After editing, STOP. The outer loop will run gate.sh.
@@ -362,7 +362,7 @@ echo "Final best score: $BEST_SCORE"
 echo "See: $RESEARCH_LOG"
 echo "See: $COMBAT_LOG"
 echo "See: $RESULTS_TSV"
-echo "Plot: research/progress.png"
+echo "Plot: research/plots/progress.png"
 if [ "$BRANCH" != "$STARTING_BRANCH" ]; then
     echo ""
     echo "To merge winning results: git checkout $STARTING_BRANCH && git merge $BRANCH"

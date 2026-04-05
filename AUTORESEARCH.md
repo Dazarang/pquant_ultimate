@@ -8,7 +8,11 @@ Autonomous ML research loop inspired by [Karpathy's autoresearch](https://github
 research/
 ├── experiment.py       # MUTABLE -- model, hyperparams, features, stocks
 ├── features_lab.py     # MUTABLE -- custom feature engineering (accumulates on wins)
-├── baseline.py         # IMMUTABLE -- logistic regression reference point
+├── utils/
+│   ├── baseline.py     # IMMUTABLE -- logistic regression reference point
+│   ├── model_wrappers.py
+│   ├── backtest_and_plot.py
+│   └── diagnostics.py
 ├── program.md          # Agent instructions, constraints, dead ends
 ├── gate.sh             # Verification gate (immutability, timeout, sanity)
 ├── run.sh              # Outer loop orchestrator
@@ -16,7 +20,8 @@ research/
 ├── RESEARCH_LOG.md     # Human-readable iteration log
 ├── COMBAT_LOG.md       # What failed and why (knowledge preservation)
 ├── metrics.md          # Metric definitions reference
-├── plot.py             # Generates progress.png from results.tsv
+├── plot.py             # Generates plots/progress.png from results.tsv
+├── plots/              # Generated plot images (progress.png, etc.)
 └── .best_score         # Current best composite score
 ```
 
@@ -35,7 +40,7 @@ for each iteration:
      d. Check PASSED flag (AP gate)
   4. If score > best → commit, update .best_score, log to results.tsv (keep)
   5. If score <= best → log diff to COMBAT_LOG.md, revert, log to results.tsv (discard)
-  6. Update progress.png plot
+  6. Update plots/progress.png
 ```
 
 ## What the Agent Controls (6 levers)
@@ -56,7 +61,7 @@ for each iteration:
 | `lib/eval.py` | Can't change how metrics are computed |
 | `lib/features.py` | Feature catalog is reference only |
 | `research/gate.sh` | Can't weaken verification |
-| `research/baseline.py` | Fixed comparison point |
+| `research/utils/baseline.py` | Fixed comparison point |
 
 ## The Metric: Multi-Budget Composite Score
 
@@ -128,5 +133,5 @@ PHASE 6: Re-run periodically
 | Tracking | `results.tsv` (untracked) | `results.tsv` + `RESEARCH_LOG.md` |
 | Knowledge preservation | None for failures | `COMBAT_LOG.md` (diffs + analysis) |
 | Anti-gaming | Fixed eval function | Immutable lib/ + gate diff checks |
-| Visualization | `analysis.ipynb` → `progress.png` | `plot.py` → `progress.png` |
+| Visualization | `analysis.ipynb` → `progress.png` | `plot.py` → `plots/progress.png` |
 | Time budget | 5 min/experiment | 15 min/experiment |

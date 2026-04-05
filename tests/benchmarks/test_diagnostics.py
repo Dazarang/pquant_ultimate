@@ -1,6 +1,6 @@
-"""Tests for research/diagnostics.py.
+"""Tests for research/utils/diagnostics.py.
 
-Covers feature importance extraction across all model types in model_wrappers.py
+Covers feature importance extraction across all model types in utils/model_wrappers.py
 and eval detail TSV generation. Uses mock objects to avoid heavy training.
 """
 
@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from research.diagnostics import extract_importances, write_feat_importance, write_eval_detail, _fmt_budget
+from research.utils.diagnostics import extract_importances, write_feat_importance, write_eval_detail, _fmt_budget
 
 FEATURES = ["rsi_14", "macd_hist", "drawdown_pct", "atr_14", "obv_slope_20"]
 N_FEAT = len(FEATURES)

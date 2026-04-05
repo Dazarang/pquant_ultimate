@@ -10,7 +10,7 @@ from pathlib import Path
 
 from xgboost import XGBClassifier
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split
 from lib.eval import tiered_eval

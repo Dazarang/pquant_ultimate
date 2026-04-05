@@ -26,7 +26,7 @@ Install any library you need: `uv add --group research <package>`. No cleanup re
 
 - `lib/` -- data loading, splitting, scaling, evaluation. Do not modify.
 - `research/gate.sh` -- verification gate.
-- `research/baseline.py` -- reference point.
+- `research/utils/baseline.py` -- reference point.
 
 ## The Metric
 
@@ -93,16 +93,16 @@ interaction  (3)  rsi*volume, drawdown*panic, rsi*volatility
 
 | Category | Available |
 |---|---|
-| Gradient boosting | `XGBClassifier`, `LGBMClassifier`, `CatBoostWrapper`, `RankingXGBClassifier` (via `research/model_wrappers.py`) |
+| Gradient boosting | `XGBClassifier`, `LGBMClassifier`, `CatBoostWrapper`, `RankingXGBClassifier` (via `research/utils/model_wrappers.py`) |
 | Sklearn | `RandomForestClassifier`, `ExtraTreesClassifier`, `GradientBoostingClassifier`, `AdaBoostClassifier`, `BaggingClassifier`, `MLPClassifier`, `LogisticRegression`, `SGDClassifier`, `SVC`, `KNeighborsClassifier` |
 | Ensembling | `StackingClassifier`, `VotingClassifier` |
-| Neural (PyTorch) | `TorchClassifier`, `TorchMLP`, `SequenceClassifier`, `LSTMNet`, `GRUNet`, `TransformerNet` via `research/model_wrappers.py` |
+| Neural (PyTorch) | `TorchClassifier`, `TorchMLP`, `SequenceClassifier`, `LSTMNet`, `GRUNet`, `TransformerNet` via `research/utils/model_wrappers.py` |
 | Focal loss | `FocalTorchClassifier` (flat), `FocalSequenceClassifier` (sequential) -- focal-loss variants of the above |
-| Utility / RL | `DirectUtilityClassifier` (expected reward, no sampling), `PolicyGradientClassifier` (REINFORCE) -- via `research/model_wrappers.py` |
-| Wrappers | `CatBoostWrapper`, `RankingXGBClassifier`, `TorchClassifier`, `FocalTorchClassifier`, `SequenceClassifier`, `FocalSequenceClassifier`, `DirectUtilityClassifier`, `PolicyGradientClassifier` -- all in `research/model_wrappers.py`, all sklearn-compatible |
+| Utility / RL | `DirectUtilityClassifier` (expected reward, no sampling), `PolicyGradientClassifier` (REINFORCE) -- via `research/utils/model_wrappers.py` |
+| Wrappers | `CatBoostWrapper`, `RankingXGBClassifier`, `TorchClassifier`, `FocalTorchClassifier`, `SequenceClassifier`, `FocalSequenceClassifier`, `DirectUtilityClassifier`, `PolicyGradientClassifier` -- all in `research/utils/model_wrappers.py`, all sklearn-compatible |
 | Neural (MLX) | `mlx.core`, `mlx.nn` -- build custom, wrap with fit/predict_proba interface |
 
-### Neural architecture modules (all via `research/model_wrappers.py`)
+### Neural architecture modules (all via `research/utils/model_wrappers.py`)
 
 `nn.Module` classes that plug into `TorchClassifier` (flat) or `SequenceClassifier` (sequential):
 
