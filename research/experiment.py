@@ -59,7 +59,7 @@ def build_model(y_train):
             self._cat = CatBoostClassifier(
                 iterations=3000,
                 depth=6,
-                learning_rate=0.02,
+                learning_rate=0.01,
                 l2_leaf_reg=5.0,
                 random_strength=1.0,
                 bagging_temperature=0.8,
@@ -84,7 +84,7 @@ def build_model(y_train):
                     'objective': 'binary',
                     'metric': 'binary_logloss',
                     'num_leaves': 63,
-                    'learning_rate': 0.02,
+                    'learning_rate': 0.01,
                     'feature_fraction': 0.6,
                     'bagging_fraction': 0.8,
                     'bagging_freq': 1,
@@ -106,7 +106,7 @@ def build_model(y_train):
             self._xgb = xgb.XGBClassifier(
                 n_estimators=3000,
                 max_depth=6,
-                learning_rate=0.02,
+                learning_rate=0.01,
                 subsample=0.8,
                 colsample_bytree=0.6,
                 scale_pos_weight=8,
