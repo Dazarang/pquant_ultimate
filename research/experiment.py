@@ -130,7 +130,7 @@ def build_model(y_train):
             cat_p = self._cat.predict_proba(X)[:, 1]
             lgb_p = self._lgb.predict(X)
             xgb_p = self._xgb.predict_proba(X)[:, 1]
-            avg = np.cbrt(cat_p * lgb_p * xgb_p)
+            avg = (cat_p + lgb_p + xgb_p) / 3
             return np.column_stack([1 - avg, avg])
 
     return _EnsembleModel()
