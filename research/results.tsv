@@ -7,3 +7,11 @@ iter	score	status	description
 6	-1.5053	keep	                (preds[:, 0] * preds[:, 1]).reshape(-1, 1),                 (pre
 7	NA	crash	                preds ** 2,                 (preds[:, 0] * preds[:, 1] * preds[:
 8	-1.4803	keep	                preds ** 2,                 (preds[:, 0] * preds[:, 1] * preds[:
+9	-1.5024	discard	                np.abs(preds[:, 0] - preds[:, 1]).reshape(-1, 1),               
+10	-1.4759	keep	    new_features = [         "price_efficiency_10", "return_accel_10", "returns_
+11	-1.5487	discard	        "consec_down", "close_position_20", "volume_down_ratio_10",         "int
+12	-1.4529	keep	        "returns_kurtosis_20", "volume_climax_ratio", "return_autocorr_10",     
+13	-1.5105	discard	        "downside_vol_ratio_20", "gap_mean_5",     def _downside_vol_ratio(close
+14	-1.4714	discard	            raw = np.column_stack([cat_p, lgb_p, xgb_p])             raw_norm = 
+15	-1.3726	keep	FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction", "rolli
+16	-1.3801	discard	        "return_zscore_20", "volatility_ratio_5_20",     def _return_zscore(clos

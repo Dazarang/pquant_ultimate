@@ -2,184 +2,6 @@
 
 Reverted experiments with scores and diffs.
 
-### Iteration 36 -- REVERTED (-0.5221)
-Score: -0.2384 vs best 0.2837
-Change:                 "subsample": 0.7, 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 88f9abb..2fa6452 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -81,7 +81,7 @@ def build_model(y_train):
-                 "max_depth": 5,
-                 "learning_rate": 0.003,
-                 "min_child_weight": 5,
--                "subsample": 0.8,
-+                "subsample": 0.7,
-                 "colsample_bytree": 0.6,
-                 "reg_alpha": 0.5,
-                 "reg_lambda": 5.0,
-```
-
-### Iteration 37 -- REVERTED (-0.2829)
-Score: 0.0008 vs best 0.2837
-Change:                 "learning_rate": 0.002,                 num_boost_round=7000, 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 88f9abb..9c2bb64 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -79,7 +79,7 @@ def build_model(y_train):
-                 "eval_metric": "ndcg",
-                 "tree_method": "hist",
-                 "max_depth": 5,
--                "learning_rate": 0.003,
-+                "learning_rate": 0.002,
-                 "min_child_weight": 5,
-                 "subsample": 0.8,
-                 "colsample_bytree": 0.6,
-@@ -90,7 +90,7 @@ def build_model(y_train):
- 
-             self._model = xgb.train(
-                 params, dtrain,
--                num_boost_round=5000,
-+                num_boost_round=7000,
-                 evals=[(deval, "eval")],
-                 early_stopping_rounds=100,
-                 verbose_eval=200,
-```
-
-### Iteration 38 -- REVERTED (-2.2461)
-Score: -1.9624 vs best 0.2837
-Change:     new_features = [         "price_efficiency_10", "return_accel_10", "returns_
-```diff
-diff --git a/research/features_lab.py b/research/features_lab.py
-index 2eff964..797dfda 100644
---- a/research/features_lab.py
-+++ b/research/features_lab.py
-@@ -22,7 +22,10 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
- 
-     # --- RESEARCHER: add features below ---
- 
--    new_features = ["price_efficiency_10", "return_accel_10", "returns_skew_20"]
-+    new_features = [
-+        "price_efficiency_10", "return_accel_10", "returns_skew_20",
-+        "closing_strength", "rel_volume_5d",
-+    ]
-     g = df.groupby("stock_id")
- 
-     def _efficiency(close):
-@@ -44,6 +47,12 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-     df["return_accel_10"] = g["close"].transform(_accel)
-     df["returns_skew_20"] = g["close"].transform(_skew)
- 
-+    rng = df["high"] - df["low"]
-+    df["closing_strength"] = (df["close"] - df["low"]) / (rng + 1e-10)
-+    df["rel_volume_5d"] = df.groupby("stock_id")["volume"].transform(
-+        lambda v: v / v.rolling(5, min_periods=3).mean()
-+    )
-+
-     # --- END researcher section ---
- 
-     return df, new_features
-```
-
-### Iteration 40 -- REVERTED (-2.5967)
-Score: -1.3718 vs best 1.2249
-Change:                 "colsample_bynode": 0.8, 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 3d462c4..eafd9b3 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -90,6 +90,7 @@ def build_model(y_train):
-                 "min_child_weight": 5,
-                 "subsample": 0.8,
-                 "colsample_bytree": 0.6,
-+                "colsample_bynode": 0.8,
-                 "reg_alpha": 0.5,
-                 "reg_lambda": 5.0,
-                 "gamma": 0.5,
-```
-
-### Iteration 42 -- REVERTED (-3.3755)
-Score: -1.8480 vs best 1.5275
-Change:                 "reg_lambda": 3.0, 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 17c20e6..dd32065 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -91,7 +91,7 @@ def build_model(y_train):
-                 "subsample": 0.8,
-                 "colsample_bytree": 0.6,
-                 "reg_alpha": 0.5,
--                "reg_lambda": 5.0,
-+                "reg_lambda": 3.0,
-                 "gamma": 0.5,
-             }
- 
-```
-
-### Iteration 43 -- REVERTED (-3.5694)
-Score: -2.0419 vs best 1.5275
-Change:                 "colsample_bytree": 0.5, 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 17c20e6..5c41fd5 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -89,7 +89,7 @@ def build_model(y_train):
-                 "learning_rate": 0.003,
-                 "min_child_weight": 5,
-                 "subsample": 0.8,
--                "colsample_bytree": 0.6,
-+                "colsample_bytree": 0.5,
-                 "reg_alpha": 0.5,
-                 "reg_lambda": 5.0,
-                 "gamma": 0.5,
-```
-
-### Iteration 44 -- REVERTED (-3.0454)
-Score: -1.5179 vs best 1.5275
-Change: FEATURE_GROUPS = ["base", "advanced", "lag", "roc", "percentile", "interaction"]
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 17c20e6..49c4cd2 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -33,7 +33,7 @@ DATASET_PATH = "data/datasets/20260331/dataset.parquet"
- STOCKS = None
- 
- # Feature groups: see list_features() for options. None = all
--FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction"]
-+FEATURE_GROUPS = ["base", "advanced", "lag", "roc", "percentile", "interaction"]
- 
- # ===========================================================================
- # MODEL -- researcher edits this section
-```
-
-### Iteration 45 -- REVERTED (-3.1630)
-Score: -1.6355 vs best 1.5275
-Change:                 "objective": "rank:map",                 "eval_metric": "map", 
-```diff
-diff --git a/research/experiment.py b/research/experiment.py
-index 17c20e6..3acd5a7 100644
---- a/research/experiment.py
-+++ b/research/experiment.py
-@@ -82,8 +82,8 @@ def build_model(y_train):
-             deval.set_group(self._group_sizes(qid_ev))
- 
-             params = {
--                "objective": "rank:ndcg",
--                "eval_metric": "ndcg",
-+                "objective": "rank:map",
-+                "eval_metric": "map",
-                 "tree_method": "hist",
-                 "max_depth": 5,
-                 "learning_rate": 0.003,
-```
-
 ### Iteration 46 -- REVERTED (-3.1458)
 Score: -1.6183 vs best 1.5275
 Change:             lr_schedule = xgb.callback.LearningRateScheduler(                 la
@@ -976,4 +798,268 @@ index 792379c..dbfbee0 100644
              print(f"Meta weights: {self._meta.coef_[0]}, intercept: {self._meta.intercept_[0]:.4f}")
  
              return self
+```
+
+### Iteration 2 -- REVERTED (+0.0000)
+Score: -1.6375 vs best -1.6375
+Change:                 early_stopping_rounds=250,                     lgb.early_stoppin
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index e06851d..ae49c6b 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -66,7 +66,7 @@ def build_model(y_train):
+                 border_count=128,
+                 scale_pos_weight=3,
+                 use_best_model=True,
+-                early_stopping_rounds=150,
++                early_stopping_rounds=250,
+                 verbose=200,
+                 task_type='CPU',
+                 thread_count=-1,
+@@ -97,7 +97,7 @@ def build_model(y_train):
+                 num_boost_round=3000,
+                 valid_sets=[deval],
+                 callbacks=[
+-                    lgb.early_stopping(150),
++                    lgb.early_stopping(250),
+                     lgb.log_evaluation(200),
+                 ],
+             )
+@@ -113,7 +113,7 @@ def build_model(y_train):
+                 reg_lambda=5.0,
+                 min_child_weight=5,
+                 tree_method='hist',
+-                early_stopping_rounds=150,
++                early_stopping_rounds=250,
+                 eval_metric='logloss',
+                 verbosity=1,
+             )
+```
+
+### Iteration 4 -- REVERTED (-0.0019)
+Score: -1.5676 vs best -1.5657
+Change:                     'num_leaves': 127, 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index a026aeb..1a7596e 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -83,7 +83,7 @@ def build_model(y_train):
+                 {
+                     'objective': 'binary',
+                     'metric': 'binary_logloss',
+-                    'num_leaves': 63,
++                    'num_leaves': 127,
+                     'learning_rate': 0.01,
+                     'feature_fraction': 0.6,
+                     'bagging_fraction': 0.8,
+```
+
+### Iteration 7 -- GATE FAILED
+Reason: GATE VIOLATION: lib/eval.py was modified. Reverting.
+Change:                 preds ** 2,                 (preds[:, 0] * preds[:, 1] * preds[:
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 5083913..871cb7f 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -148,6 +148,8 @@ def build_model(y_train):
+                 (preds[:, 0] * preds[:, 1]).reshape(-1, 1),
+                 (preds[:, 0] * preds[:, 2]).reshape(-1, 1),
+                 (preds[:, 1] * preds[:, 2]).reshape(-1, 1),
++                preds ** 2,
++                (preds[:, 0] * preds[:, 1] * preds[:, 2]).reshape(-1, 1),
+             ])
+ 
+         def predict_proba(self, X):
+```
+Traceback:
+```
+GATE VIOLATION: lib/eval.py was modified. Reverting.
+```
+
+### Iteration 9 -- REVERTED (-0.0221)
+Score: -1.5024 vs best -1.4803
+Change:                 np.abs(preds[:, 0] - preds[:, 1]).reshape(-1, 1),               
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 871cb7f..1eb5dcf 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -150,6 +150,9 @@ def build_model(y_train):
+                 (preds[:, 1] * preds[:, 2]).reshape(-1, 1),
+                 preds ** 2,
+                 (preds[:, 0] * preds[:, 1] * preds[:, 2]).reshape(-1, 1),
++                np.abs(preds[:, 0] - preds[:, 1]).reshape(-1, 1),
++                np.abs(preds[:, 0] - preds[:, 2]).reshape(-1, 1),
++                np.abs(preds[:, 1] - preds[:, 2]).reshape(-1, 1),
+             ])
+ 
+         def predict_proba(self, X):
+```
+
+### Iteration 11 -- REVERTED (-0.0728)
+Score: -1.5487 vs best -1.4759
+Change:         "consec_down", "close_position_20", "volume_down_ratio_10",         "int
+```diff
+diff --git a/research/features_lab.py b/research/features_lab.py
+index 4aa346a..4fc1be8 100644
+--- a/research/features_lab.py
++++ b/research/features_lab.py
+@@ -25,6 +25,8 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+     new_features = [
+         "price_efficiency_10", "return_accel_10", "returns_skew_20",
+         "returns_kurtosis_20", "volume_climax_ratio",
++        "consec_down", "close_position_20", "volume_down_ratio_10",
++        "intraday_reversal_5",
+     ]
+     g = df.groupby("stock_id")
+ 
+@@ -51,11 +53,38 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+         avg = volume.rolling(20, min_periods=10).mean()
+         return peak / (avg + 1e-10)
+ 
++    def _consec_down(close):
++        down = (close.pct_change() < 0).astype(float)
++        return down.rolling(10, min_periods=5).sum()
++
++    def _close_position_20(close):
++        h = close.rolling(20, min_periods=10).max()
++        l = close.rolling(20, min_periods=10).min()
++        return (close - l) / (h - l + 1e-10)
++
+     df["price_efficiency_10"] = g["close"].transform(_efficiency)
+     df["return_accel_10"] = g["close"].transform(_accel)
+     df["returns_skew_20"] = g["close"].transform(_skew)
+     df["returns_kurtosis_20"] = g["close"].transform(_kurtosis)
+     df["volume_climax_ratio"] = g["volume"].transform(_volume_climax)
++    df["consec_down"] = g["close"].transform(_consec_down)
++    df["close_position_20"] = g["close"].transform(_close_position_20)
++
++    ret = g["close"].pct_change()
++    down_vol = df["volume"] * (ret < 0).astype(float)
++    down_vol_sum = down_vol.groupby(df["stock_id"]).transform(
++        lambda x: x.rolling(10, min_periods=5).sum()
++    )
++    total_vol_sum = g["volume"].transform(
++        lambda x: x.rolling(10, min_periods=5).sum()
++    )
++    df["volume_down_ratio_10"] = down_vol_sum / (total_vol_sum + 1e-10)
++
++    rng = df["high"] - df["low"]
++    buy_press = (df["close"] - df["low"]) / (rng + 1e-10)
++    df["intraday_reversal_5"] = buy_press.groupby(df["stock_id"]).transform(
++        lambda x: x.rolling(5, min_periods=3).mean()
++    )
+ 
+     # --- END researcher section ---
+ 
+```
+
+### Iteration 13 -- REVERTED (-0.0576)
+Score: -1.5105 vs best -1.4529
+Change:         "downside_vol_ratio_20", "gap_mean_5",     def _downside_vol_ratio(close
+```diff
+diff --git a/research/features_lab.py b/research/features_lab.py
+index 9758554..2e4a268 100644
+--- a/research/features_lab.py
++++ b/research/features_lab.py
+@@ -25,6 +25,7 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+     new_features = [
+         "price_efficiency_10", "return_accel_10", "returns_skew_20",
+         "returns_kurtosis_20", "volume_climax_ratio", "return_autocorr_10",
++        "downside_vol_ratio_20", "gap_mean_5",
+     ]
+     g = df.groupby("stock_id")
+ 
+@@ -63,6 +64,20 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+ 
+     df["return_autocorr_10"] = g["close"].transform(_return_autocorr)
+ 
++    def _downside_vol_ratio(close):
++        ret = close.pct_change()
++        neg_sq = (ret.clip(upper=0) ** 2).rolling(20, min_periods=15).sum()
++        total_sq = (ret ** 2).rolling(20, min_periods=15).sum()
++        return neg_sq / (total_sq + 1e-10)
++
++    df["downside_vol_ratio_20"] = g["close"].transform(_downside_vol_ratio)
++
++    prev_close = g["close"].shift(1)
++    gap = df["open"] / prev_close - 1
++    df["gap_mean_5"] = gap.groupby(df["stock_id"]).transform(
++        lambda x: x.rolling(5, min_periods=3).mean()
++    )
++
+     # --- END researcher section ---
+ 
+     return df, new_features
+```
+
+### Iteration 14 -- REVERTED (-0.0185)
+Score: -1.4714 vs best -1.4529
+Change:             raw = np.column_stack([cat_p, lgb_p, xgb_p])             raw_norm = 
+```diff
+diff --git a/research/experiment.py b/research/experiment.py
+index 871cb7f..57ad7a2 100644
+--- a/research/experiment.py
++++ b/research/experiment.py
+@@ -140,6 +140,9 @@ def build_model(y_train):
+             from scipy.special import logit
+             lo = lambda p: logit(np.clip(p, 1e-4, 1 - 1e-4))
+             preds = np.column_stack([lo(cat_p), lo(lgb_p), lo(xgb_p)])
++            raw = np.column_stack([cat_p, lgb_p, xgb_p])
++            raw_norm = raw / (raw.sum(axis=1, keepdims=True) + 1e-10)
++            entropy = -(raw_norm * np.log(raw_norm + 1e-10)).sum(axis=1, keepdims=True)
+             return np.column_stack([
+                 preds,
+                 preds.min(axis=1, keepdims=True),
+@@ -150,6 +153,7 @@ def build_model(y_train):
+                 (preds[:, 1] * preds[:, 2]).reshape(-1, 1),
+                 preds ** 2,
+                 (preds[:, 0] * preds[:, 1] * preds[:, 2]).reshape(-1, 1),
++                entropy,
+             ])
+ 
+         def predict_proba(self, X):
+```
+
+### Iteration 16 -- REVERTED (-0.0075)
+Score: -1.3801 vs best -1.3726
+Change:         "return_zscore_20", "volatility_ratio_5_20",     def _return_zscore(clos
+```diff
+diff --git a/research/features_lab.py b/research/features_lab.py
+index 9758554..24ffe0f 100644
+--- a/research/features_lab.py
++++ b/research/features_lab.py
+@@ -25,6 +25,7 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+     new_features = [
+         "price_efficiency_10", "return_accel_10", "returns_skew_20",
+         "returns_kurtosis_20", "volume_climax_ratio", "return_autocorr_10",
++        "return_zscore_20", "volatility_ratio_5_20",
+     ]
+     g = df.groupby("stock_id")
+ 
+@@ -63,6 +64,21 @@ def add_custom_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+ 
+     df["return_autocorr_10"] = g["close"].transform(_return_autocorr)
+ 
++    def _return_zscore(close):
++        ret = close.pct_change()
++        mu = ret.rolling(20, min_periods=15).mean()
++        sigma = ret.rolling(20, min_periods=15).std()
++        return (ret - mu) / (sigma + 1e-10)
++
++    def _vol_ratio(close):
++        ret = close.pct_change()
++        vol5 = ret.rolling(5, min_periods=5).std()
++        vol20 = ret.rolling(20, min_periods=15).std()
++        return vol5 / (vol20 + 1e-10)
++
++    df["return_zscore_20"] = g["close"].transform(_return_zscore)
++    df["volatility_ratio_5_20"] = g["close"].transform(_vol_ratio)
++
+     # --- END researcher section ---
+ 
+     return df, new_features
 ```

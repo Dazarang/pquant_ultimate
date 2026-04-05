@@ -352,3 +352,60 @@ No code changes.
 
 ### Iteration 30 -- EVAL RESET (dataset rebuild + embargo fix)
 Score: -1.6805 | Dataset rebuilt: added adr_z, adr_change_20d, adr lags to lib/features.py; fixed inf in adr_change_20d. embargo_sessions 13->14 (label leakage fix for window_variations). 1210 stocks, 2,787,712 rows. Previous best -0.9009. New baseline: -1.6805.
+
+### Iteration 1 -- IMPROVED (+0.0430)
+Score: -1.6375 |             preds = np.column_stack([cat_oof, lgb_oof, xgb_oof])             met
+Commit: 0d42e63
+
+### Iteration 2 -- REVERTED (+0.0000)
+Score: -1.6375 |                 early_stopping_rounds=250,                     lgb.early_stoppin
+
+### Iteration 3 -- IMPROVED (+0.0718)
+Score: -1.5657 |                 learning_rate=0.01,                     'learning_rate': 0.01,  
+Commit: f6b170c
+
+### Iteration 4 -- REVERTED (-0.0019)
+Score: -1.5676 |                     'num_leaves': 127, 
+
+### Iteration 5 -- IMPROVED (+0.0271)
+Score: -1.5386 |             meta_X = self._build_meta(cat_oof, lgb_oof, xgb_oof)         @static
+Commit: 95a7951
+
+### Iteration 6 -- IMPROVED (+0.0333)
+Score: -1.5053 |                 (preds[:, 0] * preds[:, 1]).reshape(-1, 1),                 (pre
+Commit: f31e753
+
+### Iteration 7 -- GATE FAILED
+Reason: GATE VIOLATION: lib/eval.py was modified. Reverting.
+Change:                 preds ** 2,                 (preds[:, 0] * preds[:, 1] * preds[:
+
+### Iteration 8 -- IMPROVED (+0.0250)
+Score: -1.4803 |                 preds ** 2,                 (preds[:, 0] * preds[:, 1] * preds[:
+Commit: 2f42f50
+
+### Iteration 9 -- REVERTED (-0.0221)
+Score: -1.5024 |                 np.abs(preds[:, 0] - preds[:, 1]).reshape(-1, 1),               
+
+### Iteration 10 -- IMPROVED (+0.0044)
+Score: -1.4759 |     new_features = [         "price_efficiency_10", "return_accel_10", "returns_
+Commit: 3ee0cf2
+
+### Iteration 11 -- REVERTED (-0.0728)
+Score: -1.5487 |         "consec_down", "close_position_20", "volume_down_ratio_10",         "int
+
+### Iteration 12 -- IMPROVED (+0.0230)
+Score: -1.4529 |         "returns_kurtosis_20", "volume_climax_ratio", "return_autocorr_10",     
+Commit: cf6b315
+
+### Iteration 13 -- REVERTED (-0.0576)
+Score: -1.5105 |         "downside_vol_ratio_20", "gap_mean_5",     def _downside_vol_ratio(close
+
+### Iteration 14 -- REVERTED (-0.0185)
+Score: -1.4714 |             raw = np.column_stack([cat_p, lgb_p, xgb_p])             raw_norm = 
+
+### Iteration 15 -- IMPROVED (+0.0803)
+Score: -1.3726 | FEATURE_GROUPS = ["base", "advanced", "roc", "percentile", "interaction", "rolli
+Commit: c47fdc0
+
+### Iteration 16 -- REVERTED (-0.0075)
+Score: -1.3801 |         "return_zscore_20", "volatility_ratio_5_20",     def _return_zscore(clos
