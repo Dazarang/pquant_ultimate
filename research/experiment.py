@@ -17,6 +17,7 @@ import numpy as np  # noqa: F401,E402 -- available for researcher
 
 from lib.data import LABEL_COL, list_features, load_dataset, scale, temporal_split  # noqa: E402
 from lib.eval import tiered_eval  # noqa: E402
+from research.diagnostics import extract_importances, write_eval_detail, write_feat_importance  # noqa: E402
 from research.features_lab import add_custom_features  # noqa: E402
 
 # ===========================================================================
@@ -188,6 +189,9 @@ def run():
     df = df[df["date"] >= "2021-01-01"].reset_index(drop=True)
 
     fold_scores = []
+    fold_results = []
+    importances_by_fold = []
+    skipped_by_fold = []
     for fold_idx, (train_end, val_end) in enumerate(_WF_FOLDS, 1):
         print(f"\n{'=' * 60}")
         print(f"FOLD {fold_idx}/{len(_WF_FOLDS)}: train_end={train_end}, val_end={val_end}")
@@ -198,6 +202,9 @@ def run():
         if val.empty or train.empty:
             print(f"  FOLD {fold_idx}: skipped (empty split)")
             fold_scores.append(float("-inf"))
+            fold_results.append({"tier1": {}, "tier2": {}, "tier3": float("-inf"), "passed": False})
+            importances_by_fold.append([])
+            skipped_by_fold.append([])
             continue
 
         train_s, val_s, _, _ = scale(train, val, test, feature_cols)
@@ -211,13 +218,23 @@ def run():
         model = build_model(y_train)
         model.fit(X_train, y_train)
 
+        extracted, skipped = extract_importances(model, feature_cols)
+        importances_by_fold.append(extracted)
+        skipped_by_fold.append(skipped)
+
         y_pred_proba = model.predict_proba(X_val)[:, 1]
         print(f"Predictions: proba range [{y_pred_proba.min():.4f}, {y_pred_proba.max():.4f}]")
 
         results = tiered_eval(val, y_val, y_pred_proba)
         fold_score = results.get("tier3", float("-inf"))
         fold_scores.append(fold_score)
+        fold_results.append(results)
         print(f"FOLD_{fold_idx}_SCORE={fold_score:.4f}")
+
+    # Write diagnostic files
+    _diag = Path(__file__).parent
+    write_eval_detail(fold_scores, fold_results, _diag / "eval_last.tsv")
+    write_feat_importance(importances_by_fold, skipped_by_fold, feature_cols, _diag / "feat_imp_last.tsv")
 
     score = np.mean(fold_scores)
     passed = all(s != float("-inf") for s in fold_scores)

@@ -132,6 +132,13 @@ Trains via REINFORCE with stochastic action sampling. Accepts any `nn.Module`. P
 ### Class imbalance
 ~5% positive rate (1:20 ratio).
 
+## Diagnostic Files
+
+Updated each run. Compare `*_best.tsv` (current best) against `*_last.tsv` (last run) to see what changed.
+
+- `research/eval_best.tsv` / `research/eval_last.tsv` -- per-fold scores, per-cell (budget x horizon) sub-metric breakdown: excess, win_rate, worst_decile, knife_rate, tail_mae, entry_slippage.
+- `research/feat_imp_best.tsv` / `research/feat_imp_last.tsv` -- top 10 and bottom 5 features by gain, model extraction status. Not available for neural models.
+
 ## The Loop
 
 You are in an automated ratchet. After each edit, `gate.sh` runs the experiment. If the score improves, the change is committed. If not, the change is reverted and the diff is logged to COMBAT_LOG.md with the score delta. You only ever see the surviving best code.

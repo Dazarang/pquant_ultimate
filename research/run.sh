@@ -169,6 +169,10 @@ READ FIRST:
 - @research/experiment.py (current best experiment)
 - @research/features_lab.py (current custom features)
 - @research/program.md (full instructions and constraints)
+- @research/eval_best.tsv (current best model's per-fold and per-cell sub-metric breakdown)
+- @research/eval_last.tsv (last run's breakdown)
+- @research/feat_imp_best.tsv (current best model's feature importances)
+- @research/feat_imp_last.tsv (last run's feature importances)
 
 You may ONLY edit:
 - @research/experiment.py (model, hyperparams, features, stocks, thresholds)
@@ -252,6 +256,8 @@ EOF
 )"
             BEST_SCORE="$SCORE"
             echo "$BEST_SCORE" > "$BEST_SCORE_FILE"
+            cp research/eval_last.tsv research/eval_best.tsv 2>/dev/null || true
+            cp research/feat_imp_last.tsv research/feat_imp_best.tsv 2>/dev/null || true
             CONSECUTIVE_FAILS=0
             SESSION_FAILS=0
 
